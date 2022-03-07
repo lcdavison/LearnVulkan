@@ -1,3 +1,5 @@
 project(VulkanPBR)
 
-add_executable(VulkanPBR "Source/VulkanPBR.cpp" "Include/VulkanPBR.hpp" "Include/ErrorHandling.hpp")
+include_directories("./Include")
+
+add_executable(VulkanPBR "Source/VulkanPBR.cpp")
