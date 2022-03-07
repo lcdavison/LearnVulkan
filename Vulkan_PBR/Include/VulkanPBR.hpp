@@ -2,6 +2,8 @@
 
 #include <Windows.h>
 
+#include <cstdint>
+
 namespace PBR
 {
 	class VulkanApplication
@@ -25,8 +27,8 @@ namespace PBR
 		inline static const TCHAR* kWindowClassName = TEXT("Vulkan-PBR");
 		inline static const TCHAR* kWindowName = TEXT("PBR Window");
 
-		inline static const uint32_t kDefaultWindowWidth = 1280u;
-		inline static const uint32_t kDefaultWindowHeight = 720u;
+		inline static const std::uint32_t kDefaultWindowWidth = 1280u;
+		inline static const std::uint32_t kDefaultWindowHeight = 720u;
 
 		HWND WindowHandle_;
 
