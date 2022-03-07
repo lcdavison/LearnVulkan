@@ -5,4 +5,4 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 include_directories("./Include")
 
-add_executable(VulkanPBR "Source/VulkanPBR.cpp")
+add_executable(VulkanPBR WIN32 "Source/VulkanPBR.cpp")
