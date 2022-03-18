@@ -1,6 +1,7 @@
 #include "VulkanPBR.hpp"
 
 #include "ErrorHandling.hpp"
+#include "Vulkan.hpp"
 
 #include <memory>
 
