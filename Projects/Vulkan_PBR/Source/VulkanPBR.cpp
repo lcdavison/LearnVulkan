@@ -1,6 +1,7 @@
 #include "VulkanPBR.hpp"
 
 #include "ErrorHandling.hpp"
+#include "Vulkan.hpp"
 
 #include <memory>
 
@@ -24,9 +25,12 @@ bool PBR::VulkanApplication::Initialise()
 
 	WNDCLASSEX WindowClass = {};
 	WindowClass.cbSize = sizeof(WNDCLASSEX);
+	WindowClass.lpszClassName = kWindowClassName;
 	WindowClass.hInstance = CurrentInstance;
 	WindowClass.lpfnWndProc = &PBR::VulkanApplication::WindowProcedure;
 	WindowClass.hCursor = ::LoadCursor(nullptr, IDC_ARROW);
+	WindowClass.hIcon = ::LoadIcon(nullptr, IDI_APPLICATION);
+	WindowClass.hbrBackground = static_cast<HBRUSH>(::GetStockObject(WHITE_BRUSH));
 
 	if (::RegisterClassEx(&WindowClass))
 	{
@@ -34,6 +38,8 @@ bool PBR::VulkanApplication::Initialise()
 
 		bResult = WindowHandle_ != INVALID_HANDLE_VALUE;
 	}
+
+	bResult = VulkanModule::Load();
 
 	return bResult;
 }
@@ -54,6 +60,7 @@ INT WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, INT)
 
 	if (!bInitialised)
 	{
+		::MessageBox(nullptr, TEXT("Failed to initialise application"), TEXT("Fatal Error"), MB_OK);
 		return EXIT_FAILURE;
 	}
 
