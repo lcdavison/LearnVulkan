@@ -7,20 +7,21 @@ include_directories("./Include")
 
 list(APPEND HeaderFiles
 "Include/VulkanPBR.hpp"
-"Include/Vulkan.hpp"
+"Include/Graphics/Vulkan.hpp"
 "Include/ErrorHandling.hpp"
 )
 
 list(APPEND InlineFiles
-"Source/VulkanFunctions.inl"
+"Include/Graphics/VulkanFunctions.inl"
 )
 
 list(APPEND SourceFiles
 "Source/VulkanPBR.cpp"
-"Source/Vulkan.cpp"
+"Source/Graphics/Vulkan.cpp"
 "Source/MacroMagic.cpp"
 )
 
 add_executable(VulkanPBR WIN32 ${IncludeFiles} ${InlineFiles} ${SourceFiles})
 
+# This is because I am using Macro magic
 target_compile_definitions(VulkanPBR PRIVATE VK_NO_PROTOTYPES)

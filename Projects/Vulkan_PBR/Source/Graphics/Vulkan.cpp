@@ -1,4 +1,4 @@
-#include "Vulkan.hpp"
+#include "Graphics/Vulkan.hpp"
 
 namespace VulkanFunctions
 {
@@ -17,7 +17,7 @@ namespace VulkanFunctions
 #define VK_DEVICE_FUNCTION(FunctionName)\
     VK_FUNCTION_DEFINITION(FunctionName)
 
-#include "VulkanFunctions.inl"
+#include "Graphics/VulkanFunctions.inl"
 
 #undef VK_FUNCTION_DEFINITION
 }

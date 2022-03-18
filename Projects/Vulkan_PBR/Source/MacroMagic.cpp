@@ -1,4 +1,4 @@
-#include "Vulkan.hpp"
+#include "Graphics/Vulkan.hpp"
 
 #include <Windows.h>
 
@@ -39,7 +39,7 @@ bool const VulkanModule::LoadGlobalFunctions()
 		::OutputDebugString(ErrorMessage.c_str());\
 	}
 
-#include "VulkanFunctions.inl"
+#include "Graphics/VulkanFunctions.inl"
 
 	return true;
 }
