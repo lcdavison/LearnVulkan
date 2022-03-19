@@ -39,7 +39,13 @@ bool PBR::VulkanApplication::Initialise()
 		bResult = WindowHandle_ != INVALID_HANDLE_VALUE;
 	}
 
-	bResult = VulkanModule::Load();
+	VkApplicationInfo ApplicationInfo = {};
+	ApplicationInfo.sType = VkStructureType::VK_STRUCTURE_TYPE_APPLICATION_INFO;
+	ApplicationInfo.pApplicationName = "Vulkan PBR";
+	ApplicationInfo.applicationVersion = kApplicationVersionNo;
+	ApplicationInfo.apiVersion = VK_MAKE_API_VERSION(0, 1, 0, 0);
+
+	VulkanModule::Start(ApplicationInfo);
 
 	return bResult;
 }

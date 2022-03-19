@@ -4,25 +4,23 @@
 
 #include <string>
 
-bool const VulkanModule::Load()
+bool const VulkanModule::LoadExportedFunctions(HMODULE LibraryHandle)
 {
-	bool bResult = false;
-
-	HMODULE VulkanLibrary = ::LoadLibrary(TEXT("vulkan-1.dll"));
-	if (bResult = VulkanLibrary; !bResult)
-	{
-		::MessageBox(nullptr, TEXT("Failed to load vulkan module"), TEXT("Fatal Error"), MB_OK);
+#define VK_EXPORTED_FUNCTION(FunctionName)\
+	VulkanFunctions::FunctionName = reinterpret_cast<PFN_##FunctionName>(::GetProcAddress(LibraryHandle, #FunctionName));\
+	if (!VulkanFunctions::FunctionName) {\
+		return false;\
+	}\
+	{\
+		std::basic_string ErrorMessage = TEXT("Loaded Exported Function: "); \
+		ErrorMessage += TEXT(#FunctionName); \
+		ErrorMessage += TEXT("\n");\
+		::OutputDebugString(ErrorMessage.c_str());\
 	}
 
-	VulkanFunctions::vkGetInstanceProcAddr = reinterpret_cast<PFN_vkGetInstanceProcAddr>(::GetProcAddress(VulkanLibrary, "vkGetInstanceProcAddr"));
-	if (bResult = VulkanFunctions::vkGetInstanceProcAddr; !bResult)
-	{
-		::MessageBox(nullptr, TEXT("Failed to load \"vkGetInstanceProcAddr\""), TEXT("Fatal Error"), MB_OK);
-	}
+#include "Graphics/VulkanFunctions.inl"
 
-	LoadGlobalFunctions();
-
-	return bResult;
+	return true;
 }
 
 bool const VulkanModule::LoadGlobalFunctions()
@@ -33,7 +31,26 @@ bool const VulkanModule::LoadGlobalFunctions()
 		return false;\
 	}\
 	{\
-		std::basic_string ErrorMessage = TEXT("Loaded Function: "); \
+		std::basic_string ErrorMessage = TEXT("Loaded Global Function: "); \
+		ErrorMessage += TEXT(#FunctionName); \
+		ErrorMessage += TEXT("\n");\
+		::OutputDebugString(ErrorMessage.c_str());\
+	}
+
+#include "Graphics/VulkanFunctions.inl"
+
+	return true;
+}
+
+bool const VulkanModule::LoadInstanceFunctions(VkInstance Instance)
+{
+#define VK_INSTANCE_FUNCTION(FunctionName)\
+	VulkanFunctions::FunctionName = reinterpret_cast<PFN_##FunctionName>(VulkanFunctions::vkGetInstanceProcAddr(Instance, #FunctionName));\
+	if (!VulkanFunctions::FunctionName) {\
+		return false;\
+	}\
+	{\
+		std::basic_string ErrorMessage = TEXT("Loaded Instance Function: "); \
 		ErrorMessage += TEXT(#FunctionName); \
 		ErrorMessage += TEXT("\n");\
 		::OutputDebugString(ErrorMessage.c_str());\

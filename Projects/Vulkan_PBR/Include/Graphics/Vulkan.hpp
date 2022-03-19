@@ -1,3 +1,6 @@
+#define WIN32_LEAN_AND_MEAN
+#include <Windows.h>
+
 #include <vulkan/vulkan.h>
 
 namespace VulkanFunctions
@@ -40,7 +43,13 @@ namespace VulkanFunctions
 
 namespace VulkanModule
 {
-    extern bool const Load();
+    extern bool const LoadExportedFunctions(HMODULE LibraryHandle);
 
     extern bool const LoadGlobalFunctions();
+
+    extern bool const LoadInstanceFunctions(VkInstance Instance);
+
+    extern bool const Start(VkApplicationInfo const & ApplicationInfo);
+
+    extern bool const Stop();
 }
