@@ -8,6 +8,7 @@ include_directories("./Include")
 list(APPEND HeaderFiles
 "Include/VulkanPBR.hpp"
 "Include/Graphics/Vulkan.hpp"
+"Include/Graphics/Instance.hpp"
 "Include/ErrorHandling.hpp"
 )
 
@@ -18,6 +19,7 @@ list(APPEND InlineFiles
 list(APPEND SourceFiles
 "Source/VulkanPBR.cpp"
 "Source/Graphics/Vulkan.cpp"
+"Source/Graphics/Instance.cpp"
 "Source/MacroMagic.cpp"
 )
 
