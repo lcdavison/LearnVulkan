@@ -22,6 +22,22 @@ namespace VulkanFunctions
 #undef VK_FUNCTION_DECLARATION
 }
 
+#if defined(_DEBUG)
+#include <cstdio>
+
+#define VERIFY_VKRESULT(Function)\
+    {\
+        VkResult Result = Function;\
+        if (Result != VK_SUCCESS)\
+        {\
+            char ErrorMessage [512] = {};\
+            std::sprintf(ErrorMessage, "Function [%s] Failed with Error Code [%d]\nIn File [%s] Line [%d]", #Function, static_cast<unsigned long>(Result), __FILE__, __LINE__);\
+        }\
+    }
+#else
+#define VERIFY_RESULT(Function)
+#endif // _DEBUG
+
 namespace VulkanModule
 {
     extern bool const Load();
