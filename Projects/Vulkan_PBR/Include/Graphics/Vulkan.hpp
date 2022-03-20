@@ -1,5 +1,6 @@
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
+#include "CommonTypes.hpp"
 
 #include <vulkan/vulkan.h>
 
@@ -38,7 +39,7 @@ namespace VulkanFunctions
         }\
     }
 #else
-#define VERIFY_RESULT(Function)
+#define VERIFY_VKRESULT(Function)
 #endif // _DEBUG
 
 namespace VulkanModule

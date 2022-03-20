@@ -1,6 +1,5 @@
 #include "Graphics/Instance.hpp"
 
-#include <Windows.h>
 #include <vector>
 #include <string>
 
@@ -8,7 +7,7 @@ static std::vector<VkExtensionProperties> AvailableExtensions = {};
 
 static bool const CheckInstanceExtensions()
 {
-    uint32_t ExtensionCount = {};
+    uint32 ExtensionCount = {};
     VERIFY_VKRESULT(VulkanFunctions::vkEnumerateInstanceExtensionProperties(nullptr, &ExtensionCount, nullptr));
 
     AvailableExtensions.resize(ExtensionCount);
