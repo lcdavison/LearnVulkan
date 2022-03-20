@@ -137,6 +137,8 @@ bool const Vulkan::Device::CreateDevice(VkInstance Instance, DeviceState & Outpu
 
     VERIFY_VKRESULT(VulkanFunctions::vkCreateDevice(State.PhysicalDevice, &CreateInfo, nullptr, &State.Device));
 
+    OutputDeviceState = State;
+
     return true;
 }
 
