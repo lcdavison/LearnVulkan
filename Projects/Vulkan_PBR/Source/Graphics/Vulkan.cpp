@@ -23,12 +23,14 @@ namespace VulkanFunctions
 }
 
 #include "Graphics/Instance.hpp"
+#include "Graphics/Device.hpp"
 
 using namespace Vulkan;
 
 static HMODULE VulkanLibraryHandle = {};
 
 static Vulkan::Instance::InstanceState InstanceState = {};
+static Vulkan::Device::DeviceState DeviceState = {};
 
 bool const VulkanModule::Start(VkApplicationInfo const & ApplicationInfo)
 {
@@ -48,13 +50,17 @@ bool const VulkanModule::Start(VkApplicationInfo const & ApplicationInfo)
 
     LoadInstanceFunctions(InstanceState.Instance);
 
+    Device::CreateDevice(InstanceState.Instance, DeviceState);
+
     return bResult;
 }
 
 bool const VulkanModule::Stop()
 {
     bool bResult = false;
-     
+
+    Device::DestroyDevice(DeviceState);
+
     bResult = ::FreeLibrary(VulkanLibraryHandle) != 0u;
 
     return bResult;

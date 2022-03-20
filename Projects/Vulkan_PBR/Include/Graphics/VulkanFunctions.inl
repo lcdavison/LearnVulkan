@@ -20,6 +20,15 @@ VK_GLOBAL_FUNCTION(vkCreateInstance);
 #define VK_INSTANCE_FUNCTION(FunctionName)
 #endif
 
+VK_INSTANCE_FUNCTION(vkGetDeviceProcAddr);
+VK_INSTANCE_FUNCTION(vkEnumeratePhysicalDevices);
+VK_INSTANCE_FUNCTION(vkEnumerateDeviceExtensionProperties);
+VK_INSTANCE_FUNCTION(vkGetPhysicalDeviceProperties);
+VK_INSTANCE_FUNCTION(vkGetPhysicalDeviceFeatures);
+VK_INSTANCE_FUNCTION(vkGetPhysicalDeviceQueueFamilyProperties);
+VK_INSTANCE_FUNCTION(vkCreateDevice);
+VK_INSTANCE_FUNCTION(vkDestroyDevice);
+
 #undef VK_INSTANCE_FUNCTION
 
 #ifndef VK_DEVICE_FUNCTION
