@@ -54,5 +54,8 @@ bool const VulkanModule::Start(VkApplicationInfo const & ApplicationInfo)
 bool const VulkanModule::Stop()
 {
     bool bResult = false;
+     
+    bResult = ::FreeLibrary(VulkanLibraryHandle) != 0u;
+
     return bResult;
 }

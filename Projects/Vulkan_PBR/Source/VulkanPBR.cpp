@@ -56,6 +56,8 @@ bool PBR::VulkanApplication::Run()
 
 	::MessageBox(nullptr, TEXT("Running"), TEXT("MSG"), MB_OK);
 
+	VulkanModule::Stop();
+
 	return bResult;
 }
 
