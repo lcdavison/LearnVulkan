@@ -1,9 +1,5 @@
 #include "Graphics/Device.hpp"
 
-#if USE_PIX
-#include <WinPixEventRuntime/pix3.h>
-#endif
-
 #include <vector>
 #include <string>
 #include <algorithm>
