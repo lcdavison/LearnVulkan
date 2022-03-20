@@ -1,5 +1,7 @@
 #include "Vulkan.hpp"
 
+#include "CommonTypes.hpp"
+
 namespace Vulkan::Device
 {
     struct DeviceState

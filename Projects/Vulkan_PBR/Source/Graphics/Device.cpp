@@ -1,8 +1,9 @@
 #include "Graphics/Device.hpp"
 
+#include <Windows.h>
+
 #include <vector>
 #include <string>
-#include <algorithm>
 
 static std::vector<VkExtensionProperties> AvailableExtensions = {};
 

@@ -4,7 +4,7 @@
 
 #include <string>
 
-bool const VulkanModule::LoadExportedFunctions(HMODULE LibraryHandle)
+extern bool const LoadExportedFunctions(HMODULE LibraryHandle)
 {
 #define VK_EXPORTED_FUNCTION(FunctionName)\
 	VulkanFunctions::FunctionName = reinterpret_cast<PFN_##FunctionName>(::GetProcAddress(LibraryHandle, #FunctionName));\
@@ -23,7 +23,7 @@ bool const VulkanModule::LoadExportedFunctions(HMODULE LibraryHandle)
 	return true;
 }
 
-bool const VulkanModule::LoadGlobalFunctions()
+extern bool const LoadGlobalFunctions()
 {
 #define VK_GLOBAL_FUNCTION(FunctionName)\
 	VulkanFunctions::FunctionName = reinterpret_cast<PFN_##FunctionName>(VulkanFunctions::vkGetInstanceProcAddr(nullptr, #FunctionName));\
@@ -42,7 +42,7 @@ bool const VulkanModule::LoadGlobalFunctions()
 	return true;
 }
 
-bool const VulkanModule::LoadInstanceFunctions(VkInstance Instance)
+extern bool const LoadInstanceFunctions(VkInstance Instance)
 {
 #define VK_INSTANCE_FUNCTION(FunctionName)\
 	VulkanFunctions::FunctionName = reinterpret_cast<PFN_##FunctionName>(VulkanFunctions::vkGetInstanceProcAddr(Instance, #FunctionName));\

@@ -1,5 +1,8 @@
 #include "Graphics/Instance.hpp"
 
+#include <Windows.h>
+#include "CommonTypes.hpp"
+
 #include <vector>
 #include <string>
 

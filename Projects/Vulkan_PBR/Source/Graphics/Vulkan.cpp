@@ -22,6 +22,10 @@ namespace VulkanFunctions
 #undef VK_FUNCTION_DEFINITION
 }
 
+#include <Windows.h>
+
+#include "CommonTypes.hpp"
+
 #include "Graphics/Instance.hpp"
 #include "Graphics/Device.hpp"
 
@@ -31,6 +35,12 @@ static HMODULE VulkanLibraryHandle = {};
 
 static Vulkan::Instance::InstanceState InstanceState = {};
 static Vulkan::Device::DeviceState DeviceState = {};
+
+/* The implementation for these functions can be found in MacroMagic.cpp */
+/* Separated because the function implementation is a lil bit messy */
+extern bool const LoadExportedFunctions(HMODULE);
+extern bool const LoadGlobalFunctions();
+extern bool const LoadInstanceFunctions(VkInstance);
 
 bool const VulkanModule::Start(VkApplicationInfo const & ApplicationInfo)
 {

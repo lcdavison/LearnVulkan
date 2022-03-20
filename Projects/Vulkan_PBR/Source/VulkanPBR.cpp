@@ -3,8 +3,6 @@
 #include "ErrorHandling.hpp"
 #include "Graphics/Vulkan.hpp"
 
-#include <memory>
-
 LRESULT CALLBACK PBR::VulkanApplication::WindowProcedure(HWND Window, UINT Message, WPARAM WParam, LPARAM LParam)
 {
 	switch (Message)
