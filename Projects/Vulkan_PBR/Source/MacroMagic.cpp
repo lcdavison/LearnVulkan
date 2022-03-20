@@ -2,6 +2,7 @@
 
 #include <Windows.h>
 
+#include <unordered_set>
 #include <string>
 
 extern bool const LoadExportedFunctions(HMODULE LibraryHandle)
@@ -56,6 +57,30 @@ extern bool const LoadInstanceFunctions(VkInstance Instance)
 		::OutputDebugString(ErrorMessage.c_str());\
 	}
 
+#include "Graphics/VulkanFunctions.inl"
+
+	return true;
+}
+
+extern bool const LoadInstanceExtensionFunctions(VkInstance Instance, std::unordered_set<std::string> const & ExtensionNames)
+{
+#define VK_INSTANCE_FUNCTION_FROM_EXTENSION(Function, Extension)\
+	{\
+		auto ExtensionFound = ExtensionNames.find(std::string(Extension));\
+		if (ExtensionFound != ExtensionNames.end()) {\
+			VulkanFunctions::Function = reinterpret_cast<PFN_##Function>(VulkanFunctions::vkGetInstanceProcAddr(Instance, #Function));\
+			if (!VulkanFunctions::Function) {\
+				return false;\
+			}\
+			{\
+				std::basic_string ErrorMessage = TEXT("Loaded Instance Extension Function: ");\
+				ErrorMessage += TEXT(#Function);\
+				ErrorMessage += TEXT("\n");\
+				::OutputDebugString(ErrorMessage.c_str());\
+			}\
+		}\
+	}
+	
 #include "Graphics/VulkanFunctions.inl"
 
 	return true;

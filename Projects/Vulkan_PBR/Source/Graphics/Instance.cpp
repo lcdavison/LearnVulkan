@@ -5,6 +5,10 @@
 
 #include <vector>
 #include <string>
+#include <unordered_set>
+
+extern bool const LoadInstanceFunctions(VkInstance);
+extern bool const LoadInstanceExtensionFunctions(VkInstance, std::unordered_set<std::string> const &);
 
 static std::vector<VkExtensionProperties> AvailableExtensions = {};
 
@@ -52,6 +56,9 @@ bool const Vulkan::Instance::CreateInstance(VkApplicationInfo const & Applicatio
     {
         ::MessageBox(nullptr, TEXT("Failed to create vulkan instance"), TEXT("Fatal Error"), MB_OK);
     }
+
+    LoadInstanceFunctions(OutputInstanceState.Instance);
+    LoadInstanceExtensionFunctions(OutputInstanceState.Instance, std::unordered_set<std::string>(ExtensionNames.cbegin(), ExtensionNames.cend()));
 
     return bResult;
 }

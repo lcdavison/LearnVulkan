@@ -29,4 +29,7 @@ list(APPEND SourceFiles
 add_executable(VulkanPBR WIN32 ${IncludeFiles} ${InlineFiles} ${SourceFiles})
 
 # This is because I am using Macro magic
-target_compile_definitions(VulkanPBR PRIVATE VK_NO_PROTOTYPES)
+target_compile_definitions(VulkanPBR 
+PRIVATE VK_NO_PROTOTYPES
+PRIVATE VK_USE_PLATFORM_WIN32_KHR    
+)

@@ -14,6 +14,9 @@ namespace VulkanFunctions
 #define VK_INSTANCE_FUNCTION(FunctionName)\
     VK_FUNCTION_DEFINITION(FunctionName)
 
+#define VK_INSTANCE_FUNCTION_FROM_EXTENSION(FunctionName, Extension)\
+    VK_FUNCTION_DEFINITION(FunctionName)
+
 #define VK_DEVICE_FUNCTION(FunctionName)\
     VK_FUNCTION_DEFINITION(FunctionName)
 
@@ -31,16 +34,15 @@ namespace VulkanFunctions
 
 using namespace Vulkan;
 
-static HMODULE VulkanLibraryHandle = {};
-
-static Vulkan::Instance::InstanceState InstanceState = {};
-static Vulkan::Device::DeviceState DeviceState = {};
-
 /* The implementation for these functions can be found in MacroMagic.cpp */
 /* Separated because the function implementation is a lil bit messy */
 extern bool const LoadExportedFunctions(HMODULE);
 extern bool const LoadGlobalFunctions();
-extern bool const LoadInstanceFunctions(VkInstance);
+
+static HMODULE VulkanLibraryHandle = {};
+
+static Vulkan::Instance::InstanceState InstanceState = {};
+static Vulkan::Device::DeviceState DeviceState = {};
 
 bool const VulkanModule::Start(VkApplicationInfo const & ApplicationInfo)
 {
@@ -57,8 +59,6 @@ bool const VulkanModule::Start(VkApplicationInfo const & ApplicationInfo)
     LoadGlobalFunctions();
 
     bResult = Instance::CreateInstance(ApplicationInfo, InstanceState);
-
-    LoadInstanceFunctions(InstanceState.Instance);
 
     Device::CreateDevice(InstanceState.Instance, DeviceState);
 
