@@ -5,6 +5,8 @@
 #include <vector>
 #include <string>
 
+extern bool const LoadDeviceFunctions(VkDevice);
+
 static std::vector<VkExtensionProperties> AvailableExtensions = {};
 
 static bool const GetDeviceExtensions(VkPhysicalDevice Device)
@@ -134,6 +136,8 @@ bool const Vulkan::Device::CreateDevice(VkInstance Instance, DeviceState & Outpu
 
     VERIFY_VKRESULT(VulkanFunctions::vkCreateDevice(State.PhysicalDevice, &CreateInfo, nullptr, &State.Device));
 
+    LoadDeviceFunctions(State.Device);
+
     OutputDeviceState = State;
 
     return true;
@@ -144,5 +148,6 @@ void Vulkan::Device::DestroyDevice(DeviceState & State)
     if (State.Device)
     {
         VulkanFunctions::vkDestroyDevice(State.Device, nullptr);
+        State.Device = VK_NULL_HANDLE;
     }
 }
