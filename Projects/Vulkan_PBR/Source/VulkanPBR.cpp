@@ -69,6 +69,17 @@ static bool const Run()
 {
 	bool bResult = false;
 
+	Application::State.bRunning = true;
+
+	while (Application::State.bRunning)
+	{
+		MSG CurrentMessage = {};
+		while (::PeekMessage(&CurrentMessage, nullptr, 0u, 0u, PM_REMOVE))
+		{
+			::TranslateMessage(&CurrentMessage);
+			::DispatchMessage(&CurrentMessage);
+		}
+	}
 
 	VulkanModule::Stop();
 
