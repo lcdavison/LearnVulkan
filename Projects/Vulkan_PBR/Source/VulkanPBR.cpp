@@ -3,19 +3,26 @@
 #include "ErrorHandling.hpp"
 #include "Graphics/Vulkan.hpp"
 
-LRESULT CALLBACK PBR::VulkanApplication::WindowProcedure(HWND Window, UINT Message, WPARAM WParam, LPARAM LParam)
+extern Application::ApplicationState Application::State = Application::ApplicationState();
+
+static LRESULT CALLBACK WindowProcedure(HWND Window, UINT Message, WPARAM WParam, LPARAM LParam)
 {
 	switch (Message)
 	{
 	case WM_DESTROY:
-		::PostQuitMessage(EXIT_SUCCESS);
-		return EXIT_SUCCESS;
-	}
+	{
+		Application::State.bRunning = false;
 
-	return ::DefWindowProc(Window, Message, WParam, LParam);
+		::PostQuitMessage(EXIT_SUCCESS);
+
+		return 0;
+	}
+	default:
+		return ::DefWindowProc(Window, Message, WParam, LParam);
+	}
 }
 
-bool PBR::VulkanApplication::Initialise()
+static bool const Initialise()
 {
 	bool bResult = false;
 
@@ -23,24 +30,34 @@ bool PBR::VulkanApplication::Initialise()
 
 	WNDCLASSEX WindowClass = {};
 	WindowClass.cbSize = sizeof(WNDCLASSEX);
-	WindowClass.lpszClassName = kWindowClassName;
+	WindowClass.lpszClassName = Application::kWindowClassName;
 	WindowClass.hInstance = CurrentInstance;
-	WindowClass.lpfnWndProc = &PBR::VulkanApplication::WindowProcedure;
+	WindowClass.lpfnWndProc = &::WindowProcedure;
+	WindowClass.style = CS_HREDRAW | CS_VREDRAW;
 	WindowClass.hCursor = ::LoadCursor(nullptr, IDC_ARROW);
 	WindowClass.hIcon = ::LoadIcon(nullptr, IDI_APPLICATION);
 	WindowClass.hbrBackground = static_cast<HBRUSH>(::GetStockObject(WHITE_BRUSH));
 
 	if (::RegisterClassEx(&WindowClass))
 	{
-		WindowHandle_ = ::CreateWindow(kWindowClassName, kWindowName, WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, kDefaultWindowWidth, kDefaultWindowHeight, nullptr, nullptr, CurrentInstance, nullptr);
+		Application::State.WindowHandle = ::CreateWindow(Application::kWindowClassName, 
+														 Application::kWindowName, 
+														 WS_OVERLAPPEDWINDOW, 
+														 CW_USEDEFAULT, CW_USEDEFAULT, 
+														 Application::kDefaultWindowWidth, Application::kDefaultWindowHeight, 
+														 nullptr, nullptr, 
+														 CurrentInstance, nullptr);
 
-		bResult = WindowHandle_ != INVALID_HANDLE_VALUE;
+		bResult = Application::State.WindowHandle != INVALID_HANDLE_VALUE;
 	}
+
+	::ShowWindow(Application::State.WindowHandle, TRUE);
+	::UpdateWindow(Application::State.WindowHandle);
 
 	VkApplicationInfo ApplicationInfo = {};
 	ApplicationInfo.sType = VkStructureType::VK_STRUCTURE_TYPE_APPLICATION_INFO;
 	ApplicationInfo.pApplicationName = "Vulkan PBR";
-	ApplicationInfo.applicationVersion = kApplicationVersionNo;
+	ApplicationInfo.applicationVersion = Application::kApplicationVersionNo;
 	ApplicationInfo.apiVersion = VK_MAKE_API_VERSION(0, 1, 0, 0);
 
 	VulkanModule::Start(ApplicationInfo);
@@ -48,11 +65,10 @@ bool PBR::VulkanApplication::Initialise()
 	return bResult;
 }
 
-bool PBR::VulkanApplication::Run()
+static bool const Run()
 {
 	bool bResult = false;
 
-	::MessageBox(nullptr, TEXT("Running"), TEXT("MSG"), MB_OK);
 
 	VulkanModule::Stop();
 
@@ -61,16 +77,16 @@ bool PBR::VulkanApplication::Run()
 
 INT WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, INT)
 {
-	PBR::VulkanApplication& Application = PBR::VulkanApplication::Get();
-	bool bInitialised = Application.Initialise();
+	INT Result = EXIT_FAILURE;
 
-	if (!bInitialised)
+	if (Initialise())
+	{
+		Run();
+	}
+	else
 	{
 		::MessageBox(nullptr, TEXT("Failed to initialise application"), TEXT("Fatal Error"), MB_OK);
-		return EXIT_FAILURE;
 	}
 
-	RunFunctionAndCatchException(&PBR::VulkanApplication::Run, &Application);
-
-	return EXIT_SUCCESS;
+	return Result;
 }

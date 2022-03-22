@@ -7,18 +7,46 @@
 
 extern bool const LoadDeviceFunctions(VkDevice);
 
-static std::vector<VkExtensionProperties> AvailableExtensions = {};
+static std::vector<char const *> RequiredExtensionNames = 
+{
+    VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+};
 
-static bool const GetDeviceExtensions(VkPhysicalDevice Device)
+static bool const HasRequiredExtensions(VkPhysicalDevice Device)
 {
     uint32 ExtensionCount = {};
     VERIFY_VKRESULT(VulkanFunctions::vkEnumerateDeviceExtensionProperties(Device, nullptr, &ExtensionCount, nullptr));
 
-    AvailableExtensions.resize(ExtensionCount);
+    std::vector AvailableExtensions = std::vector<VkExtensionProperties>(ExtensionCount);
 
     VERIFY_VKRESULT(VulkanFunctions::vkEnumerateDeviceExtensionProperties(Device, nullptr, &ExtensionCount, AvailableExtensions.data()));
 
-    return true;
+#if defined(_DEBUG)
+    for (VkExtensionProperties const & Extension : AvailableExtensions)
+    {
+        std::string ExtensionName = "Device Extension: ";
+        ExtensionName += Extension.extensionName;
+        ExtensionName += "\n";
+
+        ::OutputDebugStringA(ExtensionName.c_str());
+    }
+#endif
+
+    uint16 MatchedExtensionCount = { 0u };
+
+    for (char const * ExtensionName : RequiredExtensionNames)
+    {
+        for (VkExtensionProperties const & Extension : AvailableExtensions)
+        {
+            if (std::strcmp(ExtensionName, Extension.extensionName))
+            {
+                MatchedExtensionCount++;
+                break;
+            }
+        }
+    }
+
+    return MatchedExtensionCount == RequiredExtensionNames.size();
 }
 
 inline static bool const IsSuitableDevice(VkPhysicalDeviceProperties const & DeviceProperties, VkPhysicalDeviceFeatures const & DeviceFeatures)
@@ -28,119 +56,121 @@ inline static bool const IsSuitableDevice(VkPhysicalDeviceProperties const & Dev
 
 static bool const EnumerateDevices(VkInstance Instance, std::vector<VkPhysicalDevice> & OutputPhysicalDevices)
 {
+    bool bResult = false;
+
     uint32 DeviceCount = {};
     VERIFY_VKRESULT(VulkanFunctions::vkEnumeratePhysicalDevices(Instance, &DeviceCount, nullptr));
 
-    if (DeviceCount == 0u)
+    if (DeviceCount > 0u)
     {
-        ::MessageBox(nullptr, TEXT("No devices with vulkan support"), TEXT("Fatal Error"), MB_OK);
-        return false;
+        OutputPhysicalDevices.resize(DeviceCount);
+
+        VERIFY_VKRESULT(VulkanFunctions::vkEnumeratePhysicalDevices(Instance, &DeviceCount, OutputPhysicalDevices.data()));
+
+        bResult = true;
+    }
+    else
+    {
+        ::MessageBox(nullptr, TEXT("Failed to find a device with Vulkan support."), TEXT("Fatal Error"), MB_OK);
     }
 
-    OutputPhysicalDevices.resize(DeviceCount);
-
-    VERIFY_VKRESULT(VulkanFunctions::vkEnumeratePhysicalDevices(Instance, &DeviceCount, OutputPhysicalDevices.data()));
-
-    return true;
+    return bResult;
 }
 
 static bool const SelectPhysicalDevice(VkInstance Instance, VkPhysicalDevice & OutputSelectedDevice)
 {
+    bool bResult = false;
+
     std::vector Devices = std::vector<VkPhysicalDevice>();
-    if (!::EnumerateDevices(Instance, Devices))
+    if (::EnumerateDevices(Instance, Devices))
     {
-        return false;
-    }
+        VkPhysicalDevice SelectedDevice = {};
 
-    VkPhysicalDevice SelectedDevice = {};
-
-    for (VkPhysicalDevice Device : Devices)
-    {
-        VkPhysicalDeviceProperties DeviceProperties = {};
-        VulkanFunctions::vkGetPhysicalDeviceProperties(Device, &DeviceProperties);
-
-        VkPhysicalDeviceFeatures DeviceFeatures = {};
-        VulkanFunctions::vkGetPhysicalDeviceFeatures(Device, &DeviceFeatures);
-
-        if (IsSuitableDevice(DeviceProperties, DeviceFeatures))
+        for (VkPhysicalDevice Device : Devices)
         {
-            std::basic_string Output = "Selected Device: ";
-            Output += DeviceProperties.deviceName;
-            Output += "\n";
-            ::OutputDebugStringA(Output.c_str());
+            VkPhysicalDeviceProperties DeviceProperties = {};
+            VulkanFunctions::vkGetPhysicalDeviceProperties(Device, &DeviceProperties);
 
-            SelectedDevice = Device;
-            break;
+            VkPhysicalDeviceFeatures DeviceFeatures = {};
+            VulkanFunctions::vkGetPhysicalDeviceFeatures(Device, &DeviceFeatures);
+
+            if (::IsSuitableDevice(DeviceProperties, DeviceFeatures))
+            {
+#if defined(_DEBUG)
+                std::basic_string Output = "Selected Device: ";
+                Output += DeviceProperties.deviceName;
+                Output += "\n";
+                ::OutputDebugStringA(Output.c_str());
+#endif
+
+                SelectedDevice = Device;
+                break;
+            }
         }
+
+        OutputSelectedDevice = SelectedDevice;
+        bResult = true;
     }
 
-    OutputSelectedDevice = SelectedDevice;
-
-    return true;
+    return bResult;
 }
 
 bool const Vulkan::Device::CreateDevice(VkInstance Instance, DeviceState & OutputDeviceState)
 {
-    DeviceState State = {};
+    bool bResult = false;
 
-    ::SelectPhysicalDevice(Instance, State.PhysicalDevice);
+    /* Use this for atomicity, we don't want to partially fill OutputDeviceState */
+    DeviceState IntermediateState = {};
 
-    /* Query device queue families */
-    uint32 PropertyCount = {};
-    VulkanFunctions::vkGetPhysicalDeviceQueueFamilyProperties(State.PhysicalDevice, &PropertyCount, nullptr);
-
-    std::vector Properties = std::vector<VkQueueFamilyProperties>(PropertyCount);
-    VulkanFunctions::vkGetPhysicalDeviceQueueFamilyProperties(State.PhysicalDevice, &PropertyCount, Properties.data());
-
+    if (::SelectPhysicalDevice(Instance, IntermediateState.PhysicalDevice) &&
+        ::HasRequiredExtensions(IntermediateState.PhysicalDevice))
     {
-        uint32 CurrentFamilyIndex = {};
-        for (VkQueueFamilyProperties const & FamilyProperties : Properties)
+        /* Find Queue family with required capabilities */
+
+        /* Query device queue families */
+        uint32 PropertyCount = {};
+        VulkanFunctions::vkGetPhysicalDeviceQueueFamilyProperties(IntermediateState.PhysicalDevice, &PropertyCount, nullptr);
+
+        std::vector Properties = std::vector<VkQueueFamilyProperties>(PropertyCount);
+        VulkanFunctions::vkGetPhysicalDeviceQueueFamilyProperties(IntermediateState.PhysicalDevice, &PropertyCount, Properties.data());
+
         {
-            if (FamilyProperties.queueFlags & VkQueueFlagBits::VK_QUEUE_GRAPHICS_BIT)
+            uint32 CurrentFamilyIndex = {};
+            for (VkQueueFamilyProperties const & FamilyProperties : Properties)
             {
-                State.GraphicsQueueFamilyIndex = CurrentFamilyIndex;
-                break;
+                if (FamilyProperties.queueFlags & VkQueueFlagBits::VK_QUEUE_GRAPHICS_BIT)
+                {
+                    IntermediateState.GraphicsQueueFamilyIndex = CurrentFamilyIndex;
+                    break;
+                }
+
+                CurrentFamilyIndex++;
             }
-
-            CurrentFamilyIndex++;
         }
+
+        VkDeviceQueueCreateInfo QueueCreateInfo = {};
+        QueueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+        QueueCreateInfo.queueFamilyIndex = IntermediateState.GraphicsQueueFamilyIndex;
+        QueueCreateInfo.queueCount = 1u;
+
+        VkDeviceCreateInfo CreateInfo = {};
+        CreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+        CreateInfo.queueCreateInfoCount = 1u;
+        CreateInfo.pQueueCreateInfos = &QueueCreateInfo;
+        CreateInfo.enabledExtensionCount = RequiredExtensionNames.size();
+        CreateInfo.ppEnabledExtensionNames = RequiredExtensionNames.data();
+        /* Need to figure out what features need to be enabled */
+        //CreateInfo.pEnabledFeatures;
+
+        VERIFY_VKRESULT(VulkanFunctions::vkCreateDevice(IntermediateState.PhysicalDevice, &CreateInfo, nullptr, &IntermediateState.Device));
+
+        LoadDeviceFunctions(IntermediateState.Device);
+
+        OutputDeviceState = IntermediateState;
+        bResult = true;
     }
 
-    VkDeviceQueueCreateInfo QueueCreateInfo = {};
-    QueueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-    QueueCreateInfo.queueFamilyIndex = State.GraphicsQueueFamilyIndex;
-    QueueCreateInfo.queueCount = 1u;
-
-    std::vector ExtensionNames = std::vector<char const *>(AvailableExtensions.size());
-    for (VkExtensionProperties const & Extension : AvailableExtensions)
-    {
-#if defined(_DEBUG)
-        std::basic_string ExtensionName = "Found Extension: ";
-        ExtensionName += Extension.extensionName;
-        ExtensionName += "\n";
-        ::OutputDebugStringA(ExtensionName.c_str());
-#endif
-
-        ExtensionNames.push_back(Extension.extensionName);
-    }
-
-    VkDeviceCreateInfo CreateInfo = {};
-    CreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-    CreateInfo.queueCreateInfoCount = 1u;
-    CreateInfo.pQueueCreateInfos = &QueueCreateInfo;
-    /* Should figure out what extensions are actually necessary */
-    //CreateInfo.enabledExtensionCount = AvailableExtensions.size();
-    //CreateInfo.ppEnabledExtensionNames = ExtensionNames.data();
-    /* Need to figure out what features need to be enabled */
-    //CreateInfo.pEnabledFeatures;
-
-    VERIFY_VKRESULT(VulkanFunctions::vkCreateDevice(State.PhysicalDevice, &CreateInfo, nullptr, &State.Device));
-
-    LoadDeviceFunctions(State.Device);
-
-    OutputDeviceState = State;
-
-    return true;
+    return bResult;
 }
 
 void Vulkan::Device::DestroyDevice(DeviceState & State)

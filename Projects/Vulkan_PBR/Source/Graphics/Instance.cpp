@@ -10,55 +10,84 @@
 extern bool const LoadInstanceFunctions(VkInstance);
 extern bool const LoadInstanceExtensionFunctions(VkInstance, std::unordered_set<std::string> const &);
 
-static std::vector<VkExtensionProperties> AvailableExtensions = {};
+static std::vector<char const *> const RequiredExtensions = 
+{
+    VK_KHR_SURFACE_EXTENSION_NAME,
+    VK_KHR_WIN32_SURFACE_EXTENSION_NAME,
+};
 
-static bool const CheckInstanceExtensions()
+static bool const HasRequiredExtensions()
 {
     uint32 ExtensionCount = {};
     VERIFY_VKRESULT(VulkanFunctions::vkEnumerateInstanceExtensionProperties(nullptr, &ExtensionCount, nullptr));
 
-    AvailableExtensions.resize(ExtensionCount);
+    std::vector AvailableExtensions = std::vector<VkExtensionProperties>(ExtensionCount);
 
     VERIFY_VKRESULT(VulkanFunctions::vkEnumerateInstanceExtensionProperties(nullptr, &ExtensionCount, AvailableExtensions.data()));
 
 #if defined(_DEBUG)
     for (VkExtensionProperties const & Extension : AvailableExtensions)
     {
-        std::basic_string ExtensionName = Extension.extensionName;
+        std::string ExtensionName = "Instance Extension: ";
+        ExtensionName += Extension.extensionName;
         ExtensionName += "\n";
+
         ::OutputDebugStringA(ExtensionName.c_str());
     }
 #endif
 
-    return true;
+    uint16 MatchedExtensionCount = { 0u };
+
+    for (char const * ExtensionName : RequiredExtensions)
+    {
+        for (VkExtensionProperties const & Extension : AvailableExtensions)
+        {
+            if (std::strcmp(ExtensionName, Extension.extensionName))
+            {
+                MatchedExtensionCount++;
+                break;
+            }
+        }
+    }
+
+    return MatchedExtensionCount == RequiredExtensions.size();
 }
 
 bool const Vulkan::Instance::CreateInstance(VkApplicationInfo const & ApplicationInfo, InstanceState & OutputInstanceState)
 {
     bool bResult = false;
 
-    bResult = CheckInstanceExtensions();
+    InstanceState IntermediateState = {};
 
-    std::vector ExtensionNames = std::vector<char const *>();
-    for (VkExtensionProperties const & Extension : AvailableExtensions)
+    if (::HasRequiredExtensions())
     {
-        ExtensionNames.push_back(Extension.extensionName);
+        VkInstanceCreateInfo InstanceCreateInfo = {};
+        InstanceCreateInfo.sType = VkStructureType::VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+        InstanceCreateInfo.pApplicationInfo = &ApplicationInfo;
+        InstanceCreateInfo.enabledExtensionCount = RequiredExtensions.size();
+        InstanceCreateInfo.ppEnabledExtensionNames = RequiredExtensions.data();
+
+        VERIFY_VKRESULT(VulkanFunctions::vkCreateInstance(&InstanceCreateInfo, nullptr, &IntermediateState.Instance));
+
+        bool const bFunctionsLoaded = ::LoadInstanceFunctions(IntermediateState.Instance) &&
+                                      ::LoadInstanceExtensionFunctions(IntermediateState.Instance,
+                                                                       std::unordered_set<std::string>(RequiredExtensions.cbegin(), RequiredExtensions.cend()));
+
+        if (bFunctionsLoaded)
+        {
+            OutputInstanceState = IntermediateState;
+            bResult = true;
+        }
     }
-
-    VkInstanceCreateInfo InstanceCreateInfo = {};
-    InstanceCreateInfo.sType = VkStructureType::VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-    InstanceCreateInfo.pApplicationInfo = &ApplicationInfo;
-    InstanceCreateInfo.enabledExtensionCount = AvailableExtensions.size();
-    InstanceCreateInfo.ppEnabledExtensionNames = ExtensionNames.data();
-
-    VERIFY_VKRESULT(VulkanFunctions::vkCreateInstance(&InstanceCreateInfo, nullptr, &OutputInstanceState.Instance));
-    if (OutputInstanceState.Instance == VK_NULL_HANDLE)
-    {
-        ::MessageBox(nullptr, TEXT("Failed to create vulkan instance"), TEXT("Fatal Error"), MB_OK);
-    }
-
-    LoadInstanceFunctions(OutputInstanceState.Instance);
-    LoadInstanceExtensionFunctions(OutputInstanceState.Instance, std::unordered_set<std::string>(ExtensionNames.cbegin(), ExtensionNames.cend()));
 
     return bResult;
+}
+
+void Vulkan::Instance::DestroyInstance(InstanceState & State)
+{
+    if (State.Instance)
+    {
+        VulkanFunctions::vkDestroyInstance(State.Instance, nullptr);
+        State.Instance = VK_NULL_HANDLE;
+    }
 }

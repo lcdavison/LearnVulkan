@@ -1,5 +1,5 @@
 #ifndef VK_EXPORTED_FUNCTION
-#define VK_EXPORTED_FUNCTION(FunctionName)
+#define VK_EXPORTED_FUNCTION(Function)
 #endif
 
 VK_EXPORTED_FUNCTION(vkGetInstanceProcAddr);
@@ -7,7 +7,7 @@ VK_EXPORTED_FUNCTION(vkGetInstanceProcAddr);
 #undef VK_EXPORTED_FUNCTION
 
 #ifndef VK_GLOBAL_FUNCTION
-#define VK_GLOBAL_FUNCTION(FunctionName)
+#define VK_GLOBAL_FUNCTION(Function)
 #endif
 
 VK_GLOBAL_FUNCTION(vkEnumerateInstanceExtensionProperties);
@@ -17,7 +17,7 @@ VK_GLOBAL_FUNCTION(vkCreateInstance);
 #undef VK_GLOBAL_FUNCTION
 
 #ifndef VK_INSTANCE_FUNCTION
-#define VK_INSTANCE_FUNCTION(FunctionName)
+#define VK_INSTANCE_FUNCTION(Function)
 #endif
 
 VK_INSTANCE_FUNCTION(vkGetDeviceProcAddr);
@@ -27,7 +27,9 @@ VK_INSTANCE_FUNCTION(vkGetPhysicalDeviceProperties);
 VK_INSTANCE_FUNCTION(vkGetPhysicalDeviceFeatures);
 VK_INSTANCE_FUNCTION(vkGetPhysicalDeviceQueueFamilyProperties);
 VK_INSTANCE_FUNCTION(vkCreateDevice);
-VK_INSTANCE_FUNCTION(vkDestroyDevice);
+
+VK_INSTANCE_FUNCTION(vkDestroyInstance);
+
 
 #undef VK_INSTANCE_FUNCTION
 
@@ -44,7 +46,24 @@ VK_INSTANCE_FUNCTION_FROM_EXTENSION(vkCreateWin32SurfaceKHR, VK_KHR_WIN32_SURFAC
 #undef VK_INSTANCE_FUNCTION_FROM_EXTENSION
 
 #ifndef VK_DEVICE_FUNCTION
-#define VK_DEVICE_FUNCTION(FunctionName)
+#define VK_DEVICE_FUNCTION(Function)
 #endif
 
+VK_DEVICE_FUNCTION(vkGetDeviceQueue);
+VK_DEVICE_FUNCTION(vkDeviceWaitIdle);
+
+VK_DEVICE_FUNCTION(vkCreateBuffer);
+VK_DEVICE_FUNCTION(vkGetBufferMemoryRequirements);
+
+VK_DEVICE_FUNCTION(vkDestroyDevice);
+
 #undef VK_DEVICE_FUNCTION
+
+#ifndef VK_DEVICE_FUNCTION_FROM_EXTENSION
+#define VK_DEVICE_FUNCTION_FROM_EXTENSION(Function, Extension)
+#endif
+
+VK_DEVICE_FUNCTION_FROM_EXTENSION(vkCreateSwapchainKHR, VK_KHR_SWAPCHAIN_EXTENSION_NAME);
+VK_DEVICE_FUNCTION_FROM_EXTENSION(vkGetSwapchainImagesKHR, VK_KHR_SWAPCHAIN_EXTENSION_NAME);
+
+#undef VK_DEVICE_FUNCTION_FROM_EXTENSION

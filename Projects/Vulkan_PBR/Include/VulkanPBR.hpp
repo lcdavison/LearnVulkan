@@ -4,35 +4,21 @@
 
 #include "CommonTypes.hpp"
 
-namespace PBR
+namespace Application
 {
-	class VulkanApplication
+	struct ApplicationState
 	{
-		VulkanApplication() = default;
-
-	public:
-		inline static VulkanApplication& Get()
-		{
-			static VulkanApplication Instance = VulkanApplication();
-			return Instance;
-		}
-
-		bool Initialise();
-		bool Run();
-
-	private:
-		static LRESULT CALLBACK WindowProcedure(HWND Window, UINT Message, WPARAM WParam, LPARAM LParam);
-
-	private:
-		inline static const TCHAR* kWindowClassName = TEXT("Vulkan-PBR");
-		inline static const TCHAR* kWindowName = TEXT("PBR Window");
-
-		inline static uint32 kApplicationVersionNo = 0u;
-
-		inline static const uint32 kDefaultWindowWidth = 1280u;
-		inline static const uint32 kDefaultWindowHeight = 720u;
-
-		HWND WindowHandle_;
-
+		HWND WindowHandle;
+		bool bRunning;
 	};
+
+	TCHAR const * kWindowClassName = TEXT("Vulkan-PBR");
+	TCHAR const * kWindowName = TEXT("PBR Window");
+
+	uint32 const kApplicationVersionNo = 0u;
+
+	uint32 const kDefaultWindowWidth = 1280u;
+	uint32 const kDefaultWindowHeight = 720u;
+
+	extern ApplicationState State;
 }

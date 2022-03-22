@@ -20,6 +20,9 @@ namespace VulkanFunctions
 #define VK_DEVICE_FUNCTION(Function)\
     VK_FUNCTION_DECLARATION(Function)
 
+#define VK_DEVICE_FUNCTION_FROM_EXTENSION(Function, Extension)\
+    VK_FUNCTION_DECLARATION(Function)
+
 #include "VulkanFunctions.inl"
 
 #undef VK_FUNCTION_DECLARATION

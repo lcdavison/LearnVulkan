@@ -2,23 +2,26 @@
 
 namespace VulkanFunctions
 {
-#define VK_FUNCTION_DEFINITION(FunctionName)\
-    PFN_##FunctionName FunctionName
+#define VK_FUNCTION_DEFINITION(Function)\
+    PFN_##Function Function
 
-#define VK_EXPORTED_FUNCTION(FunctionName)\
-    VK_FUNCTION_DEFINITION(FunctionName)
+#define VK_EXPORTED_FUNCTION(Function)\
+    VK_FUNCTION_DEFINITION(Function)
 
-#define VK_GLOBAL_FUNCTION(FunctionName)\
-    VK_FUNCTION_DEFINITION(FunctionName)
+#define VK_GLOBAL_FUNCTION(Function)\
+    VK_FUNCTION_DEFINITION(Function)
 
-#define VK_INSTANCE_FUNCTION(FunctionName)\
-    VK_FUNCTION_DEFINITION(FunctionName)
+#define VK_INSTANCE_FUNCTION(Function)\
+    VK_FUNCTION_DEFINITION(Function)
 
-#define VK_INSTANCE_FUNCTION_FROM_EXTENSION(FunctionName, Extension)\
-    VK_FUNCTION_DEFINITION(FunctionName)
+#define VK_INSTANCE_FUNCTION_FROM_EXTENSION(Function, Extension)\
+    VK_FUNCTION_DEFINITION(Function)
 
-#define VK_DEVICE_FUNCTION(FunctionName)\
-    VK_FUNCTION_DEFINITION(FunctionName)
+#define VK_DEVICE_FUNCTION(Function)\
+    VK_FUNCTION_DEFINITION(Function)
+
+#define VK_DEVICE_FUNCTION_FROM_EXTENSION(Function, Extension)\
+    VK_FUNCTION_DEFINITION(Function)
 
 #include "Graphics/VulkanFunctions.inl"
 
@@ -41,37 +44,34 @@ extern bool const LoadGlobalFunctions();
 
 static HMODULE VulkanLibraryHandle = {};
 
-static Vulkan::Instance::InstanceState InstanceState = {};
-static Vulkan::Device::DeviceState DeviceState = {};
+static Instance::InstanceState InstanceState = {};
+static Device::DeviceState DeviceState = {};
 
 bool const VulkanModule::Start(VkApplicationInfo const & ApplicationInfo)
 {
     bool bResult = false;
 
     VulkanLibraryHandle = ::LoadLibrary(TEXT("vulkan-1.dll"));
-    if (bResult = VulkanLibraryHandle; !bResult)
+    if (VulkanLibraryHandle)
+    {
+        bResult = ::LoadExportedFunctions(VulkanLibraryHandle) &&
+                  ::LoadGlobalFunctions() &&
+                  Instance::CreateInstance(ApplicationInfo, InstanceState) &&
+                  Device::CreateDevice(InstanceState.Instance, DeviceState);
+    }
+    else
     {
         ::MessageBox(nullptr, TEXT("Failed to load vulkan module"), TEXT("Fatal Error"), MB_OK);
     }
-
-    LoadExportedFunctions(VulkanLibraryHandle);
-
-    LoadGlobalFunctions();
-
-    bResult = Instance::CreateInstance(ApplicationInfo, InstanceState);
-
-    Device::CreateDevice(InstanceState.Instance, DeviceState);
 
     return bResult;
 }
 
 bool const VulkanModule::Stop()
 {
-    bool bResult = false;
-
     Device::DestroyDevice(DeviceState);
 
-    bResult = ::FreeLibrary(VulkanLibraryHandle) != 0u;
+    Instance::DestroyInstance(InstanceState);
 
-    return bResult;
+    return ::FreeLibrary(VulkanLibraryHandle) != 0u;
 }

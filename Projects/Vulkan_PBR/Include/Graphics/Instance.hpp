@@ -8,4 +8,6 @@ namespace Vulkan::Instance
     };
 
     extern bool const CreateInstance(VkApplicationInfo const & ApplicationInfo, InstanceState & OutputInstanceState);
+
+    extern void DestroyInstance(InstanceState & State);
 }
