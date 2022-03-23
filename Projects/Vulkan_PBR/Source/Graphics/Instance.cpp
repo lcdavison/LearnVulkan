@@ -16,6 +16,59 @@ static std::vector<char const *> const RequiredExtensions =
     VK_KHR_WIN32_SURFACE_EXTENSION_NAME,
 };
 
+static std::vector<char const *> const RequiredLayerNames =
+{
+#if _DEBUG
+    "VK_LAYER_KHRONOS_validation",
+#endif
+};
+
+static bool const HasRequiredLayers()
+{
+    uint32 PropertyCount = {};
+    VERIFY_VKRESULT(VulkanFunctions::vkEnumerateInstanceLayerProperties(&PropertyCount, nullptr));
+
+    std::vector AvailableLayers = std::vector<VkLayerProperties>(PropertyCount);
+
+    VERIFY_VKRESULT(VulkanFunctions::vkEnumerateInstanceLayerProperties(&PropertyCount, AvailableLayers.data()));
+
+#if _DEBUG
+    {
+        char const OutputPrefix [] = "Layer: ";
+
+        std::string LayerName = std::string();
+        LayerName.reserve(sizeof(OutputPrefix) + VK_MAX_EXTENSION_NAME_SIZE);
+
+        for (VkLayerProperties const & Layer : AvailableLayers)
+        {
+            LayerName.clear();
+
+            LayerName += OutputPrefix;
+            LayerName += Layer.layerName;
+            LayerName += "\n";
+
+            ::OutputDebugStringA(LayerName.c_str());
+        }
+    }
+#endif
+
+    uint32 MatchedLayerCount = { 0u };
+
+    for (char const * RequiredLayerName : RequiredLayerNames)
+    {
+        for (VkLayerProperties const & Layer : AvailableLayers)
+        {
+            if (std::strcmp(RequiredLayerName, Layer.layerName))
+            {
+                MatchedLayerCount++;
+                break;
+            }
+        }
+    }
+
+    return MatchedLayerCount == RequiredLayerNames.size();
+}
+
 static bool const HasRequiredExtensions()
 {
     uint32 ExtensionCount = {};
@@ -25,14 +78,23 @@ static bool const HasRequiredExtensions()
 
     VERIFY_VKRESULT(VulkanFunctions::vkEnumerateInstanceExtensionProperties(nullptr, &ExtensionCount, AvailableExtensions.data()));
 
-#if defined(_DEBUG)
-    for (VkExtensionProperties const & Extension : AvailableExtensions)
+#if _DEBUG
     {
-        std::string ExtensionName = "Instance Extension: ";
-        ExtensionName += Extension.extensionName;
-        ExtensionName += "\n";
+        char const OutputPrefix [] = "Instance Extension: ";
 
-        ::OutputDebugStringA(ExtensionName.c_str());
+        std::string ExtensionName = std::string();
+        ExtensionName.reserve(sizeof(OutputPrefix) + VK_MAX_EXTENSION_NAME_SIZE);
+
+        for (VkExtensionProperties const & Extension : AvailableExtensions)
+        {
+            ExtensionName.clear();
+
+            ExtensionName += OutputPrefix;
+            ExtensionName += Extension.extensionName;
+            ExtensionName += "\n";
+
+            ::OutputDebugStringA(ExtensionName.c_str());
+        }
     }
 #endif
 
@@ -59,21 +121,23 @@ bool const Vulkan::Instance::CreateInstance(VkApplicationInfo const & Applicatio
 
     InstanceState IntermediateState = {};
 
-    if (::HasRequiredExtensions())
+    if (::HasRequiredExtensions() &&
+        ::HasRequiredLayers())
     {
         VkInstanceCreateInfo InstanceCreateInfo = {};
         InstanceCreateInfo.sType = VkStructureType::VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
         InstanceCreateInfo.pApplicationInfo = &ApplicationInfo;
         InstanceCreateInfo.enabledExtensionCount = RequiredExtensions.size();
         InstanceCreateInfo.ppEnabledExtensionNames = RequiredExtensions.data();
+        InstanceCreateInfo.enabledLayerCount = RequiredLayerNames.size();
+        InstanceCreateInfo.ppEnabledLayerNames = RequiredLayerNames.data();
 
         VERIFY_VKRESULT(VulkanFunctions::vkCreateInstance(&InstanceCreateInfo, nullptr, &IntermediateState.Instance));
 
-        bool const bFunctionsLoaded = ::LoadInstanceFunctions(IntermediateState.Instance) &&
-                                      ::LoadInstanceExtensionFunctions(IntermediateState.Instance,
-                                                                       std::unordered_set<std::string>(RequiredExtensions.cbegin(), RequiredExtensions.cend()));
+        std::unordered_set const ExtensionSet = std::unordered_set<std::string>(RequiredExtensions.cbegin(), RequiredExtensions.cend());
 
-        if (bFunctionsLoaded)
+        if (::LoadInstanceFunctions(IntermediateState.Instance) &&
+            ::LoadInstanceExtensionFunctions(IntermediateState.Instance, ExtensionSet))
         {
             OutputInstanceState = IntermediateState;
             bResult = true;
