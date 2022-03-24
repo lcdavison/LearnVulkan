@@ -54,6 +54,8 @@ static bool const Initialise()
 	::ShowWindow(Application::State.WindowHandle, TRUE);
 	::UpdateWindow(Application::State.WindowHandle);
 
+	Application::State.ProcessHandle = CurrentInstance;
+
 	VkApplicationInfo ApplicationInfo = {};
 	ApplicationInfo.sType = VkStructureType::VK_STRUCTURE_TYPE_APPLICATION_INFO;
 	ApplicationInfo.pApplicationName = "Vulkan PBR";
