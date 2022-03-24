@@ -8,17 +8,18 @@ namespace Application
 {
 	struct ApplicationState
 	{
+		HINSTANCE ProcessHandle;
 		HWND WindowHandle;
 		bool bRunning;
 	};
 
-	TCHAR const * kWindowClassName = TEXT("Vulkan-PBR");
-	TCHAR const * kWindowName = TEXT("PBR Window");
+	static TCHAR const * kWindowClassName = TEXT("Vulkan-PBR");
+	static TCHAR const * kWindowName = TEXT("PBR Window");
 
-	uint32 const kApplicationVersionNo = 0u;
+	static uint32 const kApplicationVersionNo = 0u;
 
-	uint32 const kDefaultWindowWidth = 1280u;
-	uint32 const kDefaultWindowHeight = 720u;
+	static uint32 const kDefaultWindowWidth = 1280u;
+	static uint32 const kDefaultWindowHeight = 720u;
 
 	extern ApplicationState State;
 }
