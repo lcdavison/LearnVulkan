@@ -54,20 +54,22 @@ static bool const Initialise()
 	::ShowWindow(Application::State.WindowHandle, TRUE);
 	::UpdateWindow(Application::State.WindowHandle);
 
+	Application::State.ProcessHandle = CurrentInstance;
+
 	VkApplicationInfo ApplicationInfo = {};
 	ApplicationInfo.sType = VkStructureType::VK_STRUCTURE_TYPE_APPLICATION_INFO;
 	ApplicationInfo.pApplicationName = "Vulkan PBR";
 	ApplicationInfo.applicationVersion = Application::kApplicationVersionNo;
 	ApplicationInfo.apiVersion = VK_MAKE_API_VERSION(0, 1, 0, 0);
 
-	VulkanModule::Start(ApplicationInfo);
+	bResult = VulkanModule::Start(ApplicationInfo);
 
 	return bResult;
 }
 
 static bool const Run()
 {
-	bool bResult = false;
+	bool bResult = true;
 
 	Application::State.bRunning = true;
 
@@ -81,22 +83,26 @@ static bool const Run()
 		}
 	}
 
-	VulkanModule::Stop();
+	bResult = VulkanModule::Stop();
 
 	return bResult;
 }
 
 INT WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, INT)
 {
-	INT Result = EXIT_FAILURE;
+	INT Result = EXIT_SUCCESS;
 
 	if (Initialise())
 	{
-		Run();
+		if (!Run())
+		{
+			Result = EXIT_FAILURE;
+		}
 	}
 	else
 	{
 		::MessageBox(nullptr, TEXT("Failed to initialise application"), TEXT("Fatal Error"), MB_OK);
+		Result = EXIT_FAILURE;
 	}
 
 	return Result;
