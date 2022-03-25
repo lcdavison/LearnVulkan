@@ -86,7 +86,7 @@ VkResult vkCreateInstance(VkInstanceCreateInfo const * pCreateInfo, VkAllocation
     return VulkanFunctions::vkCreateInstance(pCreateInfo, pAllocator, pInstance);
 }
 
-void vkDestroyInstance(VkInstance instance, VkAllocationCallbacks const* pAllocator)
+void vkDestroyInstance(VkInstance instance, VkAllocationCallbacks const * pAllocator)
 {
     VulkanFunctions::vkDestroyInstance(instance, pAllocator);
 }
