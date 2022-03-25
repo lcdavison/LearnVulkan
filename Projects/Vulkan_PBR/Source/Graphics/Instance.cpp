@@ -12,13 +12,13 @@
 extern bool const LoadInstanceFunctions(VkInstance);
 extern bool const LoadInstanceExtensionFunctions(VkInstance, std::unordered_set<std::string> const &);
 
-static std::vector<char const *> const RequiredExtensions = 
+static std::vector<char const *> const kRequiredExtensionNames = 
 {
     VK_KHR_SURFACE_EXTENSION_NAME,
     VK_KHR_WIN32_SURFACE_EXTENSION_NAME,
 };
 
-static std::vector<char const *> const RequiredLayerNames =
+static std::vector<char const *> const kRequiredLayerNames =
 {
 #if _DEBUG
     "VK_LAYER_KHRONOS_validation",
@@ -56,7 +56,7 @@ static bool const HasRequiredLayers()
 
     uint32 MatchedLayerCount = { 0u };
 
-    for (char const * RequiredLayerName : RequiredLayerNames)
+    for (char const * RequiredLayerName : kRequiredLayerNames)
     {
         for (VkLayerProperties const & Layer : AvailableLayers)
         {
@@ -68,7 +68,7 @@ static bool const HasRequiredLayers()
         }
     }
 
-    return MatchedLayerCount == RequiredLayerNames.size();
+    return MatchedLayerCount == kRequiredLayerNames.size();
 }
 
 static bool const HasRequiredExtensions()
@@ -102,7 +102,7 @@ static bool const HasRequiredExtensions()
 
     uint16 MatchedExtensionCount = { 0u };
 
-    for (char const * ExtensionName : RequiredExtensions)
+    for (char const * ExtensionName : kRequiredExtensionNames)
     {
         for (VkExtensionProperties const & Extension : AvailableExtensions)
         {
@@ -114,7 +114,7 @@ static bool const HasRequiredExtensions()
         }
     }
 
-    return MatchedExtensionCount == RequiredExtensions.size();
+    return MatchedExtensionCount == kRequiredExtensionNames.size();
 }
 
 bool const Vulkan::Instance::CreateInstance(VkApplicationInfo const & ApplicationInfo, InstanceState & OutputState)
@@ -129,14 +129,14 @@ bool const Vulkan::Instance::CreateInstance(VkApplicationInfo const & Applicatio
         VkInstanceCreateInfo InstanceCreateInfo = {};
         InstanceCreateInfo.sType = VkStructureType::VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
         InstanceCreateInfo.pApplicationInfo = &ApplicationInfo;
-        InstanceCreateInfo.enabledExtensionCount = RequiredExtensions.size();
-        InstanceCreateInfo.ppEnabledExtensionNames = RequiredExtensions.data();
-        InstanceCreateInfo.enabledLayerCount = RequiredLayerNames.size();
-        InstanceCreateInfo.ppEnabledLayerNames = RequiredLayerNames.data();
+        InstanceCreateInfo.enabledExtensionCount = kRequiredExtensionNames.size();
+        InstanceCreateInfo.ppEnabledExtensionNames = kRequiredExtensionNames.data();
+        InstanceCreateInfo.enabledLayerCount = kRequiredLayerNames.size();
+        InstanceCreateInfo.ppEnabledLayerNames = kRequiredLayerNames.data();
 
         VERIFY_VKRESULT(VulkanFunctions::vkCreateInstance(&InstanceCreateInfo, nullptr, &IntermediateState.Instance));
 
-        std::unordered_set const ExtensionSet = std::unordered_set<std::string>(RequiredExtensions.cbegin(), RequiredExtensions.cend());
+        std::unordered_set const ExtensionSet = std::unordered_set<std::string>(kRequiredExtensionNames.cbegin(), kRequiredExtensionNames.cend());
 
         if (::LoadInstanceFunctions(IntermediateState.Instance) &&
             ::LoadInstanceExtensionFunctions(IntermediateState.Instance, ExtensionSet))
