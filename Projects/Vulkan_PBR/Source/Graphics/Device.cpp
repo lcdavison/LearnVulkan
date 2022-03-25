@@ -8,6 +8,7 @@
 #include <string>
 
 extern bool const LoadDeviceFunctions(VkDevice);
+extern bool const LoadDeviceExtensionFunctions(VkDevice);
 
 static std::vector<char const *> RequiredExtensionNames = 
 {
@@ -151,6 +152,7 @@ bool const Vulkan::Device::CreateDevice(Vulkan::Instance::InstanceState const & 
         ::HasRequiredExtensions(IntermediateState.PhysicalDevice))
     {
         /* Find Queue family with required capabilities */
+        /* Queue should be capable of graphics + presenting */
 
         /* Query device queue families */
         uint32 PropertyCount = {};
@@ -192,7 +194,8 @@ bool const Vulkan::Device::CreateDevice(Vulkan::Instance::InstanceState const & 
 
         VERIFY_VKRESULT(VulkanFunctions::vkCreateDevice(IntermediateState.PhysicalDevice, &CreateInfo, nullptr, &IntermediateState.Device));
 
-        if (::LoadDeviceFunctions(IntermediateState.Device))
+        if (::LoadDeviceFunctions(IntermediateState.Device) &&
+            ::LoadDeviceExtensionFunctions(IntermediateState.Device))
         {
             OutputState = IntermediateState;
             bResult = true;

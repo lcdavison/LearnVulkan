@@ -34,8 +34,7 @@ namespace VulkanFunctions
 
 #include "Graphics/Instance.hpp"
 #include "Graphics/Device.hpp"
-
-//#include <utility>
+#include "Graphics/Viewport.hpp"
 
 using namespace Vulkan;
 
@@ -48,6 +47,7 @@ static HMODULE VulkanLibraryHandle = {};
 
 static Instance::InstanceState InstanceState = {};
 static Device::DeviceState DeviceState = {};
+static Viewport::ViewportState ViewportState = {};
 
 bool const VulkanModule::Start(VkApplicationInfo const & ApplicationInfo)
 {
@@ -59,7 +59,8 @@ bool const VulkanModule::Start(VkApplicationInfo const & ApplicationInfo)
         bResult = ::LoadExportedFunctions(VulkanLibraryHandle) &&
                   ::LoadGlobalFunctions() &&
                   Instance::CreateInstance(ApplicationInfo, InstanceState) &&
-                  Device::CreateDevice(InstanceState, DeviceState);
+                  Device::CreateDevice(InstanceState, DeviceState) &&
+                  Viewport::CreateViewport(InstanceState, DeviceState, ViewportState);
     }
     else
     {
@@ -71,6 +72,8 @@ bool const VulkanModule::Start(VkApplicationInfo const & ApplicationInfo)
 
 bool const VulkanModule::Stop()
 {
+    Viewport::DestroyViewport(DeviceState, ViewportState);
+
     Device::DestroyDevice(DeviceState);
 
     Instance::DestroyInstance(InstanceState);

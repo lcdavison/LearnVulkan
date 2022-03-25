@@ -104,3 +104,22 @@ extern bool const LoadDeviceFunctions(VkDevice Device)
 
 	return true;
 }
+
+extern bool const LoadDeviceExtensionFunctions(VkDevice Device)
+{
+#define VK_DEVICE_FUNCTION_FROM_EXTENSION(Function, Extension)\
+	VulkanFunctions::Function = reinterpret_cast<PFN_##Function>(VulkanFunctions::vkGetDeviceProcAddr(Device, #Function));\
+	if(!VulkanFunctions::Function) {\
+		return false;\
+	}\
+	{\
+		std::basic_string ErrorMessage = TEXT("Loaded Device Extension Function: ");\
+		ErrorMessage += TEXT(#Function);\
+		ErrorMessage += TEXT("\n");\
+		::OutputDebugString(ErrorMessage.c_str());\
+	}
+
+#include "Graphics/VulkanFunctions.inl"
+
+	return true;
+}
