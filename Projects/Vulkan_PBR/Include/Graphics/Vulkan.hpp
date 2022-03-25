@@ -50,3 +50,5 @@ namespace VulkanModule
 
     extern bool const Stop();
 }
+
+VkResult vkCreateInstance(VkInstanceCreateInfo const * pCreateInfo, VkAllocationCallbacks const * pAllocator, VkInstance * pInstance);

@@ -1,5 +1,7 @@
 #include "Graphics/Instance.hpp"
 
+#include "VulkanPBR.hpp"
+
 #include <Windows.h>
 #include "CommonTypes.hpp"
 
@@ -115,7 +117,7 @@ static bool const HasRequiredExtensions()
     return MatchedExtensionCount == RequiredExtensions.size();
 }
 
-bool const Vulkan::Instance::CreateInstance(VkApplicationInfo const & ApplicationInfo, InstanceState & OutputInstanceState)
+bool const Vulkan::Instance::CreateInstance(VkApplicationInfo const & ApplicationInfo, InstanceState & OutputState)
 {
     bool bResult = false;
 
@@ -139,7 +141,14 @@ bool const Vulkan::Instance::CreateInstance(VkApplicationInfo const & Applicatio
         if (::LoadInstanceFunctions(IntermediateState.Instance) &&
             ::LoadInstanceExtensionFunctions(IntermediateState.Instance, ExtensionSet))
         {
-            OutputInstanceState = IntermediateState;
+            VkWin32SurfaceCreateInfoKHR SurfaceCreateInfo = {};
+            SurfaceCreateInfo.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
+            SurfaceCreateInfo.hinstance = Application::State.ProcessHandle;
+            SurfaceCreateInfo.hwnd = Application::State.WindowHandle;
+
+            VERIFY_VKRESULT(VulkanFunctions::vkCreateWin32SurfaceKHR(IntermediateState.Instance, &SurfaceCreateInfo, nullptr, &IntermediateState.Surface));
+
+            OutputState = IntermediateState;
             bResult = true;
         }
     }
@@ -149,6 +158,12 @@ bool const Vulkan::Instance::CreateInstance(VkApplicationInfo const & Applicatio
 
 void Vulkan::Instance::DestroyInstance(InstanceState & State)
 {
+    if (State.Surface)
+    {
+        VulkanFunctions::vkDestroySurfaceKHR(State.Instance, State.Surface, nullptr);
+        State.Surface = VK_NULL_HANDLE;
+    }
+
     if (State.Instance)
     {
         VulkanFunctions::vkDestroyInstance(State.Instance, nullptr);

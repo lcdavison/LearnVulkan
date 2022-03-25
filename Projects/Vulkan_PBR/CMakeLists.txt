@@ -10,6 +10,7 @@ list(APPEND HeaderFiles
 "Include/Graphics/Vulkan.hpp"
 "Include/Graphics/Instance.hpp"
 "Include/Graphics/Device.hpp"
+"Include/Graphics/Viewport.hpp"
 "Include/ErrorHandling.hpp"
 "Include/CommonTypes.hpp"
 )
@@ -23,6 +24,7 @@ list(APPEND SourceFiles
 "Source/Graphics/Vulkan.cpp"
 "Source/Graphics/Instance.cpp"
 "Source/Graphics/Device.cpp"
+"Source/Graphics/Viewport.cpp"
 "Source/MacroMagic.cpp"
 )
 

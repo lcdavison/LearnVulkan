@@ -5,6 +5,7 @@ namespace Vulkan::Instance
     struct InstanceState
     {
         VkInstance Instance;
+        VkSurfaceKHR Surface;
     };
 
     extern bool const CreateInstance(VkApplicationInfo const & ApplicationInfo, InstanceState & OutputInstanceState);

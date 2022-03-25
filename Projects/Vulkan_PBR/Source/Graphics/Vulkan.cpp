@@ -35,6 +35,8 @@ namespace VulkanFunctions
 #include "Graphics/Instance.hpp"
 #include "Graphics/Device.hpp"
 
+//#include <utility>
+
 using namespace Vulkan;
 
 /* The implementation for these functions can be found in MacroMagic.cpp */
@@ -57,7 +59,7 @@ bool const VulkanModule::Start(VkApplicationInfo const & ApplicationInfo)
         bResult = ::LoadExportedFunctions(VulkanLibraryHandle) &&
                   ::LoadGlobalFunctions() &&
                   Instance::CreateInstance(ApplicationInfo, InstanceState) &&
-                  Device::CreateDevice(InstanceState.Instance, DeviceState);
+                  Device::CreateDevice(InstanceState, DeviceState);
     }
     else
     {
@@ -74,4 +76,9 @@ bool const VulkanModule::Stop()
     Instance::DestroyInstance(InstanceState);
 
     return ::FreeLibrary(VulkanLibraryHandle) != 0u;
+}
+
+VkResult vkCreateInstance(VkInstanceCreateInfo const * pCreateInfo, VkAllocationCallbacks const * pAllocator, VkInstance * pInstance)
+{
+    return VulkanFunctions::vkCreateInstance(pCreateInfo, pAllocator, pInstance);
 }

@@ -2,6 +2,11 @@
 
 #include "CommonTypes.hpp"
 
+namespace Vulkan::Instance
+{
+    struct InstanceState;
+}
+
 namespace Vulkan::Device
 {
     struct DeviceState
@@ -11,7 +16,7 @@ namespace Vulkan::Device
         uint32 GraphicsQueueFamilyIndex;
     };
 
-    extern bool const CreateDevice(VkInstance Instance, DeviceState & OutputDeviceState);
+    extern bool const CreateDevice(Vulkan::Instance::InstanceState const & InstanceState, DeviceState & OutputDeviceState);
 
     extern void DestroyDevice(DeviceState & State);
 }

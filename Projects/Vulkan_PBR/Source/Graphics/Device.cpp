@@ -1,5 +1,7 @@
 #include "Graphics/Device.hpp"
 
+#include "Graphics/Instance.hpp"
+
 #include <Windows.h>
 
 #include <vector>
@@ -12,6 +14,20 @@ static std::vector<char const *> RequiredExtensionNames =
     VK_KHR_SWAPCHAIN_EXTENSION_NAME,
 };
 
+static bool const HasRequiredLayers(VkPhysicalDevice Device)
+{
+    uint32 LayerCount = {};
+    VERIFY_VKRESULT(VulkanFunctions::vkEnumerateDeviceLayerProperties(Device, &LayerCount, nullptr));
+
+    std::vector AvailableLayers = std::vector<VkLayerProperties>(LayerCount);
+
+    VERIFY_VKRESULT(VulkanFunctions::vkEnumerateDeviceLayerProperties(Device, &LayerCount, AvailableLayers.data()));
+
+
+
+    return true;
+}
+
 static bool const HasRequiredExtensions(VkPhysicalDevice Device)
 {
     uint32 ExtensionCount = {};
@@ -22,13 +38,22 @@ static bool const HasRequiredExtensions(VkPhysicalDevice Device)
     VERIFY_VKRESULT(VulkanFunctions::vkEnumerateDeviceExtensionProperties(Device, nullptr, &ExtensionCount, AvailableExtensions.data()));
 
 #if defined(_DEBUG)
-    for (VkExtensionProperties const & Extension : AvailableExtensions)
     {
-        std::string ExtensionName = "Device Extension: ";
-        ExtensionName += Extension.extensionName;
-        ExtensionName += "\n";
+        char const OutputPrefix [] = "Device Extension: ";
 
-        ::OutputDebugStringA(ExtensionName.c_str());
+        std::string ExtensionName = std::string();
+        ExtensionName.reserve(sizeof(OutputPrefix) + VK_MAX_EXTENSION_NAME_SIZE);
+
+        for (VkExtensionProperties const & Extension : AvailableExtensions)
+        {
+            ExtensionName.clear();
+
+            ExtensionName += OutputPrefix;
+            ExtensionName += Extension.extensionName;
+            ExtensionName += "\n";
+
+            ::OutputDebugStringA(ExtensionName.c_str());
+        }
     }
 #endif
 
@@ -115,14 +140,14 @@ static bool const SelectPhysicalDevice(VkInstance Instance, VkPhysicalDevice & O
     return bResult;
 }
 
-bool const Vulkan::Device::CreateDevice(VkInstance Instance, DeviceState & OutputDeviceState)
+bool const Vulkan::Device::CreateDevice(Vulkan::Instance::InstanceState const & InstanceState, DeviceState & OutputState)
 {
     bool bResult = false;
 
-    /* Use this for atomicity, we don't want to partially fill OutputDeviceState */
+    /* Use this for atomicity, we don't want to partially fill OutputState */
     DeviceState IntermediateState = {};
 
-    if (::SelectPhysicalDevice(Instance, IntermediateState.PhysicalDevice) &&
+    if (::SelectPhysicalDevice(InstanceState.Instance, IntermediateState.PhysicalDevice) &&
         ::HasRequiredExtensions(IntermediateState.PhysicalDevice))
     {
         /* Find Queue family with required capabilities */
@@ -148,10 +173,13 @@ bool const Vulkan::Device::CreateDevice(VkInstance Instance, DeviceState & Outpu
             }
         }
 
+        float const QueuePriority = 1.0f;
+
         VkDeviceQueueCreateInfo QueueCreateInfo = {};
         QueueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
         QueueCreateInfo.queueFamilyIndex = IntermediateState.GraphicsQueueFamilyIndex;
         QueueCreateInfo.queueCount = 1u;
+        QueueCreateInfo.pQueuePriorities = &QueuePriority;
 
         VkDeviceCreateInfo CreateInfo = {};
         CreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
@@ -164,10 +192,11 @@ bool const Vulkan::Device::CreateDevice(VkInstance Instance, DeviceState & Outpu
 
         VERIFY_VKRESULT(VulkanFunctions::vkCreateDevice(IntermediateState.PhysicalDevice, &CreateInfo, nullptr, &IntermediateState.Device));
 
-        LoadDeviceFunctions(IntermediateState.Device);
-
-        OutputDeviceState = IntermediateState;
-        bResult = true;
+        if (::LoadDeviceFunctions(IntermediateState.Device))
+        {
+            OutputState = IntermediateState;
+            bResult = true;
+        }
     }
 
     return bResult;
