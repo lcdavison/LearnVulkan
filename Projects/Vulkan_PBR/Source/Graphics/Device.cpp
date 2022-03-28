@@ -10,7 +10,7 @@
 extern bool const LoadDeviceFunctions(VkDevice);
 extern bool const LoadDeviceExtensionFunctions(VkDevice);
 
-static std::vector<char const *> RequiredExtensionNames = 
+static std::vector<char const *> RequiredExtensionNames =
 {
     VK_KHR_SWAPCHAIN_EXTENSION_NAME,
 };
@@ -141,7 +141,41 @@ static bool const SelectPhysicalDevice(VkInstance Instance, VkPhysicalDevice & O
     return bResult;
 }
 
-bool const Vulkan::Device::CreateDevice(Vulkan::Instance::InstanceState const & InstanceState, DeviceState & OutputState)
+static bool const SelectQueueFamily(VkPhysicalDevice Device, VkSurfaceKHR Surface, uint32 & OutputFamilyIndex)
+{
+    bool bResult = false;
+
+    uint32 PropertyCount = {};
+    VulkanFunctions::vkGetPhysicalDeviceQueueFamilyProperties(Device, &PropertyCount, nullptr);
+
+    std::vector Properties = std::vector<VkQueueFamilyProperties>(PropertyCount);
+    VulkanFunctions::vkGetPhysicalDeviceQueueFamilyProperties(Device, &PropertyCount, Properties.data());
+
+    {
+        uint32 CurrentFamilyIndex = {};
+        for (VkQueueFamilyProperties const & FamilyProperties : Properties)
+        {
+            if (FamilyProperties.queueFlags & VkQueueFlagBits::VK_QUEUE_GRAPHICS_BIT)
+            {
+                VkBool32 SupportsPresentation = {};
+                VERIFY_VKRESULT(VulkanFunctions::vkGetPhysicalDeviceSurfaceSupportKHR(Device, CurrentFamilyIndex, Surface, &SupportsPresentation));
+
+                if (SupportsPresentation == VK_TRUE)
+                {
+                    OutputFamilyIndex = CurrentFamilyIndex;
+                    bResult = true;
+                    break;
+                }
+            }
+
+            CurrentFamilyIndex++;
+        }
+    }
+
+    return bResult;
+}
+
+bool const Vulkan::Device::CreateDevice(Vulkan::Instance::InstanceState const & InstanceState, Vulkan::Device::DeviceState & OutputState)
 {
     bool bResult = false;
 
@@ -149,32 +183,9 @@ bool const Vulkan::Device::CreateDevice(Vulkan::Instance::InstanceState const & 
     DeviceState IntermediateState = {};
 
     if (::SelectPhysicalDevice(InstanceState.Instance, IntermediateState.PhysicalDevice) &&
-        ::HasRequiredExtensions(IntermediateState.PhysicalDevice))
+        ::HasRequiredExtensions(IntermediateState.PhysicalDevice) &&
+        ::SelectQueueFamily(IntermediateState.PhysicalDevice, InstanceState.Surface, IntermediateState.GraphicsQueueFamilyIndex))
     {
-        /* Find Queue family with required capabilities */
-        /* Queue should be capable of graphics + presenting */
-
-        /* Query device queue families */
-        uint32 PropertyCount = {};
-        VulkanFunctions::vkGetPhysicalDeviceQueueFamilyProperties(IntermediateState.PhysicalDevice, &PropertyCount, nullptr);
-
-        std::vector Properties = std::vector<VkQueueFamilyProperties>(PropertyCount);
-        VulkanFunctions::vkGetPhysicalDeviceQueueFamilyProperties(IntermediateState.PhysicalDevice, &PropertyCount, Properties.data());
-
-        {
-            uint32 CurrentFamilyIndex = {};
-            for (VkQueueFamilyProperties const & FamilyProperties : Properties)
-            {
-                if (FamilyProperties.queueFlags & VkQueueFlagBits::VK_QUEUE_GRAPHICS_BIT)
-                {
-                    IntermediateState.GraphicsQueueFamilyIndex = CurrentFamilyIndex;
-                    break;
-                }
-
-                CurrentFamilyIndex++;
-            }
-        }
-
         float const QueuePriority = 1.0f;
 
         VkDeviceQueueCreateInfo QueueCreateInfo = {};
@@ -197,6 +208,8 @@ bool const Vulkan::Device::CreateDevice(Vulkan::Instance::InstanceState const & 
         if (::LoadDeviceFunctions(IntermediateState.Device) &&
             ::LoadDeviceExtensionFunctions(IntermediateState.Device))
         {
+            VulkanFunctions::vkGetDeviceQueue(IntermediateState.Device, IntermediateState.GraphicsQueueFamilyIndex, 0u, &IntermediateState.GraphicsQueue);
+
             OutputState = IntermediateState;
             bResult = true;
         }
@@ -205,11 +218,31 @@ bool const Vulkan::Device::CreateDevice(Vulkan::Instance::InstanceState const & 
     return bResult;
 }
 
-void Vulkan::Device::DestroyDevice(DeviceState & State)
+void Vulkan::Device::DestroyDevice(Vulkan::Device::DeviceState & State)
 {
     if (State.Device)
     {
         VulkanFunctions::vkDestroyDevice(State.Device, nullptr);
         State.Device = VK_NULL_HANDLE;
     }
+}
+
+void Vulkan::Device::CreateCommandPool(Vulkan::Device::DeviceState const & State, VkCommandPool & OutputCommandPool)
+{
+    VkCommandPoolCreateInfo CreateInfo = {};
+    CreateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+    CreateInfo.queueFamilyIndex = State.GraphicsQueueFamilyIndex;
+
+    VERIFY_VKRESULT(VulkanFunctions::vkCreateCommandPool(State.Device, &CreateInfo, nullptr, &OutputCommandPool));
+}
+
+void Vulkan::Device::CreateCommandBuffer(Vulkan::Device::DeviceState const & State, VkCommandBufferLevel CommandBufferLevel, VkCommandBuffer & OutputCommandBuffer)
+{
+    VkCommandBufferAllocateInfo AllocateInfo = {};
+    AllocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    AllocateInfo.commandPool = State.CommandPool;
+    AllocateInfo.commandBufferCount = 1u;
+    AllocateInfo.level = CommandBufferLevel;
+
+    VERIFY_VKRESULT(VulkanFunctions::vkAllocateCommandBuffers(State.Device, &AllocateInfo, &OutputCommandBuffer));
 }

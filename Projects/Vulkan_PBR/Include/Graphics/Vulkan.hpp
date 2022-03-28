@@ -61,9 +61,41 @@ namespace VulkanFunctions
 
 namespace VulkanModule
 {
-    extern bool const Start(VkApplicationInfo const & ApplicationInfo);
-
+    extern bool const Start();
     extern bool const Stop();
 }
 
+#include "CommonTypes.hpp"
+
 VkResult vkCreateInstance(VkInstanceCreateInfo const * pCreateInfo, VkAllocationCallbacks const * pAllocator, VkInstance * pInstance);
+
+extern inline VkResult vkCreateSemaphore(VkDevice device, VkSemaphoreCreateInfo const * pCreateInfo, VkAllocationCallbacks const * pAllocator, VkSemaphore * pSemaphore);
+
+extern inline VkResult vkCreateFramebuffer(VkDevice device, VkFramebufferCreateInfo const * pCreateInfo, VkAllocationCallbacks const * pAllocator, VkFramebuffer * pFramebuffer);
+
+extern inline VkResult vkBeginCommandBuffer(VkCommandBuffer commandBuffer, VkCommandBufferBeginInfo const * pBeginInfo);
+
+extern inline VkResult vkEndCommandBuffer(VkCommandBuffer commandBuffer);
+
+extern inline VkResult vkDeviceWaitIdle(VkDevice device);
+
+extern inline VkResult vkResetCommandPool(VkDevice device, VkCommandPool commandPool, VkCommandPoolResetFlags flags);
+
+extern inline VkResult vkQueueSubmit(VkQueue queue, uint32 submitCount, VkSubmitInfo const * pSubmits, VkFence fence);
+
+extern inline VkResult vkQueuePresentKHR(VkQueue queue, VkPresentInfoKHR const * pPresentInfo);
+
+extern inline VkResult vkAcquireNextImageKHR(VkDevice device, VkSwapchainKHR swapchain, uint64 timeout, VkSemaphore semaphore, VkFence fence, uint32 * pImageIndex);
+
+extern inline void vkCmdClearColorImage(VkCommandBuffer commandBuffer, VkImage image, VkImageLayout imageLayout, VkClearColorValue const * pColor, uint32 rangeCount, VkImageSubresourceRange const * pRanges);
+
+extern inline void vkCmdPipelineBarrier(VkCommandBuffer commandBuffer, 
+                                        VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask, 
+                                        VkDependencyFlags dependencyFlags, 
+                                        uint32 memoryBarrierCount, VkMemoryBarrier const * pMemoryBarriers, 
+                                        uint32 bufferMemoryBarrierCount, VkBufferMemoryBarrier const * pBufferMemoryBarriers, 
+                                        uint32 imageMemoryBarrierCount, VkImageMemoryBarrier const * pImageMemoryBarriers);
+
+extern inline void vkCmdBeginRenderPass(VkCommandBuffer commandBuffer, VkRenderPassBeginInfo const * pRenderPassBegin, VkSubpassContents contents);
+
+extern inline void vkCmdEndRenderPass(VkCommandBuffer commandBuffer);

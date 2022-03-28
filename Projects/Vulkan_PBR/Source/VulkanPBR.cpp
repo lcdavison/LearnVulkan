@@ -1,7 +1,7 @@
 #include "VulkanPBR.hpp"
 
-#include "ErrorHandling.hpp"
 #include "Graphics/Vulkan.hpp"
+#include "ForwardRenderer.hpp"
 
 extern Application::ApplicationState Application::State = Application::ApplicationState();
 
@@ -56,13 +56,16 @@ static bool const Initialise()
 
     Application::State.ProcessHandle = CurrentInstance;
 
-    VkApplicationInfo ApplicationInfo = {};
-    ApplicationInfo.sType = VkStructureType::VK_STRUCTURE_TYPE_APPLICATION_INFO;
-    ApplicationInfo.pApplicationName = "Vulkan PBR";
-    ApplicationInfo.applicationVersion = Application::kApplicationVersionNo;
-    ApplicationInfo.apiVersion = VK_MAKE_API_VERSION(0, 1, 0, 0);
+    if (VulkanModule::Start())
+    {
+        VkApplicationInfo ApplicationInfo = {};
+        ApplicationInfo.sType = VkStructureType::VK_STRUCTURE_TYPE_APPLICATION_INFO;
+        ApplicationInfo.pApplicationName = "Vulkan PBR";
+        ApplicationInfo.applicationVersion = Application::kApplicationVersionNo;
+        ApplicationInfo.apiVersion = VK_MAKE_API_VERSION(0, 1, 0, 0);
 
-    bResult = VulkanModule::Start(ApplicationInfo);
+        bResult = ForwardRenderer::Initialise(ApplicationInfo);
+    }
 
     return bResult;
 }
@@ -81,6 +84,8 @@ static bool const Run()
             ::TranslateMessage(&CurrentMessage);
             ::DispatchMessage(&CurrentMessage);
         }
+
+        ForwardRenderer::Render();
     }
 
     bResult = VulkanModule::Stop();

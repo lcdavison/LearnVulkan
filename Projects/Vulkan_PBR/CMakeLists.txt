@@ -13,6 +13,7 @@ list(APPEND HeaderFiles
 "Include/Graphics/Viewport.hpp"
 "Include/ErrorHandling.hpp"
 "Include/CommonTypes.hpp"
+"Include/ForwardRenderer.hpp"
 )
 
 list(APPEND InlineFiles
@@ -26,6 +27,7 @@ list(APPEND SourceFiles
 "Source/Graphics/Device.cpp"
 "Source/Graphics/Viewport.cpp"
 "Source/MacroMagic.cpp"
+"Source/ForwardRenderer.cpp"
 )
 
 add_executable(VulkanPBR WIN32 ${IncludeFiles} ${InlineFiles} ${SourceFiles})

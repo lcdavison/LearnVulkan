@@ -45,11 +45,7 @@ extern bool const LoadGlobalFunctions();
 
 static HMODULE VulkanLibraryHandle = {};
 
-static Instance::InstanceState InstanceState = {};
-static Device::DeviceState DeviceState = {};
-static Viewport::ViewportState ViewportState = {};
-
-bool const VulkanModule::Start(VkApplicationInfo const & ApplicationInfo)
+bool const VulkanModule::Start()
 {
     bool bResult = false;
 
@@ -57,10 +53,7 @@ bool const VulkanModule::Start(VkApplicationInfo const & ApplicationInfo)
     if (VulkanLibraryHandle)
     {
         bResult = ::LoadExportedFunctions(VulkanLibraryHandle) &&
-                  ::LoadGlobalFunctions() &&
-                  Instance::CreateInstance(ApplicationInfo, InstanceState) &&
-                  Device::CreateDevice(InstanceState, DeviceState) &&
-                  Viewport::CreateViewport(InstanceState, DeviceState, ViewportState);
+                  ::LoadGlobalFunctions();
     }
     else
     {
@@ -72,12 +65,6 @@ bool const VulkanModule::Start(VkApplicationInfo const & ApplicationInfo)
 
 bool const VulkanModule::Stop()
 {
-    Viewport::DestroyViewport(DeviceState, ViewportState);
-
-    Device::DestroyDevice(DeviceState);
-
-    Instance::DestroyInstance(InstanceState);
-
     return ::FreeLibrary(VulkanLibraryHandle) != 0u;
 }
 
@@ -89,4 +76,79 @@ VkResult vkCreateInstance(VkInstanceCreateInfo const * pCreateInfo, VkAllocation
 void vkDestroyInstance(VkInstance instance, VkAllocationCallbacks const * pAllocator)
 {
     VulkanFunctions::vkDestroyInstance(instance, pAllocator);
+}
+
+inline VkResult vkCreateSemaphore(VkDevice device, VkSemaphoreCreateInfo const * pCreateInfo, VkAllocationCallbacks const * pAllocator, VkSemaphore * pSemaphore)
+{
+    return VulkanFunctions::vkCreateSemaphore(device, pCreateInfo, pAllocator, pSemaphore);
+}
+
+inline VkResult vkCreateFramebuffer(VkDevice device, VkFramebufferCreateInfo const * pCreateInfo, VkAllocationCallbacks const * pAllocator, VkFramebuffer * pFramebuffer)
+{
+    return VulkanFunctions::vkCreateFramebuffer(device, pCreateInfo, pAllocator, pFramebuffer);
+}
+
+inline VkResult vkBeginCommandBuffer(VkCommandBuffer commandBuffer, VkCommandBufferBeginInfo const * pBeginInfo)
+{
+    return VulkanFunctions::vkBeginCommandBuffer(commandBuffer, pBeginInfo);
+}
+
+inline VkResult vkEndCommandBuffer(VkCommandBuffer commandBuffer)
+{
+    return VulkanFunctions::vkEndCommandBuffer(commandBuffer);
+}
+
+inline VkResult vkDeviceWaitIdle(VkDevice device)
+{
+    return VulkanFunctions::vkDeviceWaitIdle(device);
+}
+
+inline VkResult vkResetCommandPool(VkDevice device, VkCommandPool commandPool, VkCommandPoolResetFlags flags)
+{
+    return VulkanFunctions::vkResetCommandPool(device, commandPool, flags);
+}
+
+inline VkResult vkQueueSubmit(VkQueue queue, uint32 submitCount, VkSubmitInfo const * pSubmits, VkFence fence)
+{
+    return VulkanFunctions::vkQueueSubmit(queue, submitCount, pSubmits, fence);
+}
+
+inline VkResult vkQueuePresentKHR(VkQueue queue, VkPresentInfoKHR const * pPresentInfo)
+{
+    return VulkanFunctions::vkQueuePresentKHR(queue, pPresentInfo);
+}
+
+inline VkResult vkAcquireNextImageKHR(VkDevice device, VkSwapchainKHR swapchain, uint64 timeout, VkSemaphore semaphore, VkFence fence, uint32 * pImageIndex)
+{
+    return VulkanFunctions::vkAcquireNextImageKHR(device, swapchain, timeout, semaphore, fence, pImageIndex);
+}
+
+inline void vkCmdClearColorImage(VkCommandBuffer commandBuffer, VkImage image, VkImageLayout imageLayout, VkClearColorValue const * pColor, uint32 rangeCount, VkImageSubresourceRange const * pRanges)
+{
+    VulkanFunctions::vkCmdClearColorImage(commandBuffer, image, imageLayout, pColor, rangeCount, pRanges);
+}
+
+inline void vkCmdPipelineBarrier(VkCommandBuffer commandBuffer,
+                                 VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask,
+                                 VkDependencyFlags dependencyFlags,
+                                 uint32 memoryBarrierCount, VkMemoryBarrier const * pMemoryBarriers,
+                                 uint32 bufferMemoryBarrierCount, VkBufferMemoryBarrier const * pBufferMemoryBarriers,
+                                 uint32 imageMemoryBarrierCount, VkImageMemoryBarrier const * pImageMemoryBarriers)
+{
+    return VulkanFunctions::vkCmdPipelineBarrier(commandBuffer,
+                                                 srcStageMask, dstStageMask,
+                                                 dependencyFlags,
+                                                 memoryBarrierCount, pMemoryBarriers,
+                                                 bufferMemoryBarrierCount, pBufferMemoryBarriers,
+                                                 imageMemoryBarrierCount, pImageMemoryBarriers);
+}
+
+inline void vkCmdBeginRenderPass(VkCommandBuffer commandBuffer, VkRenderPassBeginInfo const * pRenderPassBegin, VkSubpassContents contents)
+{
+    VulkanFunctions::vkCmdBeginRenderPass(commandBuffer, pRenderPassBegin, contents);
+}
+
+inline void vkCmdEndRenderPass(VkCommandBuffer commandBuffer)
+{
+    VulkanFunctions::vkCmdEndRenderPass(commandBuffer);
 }
