@@ -20,7 +20,7 @@ namespace Vulkan::Device
         /* Can put this here to begin with, but for multithreading each thread should use its own Pool*/
         VkCommandPool CommandPool;
 
-        VkSemaphore PresentSemaphore; // Signalled when image is acquired
+        VkSemaphore PresentSemaphore; // Signalled when presentation engine is finished with image
         VkSemaphore RenderSemaphore; // Signalled when rendering is complete
     };
 
@@ -28,9 +28,9 @@ namespace Vulkan::Device
 
     extern void DestroyDevice(DeviceState & State);
 
-    extern void CreateCommandPool(Vulkan::Device::DeviceState const & State, VkCommandPool & OutputCommandPool);
+    extern void CreateCommandPool(DeviceState const & State, VkCommandPool & OutputCommandPool);
 
-    extern void CreateCommandBuffer(Vulkan::Device::DeviceState const & State, VkCommandBufferLevel CommandBufferLevel, VkCommandBuffer & OutputCommandBuffer);
+    extern void CreateCommandBuffer(DeviceState const & State, VkCommandBufferLevel CommandBufferLevel, VkCommandBuffer & OutputCommandBuffer);
 
-    extern void CreateBuffer(Vulkan::Device::DeviceState const & State, VkBuffer & OutputBuffer);
+    extern void CreateBuffer(DeviceState const & State, VkBuffer & OutputBuffer);
 }
