@@ -9,9 +9,6 @@
 #include <string>
 #include <unordered_set>
 
-extern bool const LoadInstanceFunctions(VkInstance);
-extern bool const LoadInstanceExtensionFunctions(VkInstance, std::unordered_set<std::string> const &);
-
 static std::vector<char const *> const kRequiredExtensionNames = 
 {
     VK_KHR_SURFACE_EXTENSION_NAME,
@@ -28,11 +25,11 @@ static std::vector<char const *> const kRequiredLayerNames =
 static bool const HasRequiredLayers()
 {
     uint32 PropertyCount = {};
-    VERIFY_VKRESULT(VulkanFunctions::vkEnumerateInstanceLayerProperties(&PropertyCount, nullptr));
+    VERIFY_VKRESULT(vkEnumerateInstanceLayerProperties(&PropertyCount, nullptr));
 
     std::vector AvailableLayers = std::vector<VkLayerProperties>(PropertyCount);
 
-    VERIFY_VKRESULT(VulkanFunctions::vkEnumerateInstanceLayerProperties(&PropertyCount, AvailableLayers.data()));
+    VERIFY_VKRESULT(vkEnumerateInstanceLayerProperties(&PropertyCount, AvailableLayers.data()));
 
 #if _DEBUG
     {
@@ -74,11 +71,11 @@ static bool const HasRequiredLayers()
 static bool const HasRequiredExtensions()
 {
     uint32 ExtensionCount = {};
-    VERIFY_VKRESULT(VulkanFunctions::vkEnumerateInstanceExtensionProperties(nullptr, &ExtensionCount, nullptr));
+    VERIFY_VKRESULT(vkEnumerateInstanceExtensionProperties(nullptr, &ExtensionCount, nullptr));
 
     std::vector AvailableExtensions = std::vector<VkExtensionProperties>(ExtensionCount);
 
-    VERIFY_VKRESULT(VulkanFunctions::vkEnumerateInstanceExtensionProperties(nullptr, &ExtensionCount, AvailableExtensions.data()));
+    VERIFY_VKRESULT(vkEnumerateInstanceExtensionProperties(nullptr, &ExtensionCount, AvailableExtensions.data()));
 
 #if _DEBUG
     {
@@ -134,7 +131,7 @@ bool const Vulkan::Instance::CreateInstance(VkApplicationInfo const & Applicatio
         InstanceCreateInfo.enabledLayerCount = kRequiredLayerNames.size();
         InstanceCreateInfo.ppEnabledLayerNames = kRequiredLayerNames.data();
 
-        VERIFY_VKRESULT(VulkanFunctions::vkCreateInstance(&InstanceCreateInfo, nullptr, &IntermediateState.Instance));
+        VERIFY_VKRESULT(vkCreateInstance(&InstanceCreateInfo, nullptr, &IntermediateState.Instance));
 
         std::unordered_set const ExtensionSet = std::unordered_set<std::string>(kRequiredExtensionNames.cbegin(), kRequiredExtensionNames.cend());
 
@@ -146,7 +143,7 @@ bool const Vulkan::Instance::CreateInstance(VkApplicationInfo const & Applicatio
             SurfaceCreateInfo.hinstance = Application::State.ProcessHandle;
             SurfaceCreateInfo.hwnd = Application::State.WindowHandle;
 
-            VERIFY_VKRESULT(VulkanFunctions::vkCreateWin32SurfaceKHR(IntermediateState.Instance, &SurfaceCreateInfo, nullptr, &IntermediateState.Surface));
+            VERIFY_VKRESULT(vkCreateWin32SurfaceKHR(IntermediateState.Instance, &SurfaceCreateInfo, nullptr, &IntermediateState.Surface));
 
             OutputState = IntermediateState;
             bResult = true;
@@ -160,13 +157,13 @@ void Vulkan::Instance::DestroyInstance(InstanceState & State)
 {
     if (State.Surface)
     {
-        VulkanFunctions::vkDestroySurfaceKHR(State.Instance, State.Surface, nullptr);
+        vkDestroySurfaceKHR(State.Instance, State.Surface, nullptr);
         State.Surface = VK_NULL_HANDLE;
     }
 
     if (State.Instance)
     {
-        VulkanFunctions::vkDestroyInstance(State.Instance, nullptr);
+        vkDestroyInstance(State.Instance, nullptr);
         State.Instance = VK_NULL_HANDLE;
     }
 }

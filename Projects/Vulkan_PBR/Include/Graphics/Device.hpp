@@ -1,8 +1,6 @@
-#include "Vulkan.hpp"
+#include "VulkanModule.hpp"
 
 #include "CommonTypes.hpp"
-
-#include <array>
 
 namespace Vulkan::Instance
 {

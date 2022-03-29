@@ -1,13 +1,13 @@
+cmake_minimum_required(VERSION 3.20)
+
 project(VulkanPBR)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-include_directories("./Include")
-
 list(APPEND HeaderFiles
 "Include/VulkanPBR.hpp"
-"Include/Graphics/Vulkan.hpp"
+"Include/Graphics/VulkanModule.hpp"
 "Include/Graphics/Instance.hpp"
 "Include/Graphics/Device.hpp"
 "Include/Graphics/Viewport.hpp"
@@ -16,24 +16,25 @@ list(APPEND HeaderFiles
 "Include/ForwardRenderer.hpp"
 )
 
-list(APPEND InlineFiles
-"Include/Graphics/VulkanFunctions.inl"
-)
-
 list(APPEND SourceFiles
 "Source/VulkanPBR.cpp"
-"Source/Graphics/Vulkan.cpp"
+"Source/Graphics/VulkanModule.cpp"
 "Source/Graphics/Instance.cpp"
 "Source/Graphics/Device.cpp"
 "Source/Graphics/Viewport.cpp"
-"Source/MacroMagic.cpp"
 "Source/ForwardRenderer.cpp"
 )
 
-add_executable(VulkanPBR WIN32 ${IncludeFiles} ${InlineFiles} ${SourceFiles})
+add_executable(VulkanPBR WIN32)
 
-# This is because I am using Macro magic
-target_compile_definitions(VulkanPBR 
-PRIVATE VK_NO_PROTOTYPES
-PRIVATE VK_USE_PLATFORM_WIN32_KHR    
+target_include_directories(VulkanPBR
+PRIVATE "$<TARGET_PROPERTY:VulkanWrapper,INTERFACE_INCLUDE_DIRECTORIES>"
+PRIVATE "./Include"
 )
+
+target_sources(VulkanPBR
+PRIVATE ${HeaderFiles}
+PRIVATE ${SourceFiles}
+)
+
+target_link_libraries(VulkanPBR VulkanWrapper)

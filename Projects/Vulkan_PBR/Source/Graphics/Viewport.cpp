@@ -5,8 +5,6 @@
 #include "Graphics/Instance.hpp"
 #include "Graphics/Device.hpp"
 
-#include "CommonTypes.hpp"
-
 #include <vector>
 #include <algorithm>
 
@@ -53,13 +51,13 @@ static bool const SupportsRequiredSurfaceFormat(Vulkan::Instance::InstanceState 
     bool bResult = false;
 
     uint32 FormatCount = {};
-    VERIFY_VKRESULT(VulkanFunctions::vkGetPhysicalDeviceSurfaceFormatsKHR(DeviceState.PhysicalDevice, InstanceState.Surface, &FormatCount, nullptr));
+    VERIFY_VKRESULT(vkGetPhysicalDeviceSurfaceFormatsKHR(DeviceState.PhysicalDevice, InstanceState.Surface, &FormatCount, nullptr));
 
     if (FormatCount > 0u)
     {
         std::vector SupportedFormats = std::vector<VkSurfaceFormatKHR>(FormatCount);
 
-        VERIFY_VKRESULT(VulkanFunctions::vkGetPhysicalDeviceSurfaceFormatsKHR(DeviceState.PhysicalDevice, InstanceState.Surface, &FormatCount, SupportedFormats.data()));
+        VERIFY_VKRESULT(vkGetPhysicalDeviceSurfaceFormatsKHR(DeviceState.PhysicalDevice, InstanceState.Surface, &FormatCount, SupportedFormats.data()));
 
         /* One element with VK_FORMAT_UNDEFINED means that we can choose whatever surface format we want apparently */
         if (SupportedFormats.size() == 1 && SupportedFormats[0u].format == VK_FORMAT_UNDEFINED)
@@ -100,7 +98,7 @@ bool const Vulkan::Viewport::CreateViewport(Vulkan::Instance::InstanceState cons
     Vulkan::Viewport::ViewportState IntermediateState = {};
 
     VkSurfaceCapabilitiesKHR SurfaceCapabilities = {};
-    VERIFY_VKRESULT(VulkanFunctions::vkGetPhysicalDeviceSurfaceCapabilitiesKHR(DeviceState.PhysicalDevice, InstanceState.Surface, &SurfaceCapabilities));
+    VERIFY_VKRESULT(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(DeviceState.PhysicalDevice, InstanceState.Surface, &SurfaceCapabilities));
 
     uint32 ImageCount = ::GetSwapChainImageCount(SurfaceCapabilities);
     
@@ -126,15 +124,15 @@ bool const Vulkan::Viewport::CreateViewport(Vulkan::Instance::InstanceState cons
         SwapChainCreateInfo.presentMode = VK_PRESENT_MODE_MAILBOX_KHR;
         SwapChainCreateInfo.clipped = VK_TRUE;
 
-        VERIFY_VKRESULT(VulkanFunctions::vkCreateSwapchainKHR(DeviceState.Device, &SwapChainCreateInfo, nullptr, &IntermediateState.SwapChain));
+        VERIFY_VKRESULT(vkCreateSwapchainKHR(DeviceState.Device, &SwapChainCreateInfo, nullptr, &IntermediateState.SwapChain));
 
         {
             uint32 SwapChainImageCount = {};
-            VERIFY_VKRESULT(VulkanFunctions::vkGetSwapchainImagesKHR(DeviceState.Device, IntermediateState.SwapChain, &SwapChainImageCount, nullptr));
+            VERIFY_VKRESULT(vkGetSwapchainImagesKHR(DeviceState.Device, IntermediateState.SwapChain, &SwapChainImageCount, nullptr));
 
             IntermediateState.SwapChainImages.resize(SwapChainImageCount);
 
-            VERIFY_VKRESULT(VulkanFunctions::vkGetSwapchainImagesKHR(DeviceState.Device, IntermediateState.SwapChain, &SwapChainImageCount, IntermediateState.SwapChainImages.data()));
+            VERIFY_VKRESULT(vkGetSwapchainImagesKHR(DeviceState.Device, IntermediateState.SwapChain, &SwapChainImageCount, IntermediateState.SwapChainImages.data()));
         }
 
         OutputState = IntermediateState;
@@ -148,7 +146,7 @@ void Vulkan::Viewport::DestroyViewport(Vulkan::Device::DeviceState const & Devic
 {
     if (State.SwapChain)
     {
-        VulkanFunctions::vkDestroySwapchainKHR(DeviceState.Device, State.SwapChain, nullptr);
+        vkDestroySwapchainKHR(DeviceState.Device, State.SwapChain, nullptr);
         State.SwapChain = VK_NULL_HANDLE;
     }
 }

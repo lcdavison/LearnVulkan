@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Graphics/Vulkan.hpp"
+struct VkApplicationInfo;
 
 namespace ForwardRenderer
 {

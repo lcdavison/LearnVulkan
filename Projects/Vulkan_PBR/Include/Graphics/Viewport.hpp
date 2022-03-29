@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Vulkan.hpp"
+#include "VulkanModule.hpp"
 
 #include "CommonTypes.hpp"
 

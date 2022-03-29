@@ -1,6 +1,6 @@
 #include "VulkanPBR.hpp"
 
-#include "Graphics/Vulkan.hpp"
+#include "Graphics/VulkanModule.hpp"
 #include "ForwardRenderer.hpp"
 
 extern Application::ApplicationState Application::State = Application::ApplicationState();

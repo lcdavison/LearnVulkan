@@ -1,5 +1,7 @@
 #include "ForwardRenderer.hpp"
 
+#include "Graphics/VulkanModule.hpp"
+
 #include "Graphics/Instance.hpp"
 #include "Graphics/Device.hpp"
 #include "Graphics/Viewport.hpp"

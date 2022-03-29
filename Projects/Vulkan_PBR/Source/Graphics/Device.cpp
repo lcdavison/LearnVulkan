@@ -7,9 +7,6 @@
 #include <vector>
 #include <string>
 
-extern bool const LoadDeviceFunctions(VkDevice);
-extern bool const LoadDeviceExtensionFunctions(VkDevice);
-
 static std::vector<char const *> RequiredExtensionNames =
 {
     VK_KHR_SWAPCHAIN_EXTENSION_NAME,
@@ -18,11 +15,11 @@ static std::vector<char const *> RequiredExtensionNames =
 static bool const HasRequiredLayers(VkPhysicalDevice Device)
 {
     uint32 LayerCount = {};
-    VERIFY_VKRESULT(VulkanFunctions::vkEnumerateDeviceLayerProperties(Device, &LayerCount, nullptr));
+    VERIFY_VKRESULT(vkEnumerateDeviceLayerProperties(Device, &LayerCount, nullptr));
 
     std::vector AvailableLayers = std::vector<VkLayerProperties>(LayerCount);
 
-    VERIFY_VKRESULT(VulkanFunctions::vkEnumerateDeviceLayerProperties(Device, &LayerCount, AvailableLayers.data()));
+    VERIFY_VKRESULT(vkEnumerateDeviceLayerProperties(Device, &LayerCount, AvailableLayers.data()));
 
 
 
@@ -32,11 +29,11 @@ static bool const HasRequiredLayers(VkPhysicalDevice Device)
 static bool const HasRequiredExtensions(VkPhysicalDevice Device)
 {
     uint32 ExtensionCount = {};
-    VERIFY_VKRESULT(VulkanFunctions::vkEnumerateDeviceExtensionProperties(Device, nullptr, &ExtensionCount, nullptr));
+    VERIFY_VKRESULT(vkEnumerateDeviceExtensionProperties(Device, nullptr, &ExtensionCount, nullptr));
 
     std::vector AvailableExtensions = std::vector<VkExtensionProperties>(ExtensionCount);
 
-    VERIFY_VKRESULT(VulkanFunctions::vkEnumerateDeviceExtensionProperties(Device, nullptr, &ExtensionCount, AvailableExtensions.data()));
+    VERIFY_VKRESULT(vkEnumerateDeviceExtensionProperties(Device, nullptr, &ExtensionCount, AvailableExtensions.data()));
 
 #if defined(_DEBUG)
     {
@@ -85,13 +82,13 @@ static bool const EnumerateDevices(VkInstance Instance, std::vector<VkPhysicalDe
     bool bResult = false;
 
     uint32 DeviceCount = {};
-    VERIFY_VKRESULT(VulkanFunctions::vkEnumeratePhysicalDevices(Instance, &DeviceCount, nullptr));
+    VERIFY_VKRESULT(vkEnumeratePhysicalDevices(Instance, &DeviceCount, nullptr));
 
     if (DeviceCount > 0u)
     {
         OutputPhysicalDevices.resize(DeviceCount);
 
-        VERIFY_VKRESULT(VulkanFunctions::vkEnumeratePhysicalDevices(Instance, &DeviceCount, OutputPhysicalDevices.data()));
+        VERIFY_VKRESULT(vkEnumeratePhysicalDevices(Instance, &DeviceCount, OutputPhysicalDevices.data()));
 
         bResult = true;
     }
@@ -115,10 +112,10 @@ static bool const SelectPhysicalDevice(VkInstance Instance, VkPhysicalDevice & O
         for (VkPhysicalDevice Device : Devices)
         {
             VkPhysicalDeviceProperties DeviceProperties = {};
-            VulkanFunctions::vkGetPhysicalDeviceProperties(Device, &DeviceProperties);
+            vkGetPhysicalDeviceProperties(Device, &DeviceProperties);
 
             VkPhysicalDeviceFeatures DeviceFeatures = {};
-            VulkanFunctions::vkGetPhysicalDeviceFeatures(Device, &DeviceFeatures);
+            vkGetPhysicalDeviceFeatures(Device, &DeviceFeatures);
 
             if (::IsSuitableDevice(DeviceProperties, DeviceFeatures))
             {
@@ -146,10 +143,10 @@ static bool const SelectQueueFamily(VkPhysicalDevice Device, VkSurfaceKHR Surfac
     bool bResult = false;
 
     uint32 PropertyCount = {};
-    VulkanFunctions::vkGetPhysicalDeviceQueueFamilyProperties(Device, &PropertyCount, nullptr);
+    vkGetPhysicalDeviceQueueFamilyProperties(Device, &PropertyCount, nullptr);
 
     std::vector Properties = std::vector<VkQueueFamilyProperties>(PropertyCount);
-    VulkanFunctions::vkGetPhysicalDeviceQueueFamilyProperties(Device, &PropertyCount, Properties.data());
+    vkGetPhysicalDeviceQueueFamilyProperties(Device, &PropertyCount, Properties.data());
 
     {
         uint32 CurrentFamilyIndex = {};
@@ -158,7 +155,7 @@ static bool const SelectQueueFamily(VkPhysicalDevice Device, VkSurfaceKHR Surfac
             if (FamilyProperties.queueFlags & VkQueueFlagBits::VK_QUEUE_GRAPHICS_BIT)
             {
                 VkBool32 SupportsPresentation = {};
-                VERIFY_VKRESULT(VulkanFunctions::vkGetPhysicalDeviceSurfaceSupportKHR(Device, CurrentFamilyIndex, Surface, &SupportsPresentation));
+                VERIFY_VKRESULT(vkGetPhysicalDeviceSurfaceSupportKHR(Device, CurrentFamilyIndex, Surface, &SupportsPresentation));
 
                 if (SupportsPresentation == VK_TRUE)
                 {
@@ -203,12 +200,12 @@ bool const Vulkan::Device::CreateDevice(Vulkan::Instance::InstanceState const & 
         /* Need to figure out what features need to be enabled */
         //CreateInfo.pEnabledFeatures;
 
-        VERIFY_VKRESULT(VulkanFunctions::vkCreateDevice(IntermediateState.PhysicalDevice, &CreateInfo, nullptr, &IntermediateState.Device));
+        VERIFY_VKRESULT(vkCreateDevice(IntermediateState.PhysicalDevice, &CreateInfo, nullptr, &IntermediateState.Device));
 
         if (::LoadDeviceFunctions(IntermediateState.Device) &&
             ::LoadDeviceExtensionFunctions(IntermediateState.Device))
         {
-            VulkanFunctions::vkGetDeviceQueue(IntermediateState.Device, IntermediateState.GraphicsQueueFamilyIndex, 0u, &IntermediateState.GraphicsQueue);
+            vkGetDeviceQueue(IntermediateState.Device, IntermediateState.GraphicsQueueFamilyIndex, 0u, &IntermediateState.GraphicsQueue);
 
             OutputState = IntermediateState;
             bResult = true;
@@ -222,7 +219,7 @@ void Vulkan::Device::DestroyDevice(Vulkan::Device::DeviceState & State)
 {
     if (State.Device)
     {
-        VulkanFunctions::vkDestroyDevice(State.Device, nullptr);
+        vkDestroyDevice(State.Device, nullptr);
         State.Device = VK_NULL_HANDLE;
     }
 }
@@ -233,7 +230,7 @@ void Vulkan::Device::CreateCommandPool(Vulkan::Device::DeviceState const & State
     CreateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
     CreateInfo.queueFamilyIndex = State.GraphicsQueueFamilyIndex;
 
-    VERIFY_VKRESULT(VulkanFunctions::vkCreateCommandPool(State.Device, &CreateInfo, nullptr, &OutputCommandPool));
+    VERIFY_VKRESULT(vkCreateCommandPool(State.Device, &CreateInfo, nullptr, &OutputCommandPool));
 }
 
 void Vulkan::Device::CreateCommandBuffer(Vulkan::Device::DeviceState const & State, VkCommandBufferLevel CommandBufferLevel, VkCommandBuffer & OutputCommandBuffer)
@@ -244,5 +241,5 @@ void Vulkan::Device::CreateCommandBuffer(Vulkan::Device::DeviceState const & Sta
     AllocateInfo.commandBufferCount = 1u;
     AllocateInfo.level = CommandBufferLevel;
 
-    VERIFY_VKRESULT(VulkanFunctions::vkAllocateCommandBuffers(State.Device, &AllocateInfo, &OutputCommandBuffer));
+    VERIFY_VKRESULT(vkAllocateCommandBuffers(State.Device, &AllocateInfo, &OutputCommandBuffer));
 }
