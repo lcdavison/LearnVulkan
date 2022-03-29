@@ -37,4 +37,8 @@ PRIVATE ${HeaderFiles}
 PRIVATE ${SourceFiles}
 )
 
+target_compile_definitions(VulkanPBR
+PRIVATE "$<TARGET_PROPERTY:VulkanWrapper,INTERFACE_COMPILE_DEFINITIONS>"
+)
+
 target_link_libraries(VulkanPBR VulkanWrapper)

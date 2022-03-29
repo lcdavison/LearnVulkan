@@ -14,7 +14,7 @@ list(APPEND SourceFiles
 "Source/VulkanFunctions.inl"
 )
 
-add_library(VulkanWrapper SHARED ${HeaderFiles} ${SourceFiles})
+add_library(VulkanWrapper SHARED)
 
 target_include_directories(VulkanWrapper 
 PUBLIC "./Include"
@@ -27,4 +27,6 @@ PRIVATE ${SourceFiles}
 
 target_compile_definitions(VulkanWrapper 
 PRIVATE VULKAN_WRAPPER_EXPORT
+PUBLIC VK_NO_PROTOTYPES
+PUBLIC VK_USE_PLATFORM_WIN32_KHR
 )
