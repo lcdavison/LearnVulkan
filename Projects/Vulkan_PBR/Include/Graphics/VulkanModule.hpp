@@ -28,7 +28,10 @@
             }\
         }
 #else
-    #define VERIFY_VKRESULT(Function)
+    #define VERIFY_VKRESULT(Function)\
+        {\
+            VkResult Result = Function;\
+        }   
 #endif // _DEBUG
 
 namespace VulkanModule
