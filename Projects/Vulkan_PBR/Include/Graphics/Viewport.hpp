@@ -20,15 +20,24 @@ namespace Vulkan::Viewport
 {
     struct ViewportState
     {
-        VkSurfaceFormatKHR SurfaceFormat;
-        VkSwapchainKHR SwapChain;
         std::vector<VkImage> SwapChainImages;
         std::vector<VkImageView> SwapChainImageViews;
+
+        std::vector<VkFramebuffer> FrameBuffers;
+
+        VkExtent2D ImageExtents;
+
+        VkSwapchainKHR SwapChain;
+        VkSurfaceFormatKHR SurfaceFormat;
 
         uint32 CurrentBackBufferIndex;
     };
 
     extern bool const CreateViewport(Vulkan::Instance::InstanceState const & InstanceState, Vulkan::Device::DeviceState const & DeviceState, ViewportState & OutputState);
+
+    extern void CreateFrameBuffers(Vulkan::Device::DeviceState const & DeviceState, VkRenderPass RenderPass, ViewportState & State);
+
+    extern bool const ResizeViewport(Vulkan::Instance::InstanceState const & InstanceState, Vulkan::Device::DeviceState const & DeviceState, ViewportState & State);
 
     extern void DestroyViewport(Vulkan::Device::DeviceState const & DeviceState, ViewportState & State);
 }

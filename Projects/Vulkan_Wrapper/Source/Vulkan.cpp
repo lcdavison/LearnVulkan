@@ -199,9 +199,29 @@ VkResult vkCreateSemaphore(VkDevice device, VkSemaphoreCreateInfo const * pCreat
     return Functions::vkCreateSemaphore(device, pCreateInfo, pAllocator, pSemaphore);
 }
 
+VkResult vkCreateRenderPass(VkDevice device, VkRenderPassCreateInfo const * pCreateInfo, VkAllocationCallbacks const * pAllocator, VkRenderPass * pRenderPass)
+{
+    return Functions::vkCreateRenderPass(device, pCreateInfo, pAllocator, pRenderPass);
+}
+
 VkResult vkCreateFramebuffer(VkDevice device, VkFramebufferCreateInfo const * pCreateInfo, VkAllocationCallbacks const * pAllocator, VkFramebuffer * pFramebuffer)
 {
     return Functions::vkCreateFramebuffer(device, pCreateInfo, pAllocator, pFramebuffer);
+}
+
+VkResult vkCreateImageView(VkDevice device, VkImageViewCreateInfo const * pCreateInfo, VkAllocationCallbacks const * pAllocator, VkImageView * pImageView)
+{
+    return Functions::vkCreateImageView(device, pCreateInfo, pAllocator, pImageView);
+}
+
+VkResult vkCreateGraphicsPipelines(VkDevice device, VkPipelineCache pipelineCache, std::uint32_t createInfoCount, VkGraphicsPipelineCreateInfo const * pCreateInfos, VkAllocationCallbacks const * pAllocator, VkPipeline * pPipelines)
+{
+    return Functions::vkCreateGraphicsPipelines(device, pipelineCache, createInfoCount, pCreateInfos, pAllocator, pPipelines);
+}
+
+VkResult vkCreatePipelineLayout(VkDevice device, VkPipelineLayoutCreateInfo const * pCreateInfo, VkAllocationCallbacks const * pAllocator, VkPipelineLayout * pPipelineLayout)
+{
+    return Functions::vkCreatePipelineLayout(device, pCreateInfo, pAllocator, pPipelineLayout);
 }
 
 VkResult vkCreateWin32SurfaceKHR(VkInstance instance, VkWin32SurfaceCreateInfoKHR const * pCreateInfo, VkAllocationCallbacks const * pAllocator, VkSurfaceKHR * pSurface)
@@ -223,6 +243,31 @@ void vkDestroyInstance(VkInstance instance, VkAllocationCallbacks const * pAlloc
 void vkDestroyDevice(VkDevice device, VkAllocationCallbacks const * pAllocator)
 {
     Functions::vkDestroyDevice(device, pAllocator);
+}
+
+void vkDestroyCommandPool(VkDevice device, VkCommandPool commandPool, VkAllocationCallbacks const * pAllocator)
+{
+    Functions::vkDestroyCommandPool(device, commandPool, pAllocator);
+}
+
+void vkDestroySemaphore(VkDevice device, VkSemaphore semaphore, VkAllocationCallbacks const * pAllocator)
+{
+    Functions::vkDestroySemaphore(device, semaphore, pAllocator);
+}
+
+void vkDestroyRenderPass(VkDevice device, VkRenderPass renderPass, VkAllocationCallbacks const * pAllocator)
+{
+    Functions::vkDestroyRenderPass(device, renderPass, pAllocator);
+}
+
+void vkDestroyFramebuffer(VkDevice device, VkFramebuffer framebuffer, VkAllocationCallbacks const * pAllocator)
+{
+    Functions::vkDestroyFramebuffer(device, framebuffer, pAllocator);
+}
+
+void vkDestroyImageView(VkDevice device, VkImageView imageView, VkAllocationCallbacks const * pAllocator)
+{
+    Functions::vkDestroyImageView(device, imageView, pAllocator);
 }
 
 void vkDestroySurfaceKHR(VkInstance instance, VkSurfaceKHR surface, VkAllocationCallbacks const * pAllocator)

@@ -1,6 +1,7 @@
 #include "VulkanPBR.hpp"
 
 #include "Graphics/VulkanModule.hpp"
+#include "Graphics/Viewport.hpp"
 #include "ForwardRenderer.hpp"
 
 extern Application::ApplicationState Application::State = Application::ApplicationState();
@@ -9,16 +10,21 @@ static LRESULT CALLBACK WindowProcedure(HWND Window, UINT Message, WPARAM WParam
 {
     switch (Message)
     {
-    case WM_DESTROY:
-    {
-        Application::State.bRunning = false;
+        case WM_SIZE:
+        {
+            Application::State.CurrentWindowWidth = LOWORD(LParam);
+            Application::State.CurrentWindowHeight = HIWORD(LParam);
+        }
+        break;
+        case WM_DESTROY:
+        {
+            Application::State.bRunning = false;
 
-        ::PostQuitMessage(EXIT_SUCCESS);
-
+            ::PostQuitMessage(EXIT_SUCCESS);
+        }
         return 0;
-    }
-    default:
-        return ::DefWindowProc(Window, Message, WParam, LParam);
+        default:
+            return ::DefWindowProc(Window, Message, WParam, LParam);
     }
 }
 
@@ -40,12 +46,12 @@ static bool const Initialise()
 
     if (::RegisterClassEx(&WindowClass))
     {
-        Application::State.WindowHandle = ::CreateWindow(Application::kWindowClassName, 
-                                                         Application::kWindowName, 
-                                                         WS_OVERLAPPEDWINDOW, 
-                                                         CW_USEDEFAULT, CW_USEDEFAULT, 
-                                                         Application::kDefaultWindowWidth, Application::kDefaultWindowHeight, 
-                                                         nullptr, nullptr, 
+        Application::State.WindowHandle = ::CreateWindow(Application::kWindowClassName,
+                                                         Application::kWindowName,
+                                                         WS_OVERLAPPEDWINDOW,
+                                                         CW_USEDEFAULT, CW_USEDEFAULT,
+                                                         Application::kDefaultWindowWidth, Application::kDefaultWindowHeight,
+                                                         nullptr, nullptr,
                                                          CurrentInstance, nullptr);
 
         bResult = Application::State.WindowHandle != INVALID_HANDLE_VALUE;
@@ -87,6 +93,8 @@ static bool const Run()
 
         ForwardRenderer::Render();
     }
+
+    ForwardRenderer::Shutdown();
 
     bResult = VulkanModule::Stop();
 

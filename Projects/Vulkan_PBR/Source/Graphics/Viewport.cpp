@@ -12,6 +12,7 @@ VkFormat const kRequiredFormat = VK_FORMAT_B8G8R8A8_UNORM;
 VkColorSpaceKHR const kRequiredColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
 
 uint32 const kRequiredImageUsageFlags = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+uint32 const kRequiredImageCount = 2u;
 
 inline static bool const HasRequiredImageUsage(VkSurfaceCapabilitiesKHR const & SurfaceCapabilities)
 {
@@ -20,7 +21,7 @@ inline static bool const HasRequiredImageUsage(VkSurfaceCapabilitiesKHR const & 
 
 inline static uint32 const GetSwapChainImageCount(VkSurfaceCapabilitiesKHR const& SurfaceCapabilities)
 {
-    uint32 ImageCount = { SurfaceCapabilities.minImageCount + 1u };
+    uint32 ImageCount = { SurfaceCapabilities.minImageCount };
 
     /* maxImageCount == 0u indicates there is no limit */
     bool bRestrictImageCount = SurfaceCapabilities.maxImageCount > 0u && ImageCount > SurfaceCapabilities.maxImageCount;
@@ -28,15 +29,15 @@ inline static uint32 const GetSwapChainImageCount(VkSurfaceCapabilitiesKHR const
     return bRestrictImageCount ? SurfaceCapabilities.maxImageCount : ImageCount;
 }
 
-static VkExtent2D const GetSwapChainImageExtents(VkSurfaceCapabilitiesKHR const& SurfaceCapabilities)
+static VkExtent2D const GetSwapChainImageExtents(VkExtent2D DesiredExtents, VkSurfaceCapabilitiesKHR const& SurfaceCapabilities)
 {
     VkExtent2D ImageExtents = {};
 
     /* currentExtent.width == 0xFFFFFFFF indicates the image size controls window size */
     if (SurfaceCapabilities.currentExtent.width == 0xFFFFFFFF)
     {
-        ImageExtents.width = std::clamp(Application::kDefaultWindowWidth, SurfaceCapabilities.minImageExtent.width, SurfaceCapabilities.maxImageExtent.width);
-        ImageExtents.height = std::clamp(Application::kDefaultWindowHeight, SurfaceCapabilities.minImageExtent.height, SurfaceCapabilities.maxImageExtent.height);
+        ImageExtents.width = std::clamp(DesiredExtents.width, SurfaceCapabilities.minImageExtent.width, SurfaceCapabilities.maxImageExtent.width);
+        ImageExtents.height = std::clamp(DesiredExtents.height, SurfaceCapabilities.minImageExtent.height, SurfaceCapabilities.maxImageExtent.height);
     }
     else
     {
@@ -84,6 +85,63 @@ static bool const SupportsRequiredSurfaceFormat(Vulkan::Instance::InstanceState 
     return bResult;
 }
 
+static void DestroyFrameBuffers(Vulkan::Device::DeviceState const & DeviceState, Vulkan::Viewport::ViewportState & State)
+{
+    for (VkFramebuffer & FrameBuffer : State.FrameBuffers)
+    {
+        if (FrameBuffer)
+        {
+            vkDestroyFramebuffer(DeviceState.Device, FrameBuffer, nullptr);
+            FrameBuffer = VK_NULL_HANDLE;
+        }
+    }
+
+    for (VkImageView & ImageView : State.SwapChainImageViews)
+    {
+        if (ImageView)
+        {
+            vkDestroyImageView(DeviceState.Device, ImageView, nullptr);
+            ImageView = VK_NULL_HANDLE;
+        }
+    }
+}
+
+static void StoreSwapChainImages(Vulkan::Device::DeviceState const & DeviceState, Vulkan::Viewport::ViewportState & State)
+{
+    uint32 SwapChainImageCount = {};
+    VERIFY_VKRESULT(vkGetSwapchainImagesKHR(DeviceState.Device, State.SwapChain, &SwapChainImageCount, nullptr));
+
+    State.SwapChainImages.resize(SwapChainImageCount);
+    State.SwapChainImageViews.resize(SwapChainImageCount);
+    State.FrameBuffers.resize(SwapChainImageCount);
+
+    VERIFY_VKRESULT(vkGetSwapchainImagesKHR(DeviceState.Device, State.SwapChain, &SwapChainImageCount, State.SwapChainImages.data()));
+
+    uint32 CurrentImageIndex = { 0u };
+
+    for (VkImageView & ImageView : State.SwapChainImageViews)
+    {
+        VkImageViewCreateInfo CreateInfo = {};
+        CreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+        CreateInfo.image = State.SwapChainImages [CurrentImageIndex];
+        CreateInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+        CreateInfo.format = State.SurfaceFormat.format;
+        CreateInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+        CreateInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+        CreateInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+        CreateInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+        CreateInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        CreateInfo.subresourceRange.baseMipLevel = 0u;
+        CreateInfo.subresourceRange.levelCount = 1u;
+        CreateInfo.subresourceRange.baseArrayLayer = 0u;
+        CreateInfo.subresourceRange.layerCount = 1u;
+
+        VERIFY_VKRESULT(vkCreateImageView(DeviceState.Device, &CreateInfo, nullptr, &ImageView));
+
+        CurrentImageIndex++;
+    }
+}
+
 bool const Vulkan::Viewport::CreateViewport(Vulkan::Instance::InstanceState const & InstanceState, Vulkan::Device::DeviceState const & DeviceState, Vulkan::Viewport::ViewportState & OutputState)
 {
     if (!InstanceState.Instance || 
@@ -102,20 +160,22 @@ bool const Vulkan::Viewport::CreateViewport(Vulkan::Instance::InstanceState cons
 
     uint32 ImageCount = ::GetSwapChainImageCount(SurfaceCapabilities);
     
-    VkExtent2D ImageExtents = ::GetSwapChainImageExtents(SurfaceCapabilities);
-    
-    VkSurfaceFormatKHR SurfaceFormat = {};
+    VkExtent2D DesiredExtents = {};
+    DesiredExtents.width = Application::State.CurrentWindowWidth;
+    DesiredExtents.height = Application::State.CurrentWindowHeight;
 
+    IntermediateState.ImageExtents = ::GetSwapChainImageExtents(DesiredExtents, SurfaceCapabilities);
+    
     if (::HasRequiredImageUsage(SurfaceCapabilities) &&
-        ::SupportsRequiredSurfaceFormat(InstanceState, DeviceState, SurfaceFormat))
+        ::SupportsRequiredSurfaceFormat(InstanceState, DeviceState, IntermediateState.SurfaceFormat))
     {
         VkSwapchainCreateInfoKHR SwapChainCreateInfo = {};
         SwapChainCreateInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
         SwapChainCreateInfo.surface = InstanceState.Surface;
-        SwapChainCreateInfo.imageExtent = ImageExtents;
+        SwapChainCreateInfo.imageExtent = IntermediateState.ImageExtents;
         SwapChainCreateInfo.minImageCount = ImageCount;
-        SwapChainCreateInfo.imageFormat = SurfaceFormat.format;
-        SwapChainCreateInfo.imageColorSpace = SurfaceFormat.colorSpace;
+        SwapChainCreateInfo.imageFormat = IntermediateState.SurfaceFormat.format;
+        SwapChainCreateInfo.imageColorSpace = IntermediateState.SurfaceFormat.colorSpace;
         SwapChainCreateInfo.imageArrayLayers = 1u;
         SwapChainCreateInfo.imageUsage = kRequiredImageUsageFlags;
         SwapChainCreateInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
@@ -126,16 +186,82 @@ bool const Vulkan::Viewport::CreateViewport(Vulkan::Instance::InstanceState cons
 
         VERIFY_VKRESULT(vkCreateSwapchainKHR(DeviceState.Device, &SwapChainCreateInfo, nullptr, &IntermediateState.SwapChain));
 
-        {
-            uint32 SwapChainImageCount = {};
-            VERIFY_VKRESULT(vkGetSwapchainImagesKHR(DeviceState.Device, IntermediateState.SwapChain, &SwapChainImageCount, nullptr));
+        ::StoreSwapChainImages(DeviceState, IntermediateState);
 
-            IntermediateState.SwapChainImages.resize(SwapChainImageCount);
+        OutputState = std::move(IntermediateState);
+        bResult = true;
+    }
 
-            VERIFY_VKRESULT(vkGetSwapchainImagesKHR(DeviceState.Device, IntermediateState.SwapChain, &SwapChainImageCount, IntermediateState.SwapChainImages.data()));
-        }
+    return bResult;
+}
 
-        OutputState = IntermediateState;
+void Vulkan::Viewport::CreateFrameBuffers(Vulkan::Device::DeviceState const & DeviceState, VkRenderPass RenderPass, Vulkan::Viewport::ViewportState & State)
+{
+    uint32 CurrentFrameBufferIndex = { 0u };
+
+    for (VkFramebuffer & FrameBuffer : State.FrameBuffers)
+    {
+        VkFramebufferCreateInfo CreateInfo = {};
+        CreateInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+        CreateInfo.renderPass = RenderPass;
+        CreateInfo.width = State.ImageExtents.width;
+        CreateInfo.height = State.ImageExtents.height;
+        CreateInfo.layers = 1u;
+        CreateInfo.attachmentCount = 1u;
+        CreateInfo.pAttachments = &State.SwapChainImageViews [CurrentFrameBufferIndex];
+
+        VERIFY_VKRESULT(vkCreateFramebuffer(DeviceState.Device, &CreateInfo, nullptr, &FrameBuffer));
+
+        CurrentFrameBufferIndex++;
+    }
+}
+
+bool const Vulkan::Viewport::ResizeViewport(Vulkan::Instance::InstanceState const & InstanceState, Vulkan::Device::DeviceState const & DeviceState, Vulkan::Viewport::ViewportState & State)
+{
+    bool bResult = false;
+
+    VERIFY_VKRESULT(vkDeviceWaitIdle(DeviceState.Device));
+
+    ::DestroyFrameBuffers(DeviceState, State);
+
+    VkSurfaceCapabilitiesKHR SurfaceCapabilities = {};
+    VkResult SurfaceCapabilityError = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(DeviceState.PhysicalDevice, InstanceState.Surface, &SurfaceCapabilities);
+
+    if (SurfaceCapabilityError != VK_ERROR_SURFACE_LOST_KHR)
+    {
+        Vulkan::Viewport::ViewportState IntermediateState = {};
+
+        VkExtent2D NewImageExtents = {};
+        NewImageExtents.width = Application::State.CurrentWindowWidth;
+        NewImageExtents.height = Application::State.CurrentWindowHeight;
+
+        IntermediateState.ImageExtents = ::GetSwapChainImageExtents(NewImageExtents, SurfaceCapabilities);
+        IntermediateState.SurfaceFormat = State.SurfaceFormat;
+
+        VkSwapchainCreateInfoKHR SwapChainCreateInfo = {};
+        SwapChainCreateInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+        SwapChainCreateInfo.surface = InstanceState.Surface;
+        SwapChainCreateInfo.imageExtent = IntermediateState.ImageExtents;
+        SwapChainCreateInfo.minImageCount = SurfaceCapabilities.minImageCount;
+        SwapChainCreateInfo.imageFormat = IntermediateState.SurfaceFormat.format;
+        SwapChainCreateInfo.imageColorSpace = IntermediateState.SurfaceFormat.colorSpace;
+        SwapChainCreateInfo.imageArrayLayers = (1u < SurfaceCapabilities.maxImageArrayLayers) ? 1u : SurfaceCapabilities.maxImageArrayLayers;
+        SwapChainCreateInfo.imageUsage = kRequiredImageUsageFlags;
+        SwapChainCreateInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+        SwapChainCreateInfo.preTransform = SurfaceCapabilities.currentTransform;
+        SwapChainCreateInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+        SwapChainCreateInfo.presentMode = VK_PRESENT_MODE_MAILBOX_KHR;
+        SwapChainCreateInfo.clipped = VK_TRUE;
+
+        /* Need to find out whether we should keep track of the old swapchains and destroy them ourselves */
+        /* Reading the spec images that aren't in use should get cleand up */
+        SwapChainCreateInfo.oldSwapchain = State.SwapChain;
+
+        VERIFY_VKRESULT(vkCreateSwapchainKHR(DeviceState.Device, &SwapChainCreateInfo, nullptr, &IntermediateState.SwapChain));
+
+        ::StoreSwapChainImages(DeviceState, IntermediateState);
+
+        State = std::move(IntermediateState);
         bResult = true;
     }
 
@@ -144,6 +270,8 @@ bool const Vulkan::Viewport::CreateViewport(Vulkan::Instance::InstanceState cons
 
 void Vulkan::Viewport::DestroyViewport(Vulkan::Device::DeviceState const & DeviceState, Vulkan::Viewport::ViewportState & State)
 {
+    ::DestroyFrameBuffers(DeviceState, State);
+
     if (State.SwapChain)
     {
         vkDestroySwapchainKHR(DeviceState.Device, State.SwapChain, nullptr);

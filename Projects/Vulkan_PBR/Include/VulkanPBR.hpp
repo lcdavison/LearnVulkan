@@ -10,6 +10,10 @@ namespace Application
     {
         HINSTANCE ProcessHandle;
         HWND WindowHandle;
+
+        uint32 CurrentWindowWidth;
+        uint32 CurrentWindowHeight;
+
         bool bRunning;
     };
 
