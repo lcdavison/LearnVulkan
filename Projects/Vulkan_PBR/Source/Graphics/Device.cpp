@@ -217,6 +217,26 @@ bool const Vulkan::Device::CreateDevice(Vulkan::Instance::InstanceState const & 
 
 void Vulkan::Device::DestroyDevice(Vulkan::Device::DeviceState & State)
 {
+    VERIFY_VKRESULT(vkDeviceWaitIdle(State.Device));
+
+    if (State.CommandPool)
+    {
+        vkDestroyCommandPool(State.Device, State.CommandPool, nullptr);
+        State.CommandPool = VK_NULL_HANDLE;
+    }
+
+    if (State.PresentSemaphore)
+    {
+        vkDestroySemaphore(State.Device, State.PresentSemaphore, nullptr);
+        State.PresentSemaphore = VK_NULL_HANDLE;
+    }
+
+    if (State.RenderSemaphore)
+    {
+        vkDestroySemaphore(State.Device, State.RenderSemaphore, nullptr);
+        State.RenderSemaphore = VK_NULL_HANDLE;
+    }
+
     if (State.Device)
     {
         vkDestroyDevice(State.Device, nullptr);
