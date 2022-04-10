@@ -2,6 +2,7 @@
 
 #include "Graphics/VulkanModule.hpp"
 #include "Graphics/Viewport.hpp"
+#include "Graphics/ShaderLibrary.hpp"
 #include "ForwardRenderer.hpp"
 
 extern Application::ApplicationState Application::State = Application::ApplicationState();
@@ -70,6 +71,8 @@ static bool const Initialise()
         ApplicationInfo.applicationVersion = Application::kApplicationVersionNo;
         ApplicationInfo.apiVersion = VK_MAKE_API_VERSION(0, 1, 0, 0);
 
+        bResult = ShaderLibrary::Initialise();
+
         bResult = ForwardRenderer::Initialise(ApplicationInfo);
     }
 
@@ -93,6 +96,8 @@ static bool const Run()
 
         ForwardRenderer::Render();
     }
+
+    ShaderLibrary::Destroy();
 
     ForwardRenderer::Shutdown();
 
