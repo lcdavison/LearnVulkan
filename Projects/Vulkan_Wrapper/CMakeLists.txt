@@ -6,8 +6,14 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 list(
+    APPEND HeaderFiles
+    "Include/Vulkan.hpp"
+)
+
+list(
     APPEND SourceFiles 
     "Source/Vulkan.cpp"
+    "Source/VulkanFunctions.inl"
 )
 
 add_library(VulkanWrapper SHARED)
@@ -25,6 +31,7 @@ target_include_directories(
 
 target_sources(
     VulkanWrapper
+    PRIVATE ${HeaderFiles}
     PRIVATE ${SourceFiles}
 )
 

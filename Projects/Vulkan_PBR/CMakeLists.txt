@@ -6,6 +6,18 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 list(
+    APPEND HeaderFiles
+    "Include/VulkanPBR.hpp"
+    "Include/Graphics/VulkanModule.hpp"
+    "Include/Graphics/Instance.hpp"
+    "Include/Graphics/Device.hpp"
+    "Include/Graphics/Viewport.hpp"
+    "Include/Graphics/ShaderLibrary.hpp"
+    "Include/ShaderCompiler/ShaderCompiler.hpp"
+    "Include/ForwardRenderer.hpp"
+)
+
+list(
     APPEND SourceFiles
     "Source/VulkanPBR.cpp"
     "Source/Graphics/VulkanModule.cpp"
@@ -35,6 +47,7 @@ target_include_directories(
 
 target_sources(
     VulkanPBR
+    PRIVATE ${HeaderFiles}
     PRIVATE ${SourceFiles}
 )
 
