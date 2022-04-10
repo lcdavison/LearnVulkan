@@ -57,6 +57,10 @@ target_link_libraries(
     VulkanWrapper
 )
 
+# This is for debugging the .exe since we have required resources here
 if(MSVC)
-    set_property(TARGET VulkanPBR PROPERTY VS_DEBUGGER_WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+    set_property(
+        TARGET VulkanPBR 
+        PROPERTY VS_DEBUGGER_WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    )
 endif()
