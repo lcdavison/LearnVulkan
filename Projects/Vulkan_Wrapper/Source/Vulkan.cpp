@@ -280,6 +280,16 @@ void vkDestroyShaderModule(VkDevice device, VkShaderModule shaderModule, VkAlloc
     Functions::vkDestroyShaderModule(device, shaderModule, pAllocator);
 }
 
+void vkDestroyPipelineLayout(VkDevice device, VkPipelineLayout pipelineLayout, VkAllocationCallbacks const * pAllocator)
+{
+    Functions::vkDestroyPipelineLayout(device, pipelineLayout, pAllocator);
+}
+
+void vkDestroyPipeline(VkDevice device, VkPipeline pipeline, VkAllocationCallbacks const * pAllocator)
+{
+    Functions::vkDestroyPipeline(device, pipeline, pAllocator);
+}
+
 void vkDestroySurfaceKHR(VkInstance instance, VkSurfaceKHR surface, VkAllocationCallbacks const * pAllocator)
 {
     Functions::vkDestroySurfaceKHR(instance, surface, pAllocator);
@@ -365,4 +375,24 @@ void vkCmdBeginRenderPass(VkCommandBuffer commandBuffer, VkRenderPassBeginInfo c
 void vkCmdEndRenderPass(VkCommandBuffer commandBuffer)
 {
     Functions::vkCmdEndRenderPass(commandBuffer);
+}
+
+void vkCmdBindPipeline(VkCommandBuffer commandBuffer, VkPipelineBindPoint pipelineBindPoint, VkPipeline pipeline)
+{
+    Functions::vkCmdBindPipeline(commandBuffer, pipelineBindPoint, pipeline);
+}
+
+void vkCmdDraw(VkCommandBuffer commandBuffer, std::uint32_t vertexCount, std::uint32_t instanceCount, std::uint32_t firstVertex, std::uint32_t firstInstance)
+{
+    Functions::vkCmdDraw(commandBuffer, vertexCount, instanceCount, firstVertex, firstInstance);
+}
+
+void vkCmdSetViewport(VkCommandBuffer commandBuffer, std::uint32_t firstViewport, std::uint32_t viewportCount, VkViewport * pViewports)
+{
+    Functions::vkCmdSetViewport(commandBuffer, firstViewport, viewportCount, pViewports);
+}
+
+void vkCmdSetScissor(VkCommandBuffer commandBuffer, std::uint32_t firstScissor, std::uint32_t scissorCount, VkRect2D * pScissors)
+{
+    Functions::vkCmdSetScissor(commandBuffer, firstScissor, scissorCount, pScissors);
 }
