@@ -25,6 +25,7 @@
                 ErrorMessage += TO_STRING(__LINE__);\
                 ErrorMessage += TEXT("]");\
                 ::MessageBox(nullptr, ErrorMessage.c_str(), TEXT("Vulkan Error"), MB_OK);\
+                ::PostQuitMessage(EXIT_FAILURE);\
             }\
         }
 #else
