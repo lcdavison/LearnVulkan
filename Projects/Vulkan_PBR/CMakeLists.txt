@@ -12,6 +12,8 @@ list(
     "Include/Graphics/Instance.hpp"
     "Include/Graphics/Device.hpp"
     "Include/Graphics/Viewport.hpp"
+    "Include/Graphics/ShaderLibrary.hpp"
+    "Include/ShaderCompiler/ShaderCompiler.hpp"
     "Include/ErrorHandling.hpp"
     "Include/CommonTypes.hpp"
     "Include/ForwardRenderer.hpp"
@@ -24,6 +26,8 @@ list(
     "Source/Graphics/Instance.cpp"
     "Source/Graphics/Device.cpp"
     "Source/Graphics/Viewport.cpp"
+    "Source/Graphics/ShaderLibrary.cpp"
+    "Source/ShaderCompiler/ShaderCompiler.cpp"
     "Source/ForwardRenderer.cpp"
 )
 
@@ -31,8 +35,8 @@ add_executable(VulkanPBR WIN32)
 
 target_include_directories(
     VulkanPBR
-    PRIVATE "$<TARGET_PROPERTY:VulkanWrapper,INTERFACE_INCLUDE_DIRECTORIES>"
     PRIVATE "./Include"
+    PRIVATE "$<TARGET_PROPERTY:VulkanWrapper,INTERFACE_INCLUDE_DIRECTORIES>"
 )
 
 target_sources(
@@ -47,7 +51,12 @@ target_compile_definitions(
 )
 
 target_link_libraries(
-    VulkanPBR 
+    VulkanPBR
     glslang
+    SPIRV
     VulkanWrapper
 )
+
+if(MSVC)
+    set_property(TARGET VulkanPBR PROPERTY VS_DEBUGGER_WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+endif()
