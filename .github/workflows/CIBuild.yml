@@ -17,6 +17,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+      with:
+        submodules: "recursive"
 
     - name: Configure CMake
       run: cmake -S ${{github.workspace}}/Projects -B ${{github.workspace}}/Build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
