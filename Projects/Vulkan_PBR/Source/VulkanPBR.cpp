@@ -1,7 +1,6 @@
 #include "VulkanPBR.hpp"
 
 #include "Graphics/VulkanModule.hpp"
-#include "Graphics/Viewport.hpp"
 #include "Graphics/ShaderLibrary.hpp"
 #include "ForwardRenderer.hpp"
 
@@ -19,8 +18,6 @@ static LRESULT CALLBACK WindowProcedure(HWND Window, UINT Message, WPARAM WParam
         break;
         case WM_DESTROY:
         {
-            Application::State.bRunning = false;
-
             ::PostQuitMessage(EXIT_SUCCESS);
         }
         return 0;
@@ -79,49 +76,73 @@ static bool const Initialise()
     return bResult;
 }
 
+static bool const Destroy()
+{
+    ShaderLibrary::Destroy();
+
+    bool bResult = ForwardRenderer::Shutdown() && VulkanModule::Stop();
+
+    return bResult;
+}
+
+static bool const ProcessWindowMessages()
+{
+    bool bResult = true;
+
+    MSG CurrentMessage = {};
+
+    while (::PeekMessage(&CurrentMessage, nullptr, 0u, 0u, PM_REMOVE))
+    {
+        if (CurrentMessage.message == WM_QUIT)
+        {
+            bResult = false;
+            break;
+        }
+
+        ::TranslateMessage(&CurrentMessage);
+        ::DispatchMessage(&CurrentMessage);
+    }
+
+    return bResult;
+}
+
 static bool const Run()
 {
     bool bResult = true;
 
-    Application::State.bRunning = true;
-
-    while (Application::State.bRunning)
+    for (;;)
     {
-        MSG CurrentMessage = {};
-        while (::PeekMessage(&CurrentMessage, nullptr, 0u, 0u, PM_REMOVE))
+        if (::ProcessWindowMessages())
         {
-            ::TranslateMessage(&CurrentMessage);
-            ::DispatchMessage(&CurrentMessage);
+            ForwardRenderer::Render();
         }
-
-        ForwardRenderer::Render();
+        else
+        {
+            break;
+        }
     }
 
-    ShaderLibrary::Destroy();
-
-    ForwardRenderer::Shutdown();
-
-    bResult = VulkanModule::Stop();
+    bResult = ::Destroy();
 
     return bResult;
 }
 
 INT WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, INT)
 {
-    INT Result = EXIT_SUCCESS;
+    INT ExitCode = EXIT_SUCCESS;
 
     if (Initialise())
     {
         if (!Run())
         {
-            Result = EXIT_FAILURE;
+            ExitCode = EXIT_FAILURE;
         }
     }
     else
     {
         ::MessageBox(nullptr, TEXT("Failed to initialise application"), TEXT("Fatal Error"), MB_OK);
-        Result = EXIT_FAILURE;
+        ExitCode = EXIT_FAILURE;
     }
 
-    return Result;
+    return ExitCode;
 }
