@@ -69,7 +69,7 @@ static bool const Initialise()
         ApplicationInfo.sType = VkStructureType::VK_STRUCTURE_TYPE_APPLICATION_INFO;
         ApplicationInfo.pApplicationName = "Vulkan PBR";
         ApplicationInfo.applicationVersion = Application::kApplicationVersionNo;
-        ApplicationInfo.apiVersion = VK_MAKE_API_VERSION(0, 1, 0, 0);
+        ApplicationInfo.apiVersion = VK_MAKE_API_VERSION(0, 1, 3, 0);
 
         bResult = ShaderLibrary::Initialise();
 
