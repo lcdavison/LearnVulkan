@@ -72,8 +72,9 @@ VK_DEVICE_FUNCTION(vkCreateFence);
 VK_DEVICE_FUNCTION(vkCreateFramebuffer);
 VK_DEVICE_FUNCTION(vkCreateRenderPass);
 VK_DEVICE_FUNCTION(vkCreateImageView);
-VK_DEVICE_FUNCTION(vkCreateGraphicsPipelines);
+VK_DEVICE_FUNCTION(vkCreateShaderModule);
 VK_DEVICE_FUNCTION(vkCreatePipelineLayout);
+VK_DEVICE_FUNCTION(vkCreateGraphicsPipelines);
 
 VK_DEVICE_FUNCTION(vkDestroyDevice);
 VK_DEVICE_FUNCTION(vkDestroyCommandPool);
@@ -81,6 +82,7 @@ VK_DEVICE_FUNCTION(vkDestroySemaphore);
 VK_DEVICE_FUNCTION(vkDestroyRenderPass);
 VK_DEVICE_FUNCTION(vkDestroyFramebuffer);
 VK_DEVICE_FUNCTION(vkDestroyImageView);
+VK_DEVICE_FUNCTION(vkDestroyShaderModule);
 
 VK_DEVICE_FUNCTION(vkQueueSubmit);
 

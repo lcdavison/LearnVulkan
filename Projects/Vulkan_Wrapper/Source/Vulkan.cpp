@@ -214,6 +214,11 @@ VkResult vkCreateImageView(VkDevice device, VkImageViewCreateInfo const * pCreat
     return Functions::vkCreateImageView(device, pCreateInfo, pAllocator, pImageView);
 }
 
+VkResult vkCreateShaderModule(VkDevice device, VkShaderModuleCreateInfo const * pCreateInfo, VkAllocationCallbacks const * pAllocator, VkShaderModule * pShaderModule)
+{
+    return Functions::vkCreateShaderModule(device, pCreateInfo, pAllocator, pShaderModule);
+}
+
 VkResult vkCreateGraphicsPipelines(VkDevice device, VkPipelineCache pipelineCache, std::uint32_t createInfoCount, VkGraphicsPipelineCreateInfo const * pCreateInfos, VkAllocationCallbacks const * pAllocator, VkPipeline * pPipelines)
 {
     return Functions::vkCreateGraphicsPipelines(device, pipelineCache, createInfoCount, pCreateInfos, pAllocator, pPipelines);
@@ -268,6 +273,11 @@ void vkDestroyFramebuffer(VkDevice device, VkFramebuffer framebuffer, VkAllocati
 void vkDestroyImageView(VkDevice device, VkImageView imageView, VkAllocationCallbacks const * pAllocator)
 {
     Functions::vkDestroyImageView(device, imageView, pAllocator);
+}
+
+void vkDestroyShaderModule(VkDevice device, VkShaderModule shaderModule, VkAllocationCallbacks const * pAllocator)
+{
+    Functions::vkDestroyShaderModule(device, shaderModule, pAllocator);
 }
 
 void vkDestroySurfaceKHR(VkInstance instance, VkSurfaceKHR surface, VkAllocationCallbacks const * pAllocator)
