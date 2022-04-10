@@ -6,20 +6,6 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 list(
-    APPEND HeaderFiles
-    "Include/VulkanPBR.hpp"
-    "Include/Graphics/VulkanModule.hpp"
-    "Include/Graphics/Instance.hpp"
-    "Include/Graphics/Device.hpp"
-    "Include/Graphics/Viewport.hpp"
-    "Include/Graphics/ShaderLibrary.hpp"
-    "Include/ShaderCompiler/ShaderCompiler.hpp"
-    "Include/ErrorHandling.hpp"
-    "Include/CommonTypes.hpp"
-    "Include/ForwardRenderer.hpp"
-)
-
-list(
     APPEND SourceFiles
     "Source/VulkanPBR.cpp"
     "Source/Graphics/VulkanModule.cpp"
@@ -35,13 +21,20 @@ add_executable(VulkanPBR WIN32)
 
 target_include_directories(
     VulkanPBR
-    PRIVATE "./Include"
+    SYSTEM
+    PRIVATE "${LearnVulkan_SOURCE_DIR}/External/vulkan/Include"
     PRIVATE "$<TARGET_PROPERTY:VulkanWrapper,INTERFACE_INCLUDE_DIRECTORIES>"
+    PRIVATE "$<TARGET_PROPERTY:glslang,INTERFACE_INCLUDE_DIRECTORIES>"
+    PRIVATE "$<TARGET_PROPERTY:SPIRV,INTERFACE_INCLUDE_DIRECTORIES>"
+)
+
+target_include_directories(
+    VulkanPBR
+    PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/Include"
 )
 
 target_sources(
     VulkanPBR
-    PRIVATE ${HeaderFiles}
     PRIVATE ${SourceFiles}
 )
 
