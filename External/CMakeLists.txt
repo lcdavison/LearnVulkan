@@ -12,8 +12,10 @@ add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/glslang")
 
 set_target_properties(
     glslang
+    SPIRV
     OGLCompiler
     OSDependent
-    SPIRV
+    GenericCodeGen
+    MachineIndependent
     PROPERTIES FOLDER "External"
 )
