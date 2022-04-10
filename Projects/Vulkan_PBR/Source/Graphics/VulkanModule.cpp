@@ -31,5 +31,5 @@ bool const VulkanModule::Start()
 
 bool const VulkanModule::Stop()
 {
-    return ::FreeLibrary(VulkanLibraryHandle) != 0u;
+    return ::FreeLibrary(VulkanLibraryHandle) == TRUE;
 }
