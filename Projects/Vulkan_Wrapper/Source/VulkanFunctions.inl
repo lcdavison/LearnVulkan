@@ -58,8 +58,6 @@ VK_INSTANCE_FUNCTION_FROM_EXTENSION(vkDestroySurfaceKHR, VK_KHR_SURFACE_EXTENSIO
 VK_DEVICE_FUNCTION(vkGetDeviceQueue);
 VK_DEVICE_FUNCTION(vkDeviceWaitIdle);
 
-VK_DEVICE_FUNCTION(vkResetCommandPool);
-
 VK_DEVICE_FUNCTION(vkAllocateCommandBuffers);
 VK_DEVICE_FUNCTION(vkAllocateDescriptorSets);
 
@@ -84,6 +82,7 @@ VK_DEVICE_FUNCTION(vkCreateDescriptorSetLayout);
 VK_DEVICE_FUNCTION(vkDestroyDevice);
 VK_DEVICE_FUNCTION(vkDestroyCommandPool);
 VK_DEVICE_FUNCTION(vkDestroySemaphore);
+VK_DEVICE_FUNCTION(vkDestroyFence);
 VK_DEVICE_FUNCTION(vkDestroyRenderPass);
 VK_DEVICE_FUNCTION(vkDestroyFramebuffer);
 VK_DEVICE_FUNCTION(vkDestroyImageView);
@@ -92,6 +91,12 @@ VK_DEVICE_FUNCTION(vkDestroyPipelineLayout);
 VK_DEVICE_FUNCTION(vkDestroyPipeline);
 VK_DEVICE_FUNCTION(vkDestroyDescriptorPool);
 VK_DEVICE_FUNCTION(vkDestroyDescriptorSetLayout);
+
+VK_DEVICE_FUNCTION(vkWaitForFences);
+
+VK_DEVICE_FUNCTION(vkResetFences);
+VK_DEVICE_FUNCTION(vkResetCommandPool);
+VK_DEVICE_FUNCTION(vkResetCommandBuffer);
 
 VK_DEVICE_FUNCTION(vkQueueSubmit);
 

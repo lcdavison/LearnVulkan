@@ -225,18 +225,6 @@ void Vulkan::Device::DestroyDevice(Vulkan::Device::DeviceState & State)
         State.CommandPool = VK_NULL_HANDLE;
     }
 
-    if (State.PresentSemaphore)
-    {
-        vkDestroySemaphore(State.Device, State.PresentSemaphore, nullptr);
-        State.PresentSemaphore = VK_NULL_HANDLE;
-    }
-
-    if (State.RenderSemaphore)
-    {
-        vkDestroySemaphore(State.Device, State.RenderSemaphore, nullptr);
-        State.RenderSemaphore = VK_NULL_HANDLE;
-    }
-
     if (State.Device)
     {
         vkDestroyDevice(State.Device, nullptr);
@@ -249,6 +237,7 @@ void Vulkan::Device::CreateCommandPool(Vulkan::Device::DeviceState const & State
     VkCommandPoolCreateInfo CreateInfo = {};
     CreateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
     CreateInfo.queueFamilyIndex = State.GraphicsQueueFamilyIndex;
+    CreateInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
 
     VERIFY_VKRESULT(vkCreateCommandPool(State.Device, &CreateInfo, nullptr, &OutputCommandPool));
 }
@@ -262,4 +251,18 @@ void Vulkan::Device::CreateCommandBuffer(Vulkan::Device::DeviceState const & Sta
     AllocateInfo.level = CommandBufferLevel;
 
     VERIFY_VKRESULT(vkAllocateCommandBuffers(State.Device, &AllocateInfo, &OutputCommandBuffer));
+}
+
+void Vulkan::Device::CreateFrameBuffer(DeviceState const & State, uint32 Width, uint32 Height, VkRenderPass RenderPass, std::vector<VkImageView> const & Attachments, VkFramebuffer & OutputFrameBuffer)
+{
+    VkFramebufferCreateInfo CreateInfo = {};
+    CreateInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+    CreateInfo.renderPass = RenderPass;
+    CreateInfo.width = Width;
+    CreateInfo.height = Height;
+    CreateInfo.layers = 1u;
+    CreateInfo.attachmentCount = Attachments.size();
+    CreateInfo.pAttachments = Attachments.data();
+
+    VERIFY_VKRESULT(vkCreateFramebuffer(State.Device, &CreateInfo, nullptr, &OutputFrameBuffer));
 }

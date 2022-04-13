@@ -40,6 +40,7 @@ VULKAN_WRAPPER_API VkResult vkCreateInstance(VkInstanceCreateInfo const * pCreat
 VULKAN_WRAPPER_API VkResult vkCreateDevice(VkPhysicalDevice physicalDevice, VkDeviceCreateInfo const * pCreateInfo, VkAllocationCallbacks const * pAllocator, VkDevice * pDevice);
 VULKAN_WRAPPER_API VkResult vkCreateCommandPool(VkDevice device, VkCommandPoolCreateInfo const * pCreateInfo, VkAllocationCallbacks const * pAllocator, VkCommandPool * pCommandPool);
 VULKAN_WRAPPER_API VkResult vkCreateSemaphore(VkDevice device, VkSemaphoreCreateInfo const * pCreateInfo, VkAllocationCallbacks const * pAllocator, VkSemaphore * pSemaphore);
+VULKAN_WRAPPER_API VkResult vkCreateFence(VkDevice device, VkFenceCreateInfo const * pCreateInfo, VkAllocationCallbacks const * pAllocator, VkFence * pFence);
 VULKAN_WRAPPER_API VkResult vkCreateRenderPass(VkDevice device, VkRenderPassCreateInfo const * pCreateInfo, VkAllocationCallbacks const * pAllocator, VkRenderPass * pRenderPass);
 VULKAN_WRAPPER_API VkResult vkCreateFramebuffer(VkDevice device, VkFramebufferCreateInfo const * pCreateInfo, VkAllocationCallbacks const * pAllocator, VkFramebuffer * pFramebuffer);
 VULKAN_WRAPPER_API VkResult vkCreateImageView(VkDevice device, VkImageViewCreateInfo const * pCreateInfo, VkAllocationCallbacks const * pAllocator, VkImageView * pImageView);
@@ -54,6 +55,7 @@ VULKAN_WRAPPER_API void vkDestroyInstance(VkInstance instance, VkAllocationCallb
 VULKAN_WRAPPER_API void vkDestroyDevice(VkDevice device, VkAllocationCallbacks const * pAllocator);
 VULKAN_WRAPPER_API void vkDestroyCommandPool(VkDevice device, VkCommandPool commandPool, VkAllocationCallbacks const * pAllocator);
 VULKAN_WRAPPER_API void vkDestroySemaphore(VkDevice device, VkSemaphore semaphore, VkAllocationCallbacks const * pAllocator);
+VULKAN_WRAPPER_API void vkDestroyFence(VkDevice device, VkFence fence, VkAllocationCallbacks const * pAllocator);
 VULKAN_WRAPPER_API void vkDestroyRenderPass(VkDevice device, VkRenderPass renderPass, VkAllocationCallbacks const * pAllocator);
 VULKAN_WRAPPER_API void vkDestroyFramebuffer(VkDevice device, VkFramebuffer framebuffer, VkAllocationCallbacks const * pAllocator);
 VULKAN_WRAPPER_API void vkDestroyImageView(VkDevice device, VkImageView imageView, VkAllocationCallbacks const * pAllocator);
@@ -62,6 +64,13 @@ VULKAN_WRAPPER_API void vkDestroyPipelineLayout(VkDevice device, VkPipelineLayou
 VULKAN_WRAPPER_API void vkDestroyPipeline(VkDevice device, VkPipeline pipeline, VkAllocationCallbacks const * pAllocator);
 VULKAN_WRAPPER_API void vkDestroySurfaceKHR(VkInstance instance, VkSurfaceKHR surface, VkAllocationCallbacks const * pAllocator);
 VULKAN_WRAPPER_API void vkDestroySwapchainKHR(VkDevice device, VkSwapchainKHR swapchain, VkAllocationCallbacks const * pAllocator);
+
+VULKAN_WRAPPER_API VkResult vkWaitForFences(VkDevice device, std::uint32_t fenceCount, VkFence const * pFences, VkBool32 waitAll, std::uint64_t timeout);
+
+
+VULKAN_WRAPPER_API VkResult vkResetFences(VkDevice device, std::uint32_t fenceCount, VkFence const * pFences);
+VULKAN_WRAPPER_API VkResult vkResetCommandPool(VkDevice device, VkCommandPool commandPool, VkCommandPoolResetFlags flags);
+VULKAN_WRAPPER_API VkResult vkResetCommandBuffer(VkCommandBuffer commandBuffer, VkCommandBufferResetFlags flags);
 
 
 VULKAN_WRAPPER_API VkResult vkAllocateCommandBuffers(VkDevice device, VkCommandBufferAllocateInfo const * pAllocateInfo, VkCommandBuffer * pCommandBuffers);
@@ -74,8 +83,6 @@ VULKAN_WRAPPER_API VkResult vkBeginCommandBuffer(VkCommandBuffer commandBuffer, 
 VULKAN_WRAPPER_API VkResult vkEndCommandBuffer(VkCommandBuffer commandBuffer);
 
 VULKAN_WRAPPER_API VkResult vkDeviceWaitIdle(VkDevice device);
-
-VULKAN_WRAPPER_API VkResult vkResetCommandPool(VkDevice device, VkCommandPool commandPool, VkCommandPoolResetFlags flags);
 
 VULKAN_WRAPPER_API VkResult vkQueueSubmit(VkQueue queue, std::uint32_t submitCount, VkSubmitInfo const * pSubmits, VkFence fence);
 

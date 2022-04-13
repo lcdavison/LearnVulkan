@@ -199,6 +199,11 @@ VkResult vkCreateSemaphore(VkDevice device, VkSemaphoreCreateInfo const * pCreat
     return Functions::vkCreateSemaphore(device, pCreateInfo, pAllocator, pSemaphore);
 }
 
+VkResult vkCreateFence(VkDevice device, VkFenceCreateInfo const * pCreateInfo, VkAllocationCallbacks const * pAllocator, VkFence * pFence)
+{
+    return Functions::vkCreateFence(device, pCreateInfo, pAllocator, pFence);
+}
+
 VkResult vkCreateRenderPass(VkDevice device, VkRenderPassCreateInfo const * pCreateInfo, VkAllocationCallbacks const * pAllocator, VkRenderPass * pRenderPass)
 {
     return Functions::vkCreateRenderPass(device, pCreateInfo, pAllocator, pRenderPass);
@@ -260,6 +265,11 @@ void vkDestroySemaphore(VkDevice device, VkSemaphore semaphore, VkAllocationCall
     Functions::vkDestroySemaphore(device, semaphore, pAllocator);
 }
 
+void vkDestroyFence(VkDevice device, VkFence fence, VkAllocationCallbacks const * pAllocator)
+{
+    Functions::vkDestroyFence(device, fence, pAllocator);
+}
+
 void vkDestroyRenderPass(VkDevice device, VkRenderPass renderPass, VkAllocationCallbacks const * pAllocator)
 {
     Functions::vkDestroyRenderPass(device, renderPass, pAllocator);
@@ -301,6 +311,27 @@ void vkDestroySwapchainKHR(VkDevice device, VkSwapchainKHR swapchain, VkAllocati
 }
 
 
+VkResult vkWaitForFences(VkDevice device, std::uint32_t fenceCount, VkFence const * pFences, VkBool32 waitAll, std::uint64_t timeout)
+{
+    return Functions::vkWaitForFences(device, fenceCount, pFences, waitAll, timeout);
+}
+
+VkResult vkResetFences(VkDevice device, std::uint32_t fenceCount, VkFence const * pFences)
+{
+    return Functions::vkResetFences(device, fenceCount, pFences);
+}
+
+VkResult vkResetCommandPool(VkDevice device, VkCommandPool commandPool, VkCommandPoolResetFlags flags)
+{
+    return Functions::vkResetCommandPool(device, commandPool, flags);
+}
+
+VkResult vkResetCommandBuffer(VkCommandBuffer commandBuffer, VkCommandBufferResetFlags flags)
+{
+    return Functions::vkResetCommandBuffer(commandBuffer, flags);
+}
+
+
 VkResult vkAllocateCommandBuffers(VkDevice device, VkCommandBufferAllocateInfo const * pAllocateInfo, VkCommandBuffer * pCommandBuffers)
 {
     return Functions::vkAllocateCommandBuffers(device, pAllocateInfo, pCommandBuffers);
@@ -327,10 +358,6 @@ VkResult vkDeviceWaitIdle(VkDevice device)
     return Functions::vkDeviceWaitIdle(device);
 }
 
-VkResult vkResetCommandPool(VkDevice device, VkCommandPool commandPool, VkCommandPoolResetFlags flags)
-{
-    return Functions::vkResetCommandPool(device, commandPool, flags);
-}
 
 VkResult vkQueueSubmit(VkQueue queue, std::uint32_t submitCount, VkSubmitInfo const * pSubmits, VkFence fence)
 {
