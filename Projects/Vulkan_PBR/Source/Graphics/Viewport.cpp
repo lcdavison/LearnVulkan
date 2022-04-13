@@ -85,27 +85,6 @@ static bool const SupportsRequiredSurfaceFormat(Vulkan::Instance::InstanceState 
     return bResult;
 }
 
-static void DestroyFrameBuffers(Vulkan::Device::DeviceState const & DeviceState, Vulkan::Viewport::ViewportState & State)
-{
-    for (VkFramebuffer & FrameBuffer : State.FrameBuffers)
-    {
-        if (FrameBuffer)
-        {
-            vkDestroyFramebuffer(DeviceState.Device, FrameBuffer, nullptr);
-            FrameBuffer = VK_NULL_HANDLE;
-        }
-    }
-
-    for (VkImageView & ImageView : State.SwapChainImageViews)
-    {
-        if (ImageView)
-        {
-            vkDestroyImageView(DeviceState.Device, ImageView, nullptr);
-            ImageView = VK_NULL_HANDLE;
-        }
-    }
-}
-
 static void StoreSwapChainImages(Vulkan::Device::DeviceState const & DeviceState, Vulkan::Viewport::ViewportState & State)
 {
     uint32 SwapChainImageCount = {};
@@ -113,7 +92,6 @@ static void StoreSwapChainImages(Vulkan::Device::DeviceState const & DeviceState
 
     State.SwapChainImages.resize(SwapChainImageCount);
     State.SwapChainImageViews.resize(SwapChainImageCount);
-    State.FrameBuffers.resize(SwapChainImageCount);
 
     VERIFY_VKRESULT(vkGetSwapchainImagesKHR(DeviceState.Device, State.SwapChain, &SwapChainImageCount, State.SwapChainImages.data()));
 
@@ -188,6 +166,16 @@ bool const Vulkan::Viewport::CreateViewport(Vulkan::Instance::InstanceState cons
 
         ::StoreSwapChainImages(DeviceState, IntermediateState);
 
+        IntermediateState.DynamicViewport.width = IntermediateState.ImageExtents.width;
+        IntermediateState.DynamicViewport.height = IntermediateState.ImageExtents.height;
+        IntermediateState.DynamicViewport.x = 0.0f;
+        IntermediateState.DynamicViewport.y = 0.0f;
+        IntermediateState.DynamicViewport.minDepth = 0.0f;
+        IntermediateState.DynamicViewport.maxDepth = 1.0f;
+
+        IntermediateState.DynamicScissorRect.extent = IntermediateState.ImageExtents;
+        IntermediateState.DynamicScissorRect.offset = VkOffset2D { 0u, 0u };
+
         OutputState = std::move(IntermediateState);
         bResult = true;
     }
@@ -195,34 +183,18 @@ bool const Vulkan::Viewport::CreateViewport(Vulkan::Instance::InstanceState cons
     return bResult;
 }
 
-void Vulkan::Viewport::CreateFrameBuffers(Vulkan::Device::DeviceState const & DeviceState, VkRenderPass RenderPass, Vulkan::Viewport::ViewportState & State)
-{
-    uint32 CurrentFrameBufferIndex = { 0u };
-
-    for (VkFramebuffer & FrameBuffer : State.FrameBuffers)
-    {
-        VkFramebufferCreateInfo CreateInfo = {};
-        CreateInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-        CreateInfo.renderPass = RenderPass;
-        CreateInfo.width = State.ImageExtents.width;
-        CreateInfo.height = State.ImageExtents.height;
-        CreateInfo.layers = 1u;
-        CreateInfo.attachmentCount = 1u;
-        CreateInfo.pAttachments = &State.SwapChainImageViews [CurrentFrameBufferIndex];
-
-        VERIFY_VKRESULT(vkCreateFramebuffer(DeviceState.Device, &CreateInfo, nullptr, &FrameBuffer));
-
-        CurrentFrameBufferIndex++;
-    }
-}
-
 bool const Vulkan::Viewport::ResizeViewport(Vulkan::Instance::InstanceState const & InstanceState, Vulkan::Device::DeviceState const & DeviceState, Vulkan::Viewport::ViewportState & State)
 {
     bool bResult = false;
 
-    VERIFY_VKRESULT(vkDeviceWaitIdle(DeviceState.Device));
-
-    ::DestroyFrameBuffers(DeviceState, State);
+    for (VkImageView & ImageView : State.SwapChainImageViews)
+    {
+        if (ImageView)
+        {
+            vkDestroyImageView(DeviceState.Device, ImageView, nullptr);
+            ImageView = VK_NULL_HANDLE;
+        }
+    }
 
     VkSurfaceCapabilitiesKHR SurfaceCapabilities = {};
     VkResult SurfaceCapabilityError = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(DeviceState.PhysicalDevice, InstanceState.Surface, &SurfaceCapabilities);
@@ -261,6 +233,16 @@ bool const Vulkan::Viewport::ResizeViewport(Vulkan::Instance::InstanceState cons
 
         ::StoreSwapChainImages(DeviceState, IntermediateState);
 
+        IntermediateState.DynamicViewport.width = IntermediateState.ImageExtents.width;
+        IntermediateState.DynamicViewport.height = IntermediateState.ImageExtents.height;
+        IntermediateState.DynamicViewport.x = 0.0f;
+        IntermediateState.DynamicViewport.y = 0.0f;
+        IntermediateState.DynamicViewport.minDepth = 0.0f;
+        IntermediateState.DynamicViewport.maxDepth = 1.0f;
+
+        IntermediateState.DynamicScissorRect.extent = IntermediateState.ImageExtents;
+        IntermediateState.DynamicScissorRect.offset = VkOffset2D { 0u, 0u };
+
         State = std::move(IntermediateState);
         bResult = true;
     }
@@ -270,7 +252,14 @@ bool const Vulkan::Viewport::ResizeViewport(Vulkan::Instance::InstanceState cons
 
 void Vulkan::Viewport::DestroyViewport(Vulkan::Device::DeviceState const & DeviceState, Vulkan::Viewport::ViewportState & State)
 {
-    ::DestroyFrameBuffers(DeviceState, State);
+    for (VkImageView & ImageView : State.SwapChainImageViews)
+    {
+        if (ImageView)
+        {
+            vkDestroyImageView(DeviceState.Device, ImageView, nullptr);
+            ImageView = VK_NULL_HANDLE;
+        }
+    }
 
     if (State.SwapChain)
     {

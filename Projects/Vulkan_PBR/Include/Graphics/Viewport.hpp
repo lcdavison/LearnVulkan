@@ -23,7 +23,8 @@ namespace Vulkan::Viewport
         std::vector<VkImage> SwapChainImages;
         std::vector<VkImageView> SwapChainImageViews;
 
-        std::vector<VkFramebuffer> FrameBuffers;
+        VkViewport DynamicViewport;
+        VkRect2D DynamicScissorRect;
 
         VkExtent2D ImageExtents;
 
@@ -34,8 +35,6 @@ namespace Vulkan::Viewport
     };
 
     extern bool const CreateViewport(Vulkan::Instance::InstanceState const & InstanceState, Vulkan::Device::DeviceState const & DeviceState, ViewportState & OutputState);
-
-    extern void CreateFrameBuffers(Vulkan::Device::DeviceState const & DeviceState, VkRenderPass RenderPass, ViewportState & State);
 
     extern bool const ResizeViewport(Vulkan::Instance::InstanceState const & InstanceState, Vulkan::Device::DeviceState const & DeviceState, ViewportState & State);
 

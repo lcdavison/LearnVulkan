@@ -11,13 +11,26 @@
 
 #include <array>
 
+#undef max
+
+struct FrameStateCollection
+{
+    std::vector<VkCommandBuffer> CommandBuffers;
+    std::vector<VkSemaphore> Semaphores;
+    std::vector<VkFence> Fences;
+    std::vector<VkFramebuffer> FrameBuffers;
+
+    uint8 CurrentFrameStateIndex;
+};
+
 static std::string const kDefaultShaderEntryPointName = "main";
+static uint8 const kFrameStateCount = { 2u };
 
 static Vulkan::Instance::InstanceState InstanceState = {};
 static Vulkan::Device::DeviceState DeviceState = {};
 static Vulkan::Viewport::ViewportState ViewportState = {};
+static FrameStateCollection FrameState = {};
 
-static VkCommandBuffer CommandBuffer = {};
 static VkRenderPass MainRenderPass = {};
 static VkShaderModule ShaderModule = {};
 
@@ -30,7 +43,88 @@ static uint16 FragmentShaderHandle = {};
 static VkShaderModule VertexShaderModule = {};
 static VkShaderModule FragmentShaderModule = {};
 
-/* TODO: Double buffer render loop so we don't wait at the end of each frame for the device to finish */
+static void CreateFrameState()
+{
+    FrameState.CurrentFrameStateIndex = 0u;
+
+    FrameState.CommandBuffers.resize(kFrameStateCount);
+    FrameState.FrameBuffers.resize(kFrameStateCount);
+    FrameState.Semaphores.resize(kFrameStateCount * 2u);    // Each frame uses 2 semaphores
+    FrameState.Fences.resize(kFrameStateCount);
+
+    for (VkCommandBuffer & CommandBuffer : FrameState.CommandBuffers)
+    {
+        Vulkan::Device::CreateCommandBuffer(DeviceState, VK_COMMAND_BUFFER_LEVEL_PRIMARY, CommandBuffer);
+    }
+
+    {
+        uint8 CurrentImageViewIndex = { 0u };
+        for (VkFramebuffer & FrameBuffer : FrameState.FrameBuffers)
+        {
+            std::vector<VkImageView> FrameBufferAttachments =
+            {
+                ViewportState.SwapChainImageViews [CurrentImageViewIndex],
+            };
+
+            Vulkan::Device::CreateFrameBuffer(DeviceState, ViewportState.ImageExtents.width, ViewportState.ImageExtents.height, MainRenderPass, FrameBufferAttachments, FrameBuffer);
+
+            CurrentImageViewIndex++;
+        }
+    }
+
+    {
+        VkSemaphoreCreateInfo CreateInfo = {};
+        CreateInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+
+        for (VkSemaphore & Semaphore : FrameState.Semaphores)
+        {
+            VERIFY_VKRESULT(vkCreateSemaphore(DeviceState.Device, &CreateInfo, nullptr, &Semaphore));
+        }
+    }
+
+    {
+        VkFenceCreateInfo CreateInfo = {};
+        CreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+        CreateInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+
+        for (VkFence & Fence : FrameState.Fences)
+        {
+            VERIFY_VKRESULT(vkCreateFence(DeviceState.Device, &CreateInfo, nullptr, &Fence));
+        }
+    }
+}
+
+static void DestroyFrameState()
+{
+    for (VkFence & Fence : FrameState.Fences)
+    {
+        if (Fence)
+        {
+            vkDestroyFence(DeviceState.Device, Fence, nullptr);
+            Fence = VK_NULL_HANDLE;
+        }
+    }
+
+    for (VkSemaphore & Semaphore : FrameState.Semaphores)
+    {
+        if (Semaphore)
+        {
+            vkDestroySemaphore(DeviceState.Device, Semaphore, nullptr);
+            Semaphore = VK_NULL_HANDLE;
+        }
+    }
+
+    for (VkFramebuffer & FrameBuffer : FrameState.FrameBuffers)
+    {
+        if (FrameBuffer)
+        {
+            vkDestroyFramebuffer(DeviceState.Device, FrameBuffer, nullptr);
+            FrameBuffer = VK_NULL_HANDLE;
+        }
+    }
+
+    vkFreeCommandBuffers(DeviceState.Device, DeviceState.CommandPool, FrameState.CommandBuffers.size(), FrameState.CommandBuffers.data());
+}
 
 static bool const CreateMainRenderPass()
 {
@@ -65,8 +159,6 @@ static bool const CreateMainRenderPass()
 
         VERIFY_VKRESULT(vkCreateRenderPass(DeviceState.Device, &CreateInfo, nullptr, &MainRenderPass));
     }
-
-    Vulkan::Viewport::CreateFrameBuffers(DeviceState, MainRenderPass, ViewportState);
 
     return bResult;
 }
@@ -188,17 +280,11 @@ bool const ForwardRenderer::Initialise(VkApplicationInfo const & ApplicationInfo
     {
         Vulkan::Device::CreateCommandPool(DeviceState, DeviceState.CommandPool);
 
-        Vulkan::Device::CreateCommandBuffer(DeviceState, VK_COMMAND_BUFFER_LEVEL_PRIMARY, CommandBuffer);
+        bResult = ::CreateMainRenderPass();
 
-        VkSemaphoreCreateInfo CreateInfo = {};
-        CreateInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+        bResult = ::CreateGraphicsPipeline();
 
-        VERIFY_VKRESULT(vkCreateSemaphore(DeviceState.Device, &CreateInfo, nullptr, &DeviceState.PresentSemaphore));
-        VERIFY_VKRESULT(vkCreateSemaphore(DeviceState.Device, &CreateInfo, nullptr, &DeviceState.RenderSemaphore));
-
-        bResult = CreateMainRenderPass();
-
-        bResult = CreateGraphicsPipeline();
+        ::CreateFrameState();
     }
 
     return bResult;
@@ -207,6 +293,8 @@ bool const ForwardRenderer::Initialise(VkApplicationInfo const & ApplicationInfo
 bool const ForwardRenderer::Shutdown()
 {
     vkDeviceWaitIdle(DeviceState.Device);
+
+    ::DestroyFrameState();
 
     if (TrianglePipelineState)
     {
@@ -237,97 +325,112 @@ bool const ForwardRenderer::Shutdown()
     return true;
 }
 
+static void ResizeViewport()
+{
+    VERIFY_VKRESULT(vkDeviceWaitIdle(DeviceState.Device));
+
+    Vulkan::Viewport::ResizeViewport(InstanceState, DeviceState, ViewportState);
+
+    {
+        uint8 CurrentImageIndex = { 0u };
+        for (VkFramebuffer & FrameBuffer : FrameState.FrameBuffers)
+        {
+            vkDestroyFramebuffer(DeviceState.Device, FrameBuffer, nullptr);
+
+            std::vector<VkImageView> FrameBufferAttachments =
+            {
+                ViewportState.SwapChainImageViews [CurrentImageIndex],
+            };
+
+            Vulkan::Device::CreateFrameBuffer(DeviceState, Application::State.CurrentWindowWidth, Application::State.CurrentWindowHeight, MainRenderPass, FrameBufferAttachments, FrameBuffer);
+
+            CurrentImageIndex++;
+        }
+    }
+}
+
 void ForwardRenderer::Render()
 {
+    vkWaitForFences(DeviceState.Device, 1u, &FrameState.Fences [FrameState.CurrentFrameStateIndex], VK_TRUE, std::numeric_limits<uint64>::max());
+
     uint32 CurrentImageIndex = {};
-    VkResult ImageAcquireResult = vkAcquireNextImageKHR(DeviceState.Device, ViewportState.SwapChain, 0, DeviceState.PresentSemaphore, VK_NULL_HANDLE, &CurrentImageIndex);
+    VkResult ImageAcquireResult = vkAcquireNextImageKHR(DeviceState.Device, ViewportState.SwapChain, 0ull, FrameState.Semaphores [FrameState.CurrentFrameStateIndex], VK_NULL_HANDLE, &CurrentImageIndex);
 
-    if (ImageAcquireResult == VK_ERROR_OUT_OF_DATE_KHR ||
-        ImageAcquireResult == VK_SUBOPTIMAL_KHR)
+    if (ImageAcquireResult == VK_SUBOPTIMAL_KHR ||
+        ImageAcquireResult == VK_ERROR_OUT_OF_DATE_KHR)
     {
-        if (!Vulkan::Viewport::ResizeViewport(InstanceState, DeviceState, ViewportState))
-        {
-            return;
-        }
+        ::ResizeViewport();
 
-        Vulkan::Viewport::CreateFrameBuffers(DeviceState, MainRenderPass, ViewportState);
-
-        VERIFY_VKRESULT(vkAcquireNextImageKHR(DeviceState.Device, ViewportState.SwapChain, 0, DeviceState.PresentSemaphore, VK_NULL_HANDLE, &CurrentImageIndex));
+        VERIFY_VKRESULT(vkAcquireNextImageKHR(DeviceState.Device, ViewportState.SwapChain, 0ull, FrameState.Semaphores [FrameState.CurrentFrameStateIndex], VK_NULL_HANDLE, &CurrentImageIndex));
     }
 
-    VERIFY_VKRESULT(vkResetCommandPool(DeviceState.Device, DeviceState.CommandPool, 0u));
+    vkResetFences(DeviceState.Device, 1u, &FrameState.Fences [FrameState.CurrentFrameStateIndex]);
 
-    VkCommandBufferBeginInfo BeginInfo = {};
-    BeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-    BeginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    VkCommandBuffer & CurrentCommandBuffer = FrameState.CommandBuffers [FrameState.CurrentFrameStateIndex];
 
-    VERIFY_VKRESULT(vkBeginCommandBuffer(CommandBuffer, &BeginInfo));
+    VERIFY_VKRESULT(vkResetCommandBuffer(CurrentCommandBuffer, 0u));
 
     {
-        static VkClearValue ColourClearValue = {};
-        ColourClearValue.color = { 0.0f, 0.4f, 0.7f, 1.0f };
+        VkCommandBufferBeginInfo BeginInfo = {};
+        BeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        BeginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
-        VkRenderPassBeginInfo PassBeginInfo = {};
-        PassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-        PassBeginInfo.renderPass = MainRenderPass;
-        PassBeginInfo.framebuffer = ViewportState.FrameBuffers [CurrentImageIndex];
-        PassBeginInfo.renderArea.extent = ViewportState.ImageExtents;
-        PassBeginInfo.renderArea.offset = VkOffset2D { 0u, 0u };
-        PassBeginInfo.clearValueCount = 1u;
-        PassBeginInfo.pClearValues = &ColourClearValue;
-
-        vkCmdBeginRenderPass(CommandBuffer, &PassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+        VERIFY_VKRESULT(vkBeginCommandBuffer(CurrentCommandBuffer, &BeginInfo));
     }
 
-    VkViewport Viewport = {};
-    Viewport.x = 0.0f;
-    Viewport.y = 0.0f;
-    Viewport.width = static_cast<float>(Application::State.CurrentWindowWidth);
-    Viewport.height = static_cast<float>(Application::State.CurrentWindowHeight);
-    Viewport.minDepth = 0.0f;
-    Viewport.maxDepth = 1.0f;
+    {
+        VkClearValue ClearValue = {};
+        ClearValue.color = VkClearColorValue { 0.0f, 0.4f, 0.7f, 1.0f };
 
-    vkCmdSetViewport(CommandBuffer, 0u, 1u, &Viewport);
+        VkRenderPassBeginInfo BeginInfo = {};
+        BeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+        BeginInfo.renderPass = MainRenderPass;
+        BeginInfo.framebuffer = FrameState.FrameBuffers [FrameState.CurrentFrameStateIndex];
+        BeginInfo.renderArea.extent = ViewportState.ImageExtents;
+        BeginInfo.renderArea.offset = VkOffset2D { 0u, 0u };
+        BeginInfo.clearValueCount = 1u;
+        BeginInfo.pClearValues = &ClearValue;
 
-    VkRect2D ScissorRect = {};
-    ScissorRect.extent.width = Application::State.CurrentWindowWidth;
-    ScissorRect.extent.height = Application::State.CurrentWindowHeight;
-    ScissorRect.offset.x = 0u;
-    ScissorRect.offset.y = 0u;
+        vkCmdBeginRenderPass(CurrentCommandBuffer, &BeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+    }
 
-    vkCmdSetScissor(CommandBuffer, 0u, 1u, &ScissorRect);
+    vkCmdSetViewport(CurrentCommandBuffer, 0u, 1u, &ViewportState.DynamicViewport);
+    vkCmdSetScissor(CurrentCommandBuffer, 0u, 1u, &ViewportState.DynamicScissorRect);
 
-    vkCmdBindPipeline(CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, TrianglePipelineState);
-    vkCmdDraw(CommandBuffer, 3u, 1u, 0u, 0u);
+    vkCmdBindPipeline(CurrentCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, TrianglePipelineState);
+    vkCmdDraw(CurrentCommandBuffer, 3u, 1u, 0u, 0u);
 
-    vkCmdEndRenderPass(CommandBuffer);
+    vkCmdEndRenderPass(CurrentCommandBuffer);
 
-    VERIFY_VKRESULT(vkEndCommandBuffer(CommandBuffer));
+    vkEndCommandBuffer(CurrentCommandBuffer);
 
-    VkPipelineStageFlags StageFlags = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    {
+        VkPipelineStageFlags const PipelineWaitStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 
-    VkSubmitInfo SubmitInfo = {};
-    SubmitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-    SubmitInfo.commandBufferCount = 1u;
-    SubmitInfo.pCommandBuffers = &CommandBuffer;
-    SubmitInfo.waitSemaphoreCount = 1u;
-    SubmitInfo.pWaitSemaphores = &DeviceState.PresentSemaphore;
-    SubmitInfo.pWaitDstStageMask = &StageFlags;
-    SubmitInfo.signalSemaphoreCount = 1u;
-    SubmitInfo.pSignalSemaphores = &DeviceState.RenderSemaphore;
+        VkSubmitInfo SubmitInfo = {};
+        SubmitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        SubmitInfo.commandBufferCount = 1u;
+        SubmitInfo.pCommandBuffers = &CurrentCommandBuffer;
+        SubmitInfo.waitSemaphoreCount = 1u;
+        SubmitInfo.pWaitSemaphores = &FrameState.Semaphores [FrameState.CurrentFrameStateIndex];
+        SubmitInfo.signalSemaphoreCount = 1u;
+        SubmitInfo.pSignalSemaphores = &FrameState.Semaphores [FrameState.CurrentFrameStateIndex + 1u];
+        SubmitInfo.pWaitDstStageMask = &PipelineWaitStage;
 
-    VERIFY_VKRESULT(vkQueueSubmit(DeviceState.GraphicsQueue, 1u, &SubmitInfo, VK_NULL_HANDLE));
+        VERIFY_VKRESULT(vkQueueSubmit(DeviceState.GraphicsQueue, 1u, &SubmitInfo, FrameState.Fences [FrameState.CurrentFrameStateIndex]));
+    }
 
-    VkPresentInfoKHR PresentInfo = {};
-    PresentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-    PresentInfo.waitSemaphoreCount = 1u;
-    PresentInfo.pWaitSemaphores = &DeviceState.RenderSemaphore;
-    PresentInfo.swapchainCount = 1u;
-    PresentInfo.pSwapchains = &ViewportState.SwapChain;
-    PresentInfo.pImageIndices = &CurrentImageIndex;
+    {
+        VkPresentInfoKHR PresentInfo = {};
+        PresentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+        PresentInfo.swapchainCount = 1u;
+        PresentInfo.pSwapchains = &ViewportState.SwapChain;
+        PresentInfo.waitSemaphoreCount = 1u;
+        PresentInfo.pWaitSemaphores = &FrameState.Semaphores [FrameState.CurrentFrameStateIndex + 1u];
+        PresentInfo.pImageIndices = &CurrentImageIndex;
 
-    vkQueuePresentKHR(DeviceState.GraphicsQueue, &PresentInfo);
+        vkQueuePresentKHR(DeviceState.GraphicsQueue, &PresentInfo);
+    }
 
-    /* Bad at the moment, but wait for the device to finish work before starting the next frame */
-    VERIFY_VKRESULT(vkDeviceWaitIdle(DeviceState.Device));
+    FrameState.CurrentFrameStateIndex = (++FrameState.CurrentFrameStateIndex) % kFrameStateCount;
 }
