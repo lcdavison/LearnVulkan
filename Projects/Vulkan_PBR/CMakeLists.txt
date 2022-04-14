@@ -56,6 +56,13 @@ target_compile_definitions(
     PRIVATE "$<TARGET_PROPERTY:VulkanWrapper,INTERFACE_COMPILE_DEFINITIONS>"
 )
 
+target_compile_options(
+    VulkanPBR
+    PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/W4 /WX>
+    PRIVATE $<$<CONFIG:DEBUG>:/Ob0>
+    PRIVATE $<$<CONFIG:RELEASE>:/Ot /Ob2>
+)
+
 target_link_libraries(
     VulkanPBR
     glslang

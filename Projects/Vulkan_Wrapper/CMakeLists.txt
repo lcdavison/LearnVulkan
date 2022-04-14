@@ -41,3 +41,9 @@ target_compile_definitions(
     PUBLIC VK_NO_PROTOTYPES
     PUBLIC VK_USE_PLATFORM_WIN32_KHR
 )
+
+# Treat warnings as errors
+target_compile_options(
+    VulkanWrapper
+    PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/W4 /WX>
+)

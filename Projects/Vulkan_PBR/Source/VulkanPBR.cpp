@@ -24,6 +24,8 @@ static LRESULT CALLBACK WindowProcedure(HWND Window, UINT Message, WPARAM WParam
         default:
             return ::DefWindowProc(Window, Message, WParam, LParam);
     }
+
+    return ::DefWindowProc(Window, Message, WParam, LParam);
 }
 
 static bool const Initialise()

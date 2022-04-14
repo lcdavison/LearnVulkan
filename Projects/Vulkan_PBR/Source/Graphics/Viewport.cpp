@@ -166,8 +166,8 @@ bool const Vulkan::Viewport::CreateViewport(Vulkan::Instance::InstanceState cons
 
         ::StoreSwapChainImages(DeviceState, IntermediateState);
 
-        IntermediateState.DynamicViewport.width = IntermediateState.ImageExtents.width;
-        IntermediateState.DynamicViewport.height = IntermediateState.ImageExtents.height;
+        IntermediateState.DynamicViewport.width = static_cast<float>(IntermediateState.ImageExtents.width);
+        IntermediateState.DynamicViewport.height = static_cast<float>(IntermediateState.ImageExtents.height);
         IntermediateState.DynamicViewport.x = 0.0f;
         IntermediateState.DynamicViewport.y = 0.0f;
         IntermediateState.DynamicViewport.minDepth = 0.0f;
@@ -233,8 +233,8 @@ bool const Vulkan::Viewport::ResizeViewport(Vulkan::Instance::InstanceState cons
 
         ::StoreSwapChainImages(DeviceState, IntermediateState);
 
-        IntermediateState.DynamicViewport.width = IntermediateState.ImageExtents.width;
-        IntermediateState.DynamicViewport.height = IntermediateState.ImageExtents.height;
+        IntermediateState.DynamicViewport.width = static_cast<float>(IntermediateState.ImageExtents.width);
+        IntermediateState.DynamicViewport.height = static_cast<float>(IntermediateState.ImageExtents.height);
         IntermediateState.DynamicViewport.x = 0.0f;
         IntermediateState.DynamicViewport.y = 0.0f;
         IntermediateState.DynamicViewport.minDepth = 0.0f;

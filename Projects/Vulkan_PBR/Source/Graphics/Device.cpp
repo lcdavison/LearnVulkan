@@ -12,19 +12,20 @@ static std::vector<char const *> RequiredExtensionNames =
     VK_KHR_SWAPCHAIN_EXTENSION_NAME,
 };
 
-static bool const HasRequiredLayers(VkPhysicalDevice Device)
-{
-    uint32 LayerCount = {};
-    VERIFY_VKRESULT(vkEnumerateDeviceLayerProperties(Device, &LayerCount, nullptr));
-
-    std::vector AvailableLayers = std::vector<VkLayerProperties>(LayerCount);
-
-    VERIFY_VKRESULT(vkEnumerateDeviceLayerProperties(Device, &LayerCount, AvailableLayers.data()));
-
-
-
-    return true;
-}
+/* TODO: Do layer checks? */
+//static bool const HasRequiredLayers(VkPhysicalDevice Device)
+//{
+//    uint32 LayerCount = {};
+//    VERIFY_VKRESULT(vkEnumerateDeviceLayerProperties(Device, &LayerCount, nullptr));
+//
+//    std::vector AvailableLayers = std::vector<VkLayerProperties>(LayerCount);
+//
+//    VERIFY_VKRESULT(vkEnumerateDeviceLayerProperties(Device, &LayerCount, AvailableLayers.data()));
+//
+//
+//
+//    return true;
+//}
 
 static bool const HasRequiredExtensions(VkPhysicalDevice Device)
 {
@@ -72,7 +73,7 @@ static bool const HasRequiredExtensions(VkPhysicalDevice Device)
     return MatchedExtensionCount == RequiredExtensionNames.size();
 }
 
-inline static bool const IsSuitableDevice(VkPhysicalDeviceProperties const & DeviceProperties, VkPhysicalDeviceFeatures const & DeviceFeatures)
+inline static bool const IsSuitableDevice(VkPhysicalDeviceProperties const & DeviceProperties)
 {
     return DeviceProperties.deviceType == VkPhysicalDeviceType::VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU;
 }
@@ -117,7 +118,7 @@ static bool const SelectPhysicalDevice(VkInstance Instance, VkPhysicalDevice & O
             VkPhysicalDeviceFeatures DeviceFeatures = {};
             vkGetPhysicalDeviceFeatures(Device, &DeviceFeatures);
 
-            if (::IsSuitableDevice(DeviceProperties, DeviceFeatures))
+            if (::IsSuitableDevice(DeviceProperties))
             {
 #if defined(_DEBUG)
                 std::basic_string Output = "Selected Device: ";
@@ -195,7 +196,7 @@ bool const Vulkan::Device::CreateDevice(Vulkan::Instance::InstanceState const & 
         CreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
         CreateInfo.queueCreateInfoCount = 1u;
         CreateInfo.pQueueCreateInfos = &QueueCreateInfo;
-        CreateInfo.enabledExtensionCount = RequiredExtensionNames.size();
+        CreateInfo.enabledExtensionCount = static_cast<uint32>(RequiredExtensionNames.size());
         CreateInfo.ppEnabledExtensionNames = RequiredExtensionNames.data();
         /* Need to figure out what features need to be enabled */
         //CreateInfo.pEnabledFeatures;
@@ -261,7 +262,7 @@ void Vulkan::Device::CreateFrameBuffer(DeviceState const & State, uint32 Width, 
     CreateInfo.width = Width;
     CreateInfo.height = Height;
     CreateInfo.layers = 1u;
-    CreateInfo.attachmentCount = Attachments.size();
+    CreateInfo.attachmentCount = static_cast<uint32>(Attachments.size());
     CreateInfo.pAttachments = Attachments.data();
 
     VERIFY_VKRESULT(vkCreateFramebuffer(State.Device, &CreateInfo, nullptr, &OutputFrameBuffer));

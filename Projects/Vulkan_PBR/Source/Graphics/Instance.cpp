@@ -126,9 +126,9 @@ bool const Vulkan::Instance::CreateInstance(VkApplicationInfo const & Applicatio
         VkInstanceCreateInfo InstanceCreateInfo = {};
         InstanceCreateInfo.sType = VkStructureType::VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
         InstanceCreateInfo.pApplicationInfo = &ApplicationInfo;
-        InstanceCreateInfo.enabledExtensionCount = kRequiredExtensionNames.size();
+        InstanceCreateInfo.enabledExtensionCount = static_cast<uint32>(kRequiredExtensionNames.size());
         InstanceCreateInfo.ppEnabledExtensionNames = kRequiredExtensionNames.data();
-        InstanceCreateInfo.enabledLayerCount = kRequiredLayerNames.size();
+        InstanceCreateInfo.enabledLayerCount = static_cast<uint32>(kRequiredLayerNames.size());
         InstanceCreateInfo.ppEnabledLayerNames = kRequiredLayerNames.data();
 
         VERIFY_VKRESULT(vkCreateInstance(&InstanceCreateInfo, nullptr, &IntermediateState.Instance));

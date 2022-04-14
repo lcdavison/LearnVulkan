@@ -123,7 +123,7 @@ static void DestroyFrameState()
         }
     }
 
-    vkFreeCommandBuffers(DeviceState.Device, DeviceState.CommandPool, FrameState.CommandBuffers.size(), FrameState.CommandBuffers.data());
+    vkFreeCommandBuffers(DeviceState.Device, DeviceState.CommandPool, static_cast<uint32>(FrameState.CommandBuffers.size()), FrameState.CommandBuffers.data());
 }
 
 static bool const CreateMainRenderPass()
@@ -225,10 +225,10 @@ static bool const CreateGraphicsPipeline()
         MultiSampleState.alphaToCoverageEnable = VK_FALSE;
         MultiSampleState.sampleShadingEnable = VK_FALSE;
 
-        VkPipelineViewportStateCreateInfo ViewportState = {};
-        ViewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
-        ViewportState.viewportCount = 1u;
-        ViewportState.scissorCount = 1u;
+        VkPipelineViewportStateCreateInfo PipelineViewportState = {};
+        PipelineViewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+        PipelineViewportState.viewportCount = 1u;
+        PipelineViewportState.scissorCount = 1u;
 
         std::array<VkDynamicState, 2u> DynamicStates = 
         {
@@ -238,7 +238,7 @@ static bool const CreateGraphicsPipeline()
 
         VkPipelineDynamicStateCreateInfo DynamicState = {};
         DynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-        DynamicState.dynamicStateCount = DynamicStates.size();
+        DynamicState.dynamicStateCount = static_cast<uint32>(DynamicStates.size());
         DynamicState.pDynamicStates = DynamicStates.data();
 
         VkGraphicsPipelineCreateInfo CreateInfo = {};
@@ -247,7 +247,7 @@ static bool const CreateGraphicsPipeline()
         CreateInfo.basePipelineIndex = -1l;
         CreateInfo.renderPass = MainRenderPass;
         CreateInfo.subpass = 0u;
-        CreateInfo.stageCount = ShaderStages.size();
+        CreateInfo.stageCount = static_cast<uint32>(ShaderStages.size());
         CreateInfo.pStages = ShaderStages.data();
         CreateInfo.layout = TrianglePipelineLayout;
         CreateInfo.pVertexInputState = &VertexInputState;
@@ -255,7 +255,7 @@ static bool const CreateGraphicsPipeline()
         CreateInfo.pRasterizationState = &RasterizationState;
         CreateInfo.pColorBlendState = &ColourBlendState;
         CreateInfo.pMultisampleState = &MultiSampleState;
-        CreateInfo.pViewportState = &ViewportState;
+        CreateInfo.pViewportState = &PipelineViewportState;
         CreateInfo.pDynamicState = &DynamicState;
 
         VERIFY_VKRESULT(vkCreateGraphicsPipelines(DeviceState.Device, VK_NULL_HANDLE, 1u, &CreateInfo, nullptr, &TrianglePipelineState));
