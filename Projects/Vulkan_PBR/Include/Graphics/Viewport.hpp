@@ -30,8 +30,6 @@ namespace Vulkan::Viewport
 
         VkSwapchainKHR SwapChain;
         VkSurfaceFormatKHR SurfaceFormat;
-
-        uint32 CurrentBackBufferIndex;
     };
 
     extern bool const CreateViewport(Vulkan::Instance::InstanceState const & InstanceState, Vulkan::Device::DeviceState const & DeviceState, ViewportState & OutputState);
