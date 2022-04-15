@@ -66,6 +66,7 @@ target_link_libraries(
     SPIRV
     VulkanWrapper
     MathLib
+    OBJLoader
 )
 
 # This is for debugging the .exe since we have required resources here
