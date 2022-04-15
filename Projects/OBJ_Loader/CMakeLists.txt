@@ -19,7 +19,7 @@ add_library(OBJLoader SHARED)
 
 target_include_directories(
     OBJLoader
-    PUBLIC "./Include"
+    PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/Include"
 )
 
 target_sources(
