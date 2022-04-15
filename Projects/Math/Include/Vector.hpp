@@ -26,7 +26,8 @@ namespace Math
 
         inline static Vector3 const Normalize(Vector3 const & Vector)
         {
-            return Vector * (1.0f / Length(Vector));
+            float const InverseLength = 1.0f / Length(Vector);
+            return Vector3 { Vector.X * InverseLength, Vector.Y * InverseLength, Vector.Z * InverseLength };
         }
 
         static constexpr Vector3 const Zero()
