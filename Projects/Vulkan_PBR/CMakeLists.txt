@@ -35,9 +35,6 @@ target_include_directories(
     VulkanPBR
     SYSTEM
     PRIVATE "${LearnVulkan_SOURCE_DIR}/External/vulkan/Include"
-    PRIVATE "$<TARGET_PROPERTY:VulkanWrapper,INTERFACE_INCLUDE_DIRECTORIES>"
-    PRIVATE "$<TARGET_PROPERTY:glslang,INTERFACE_INCLUDE_DIRECTORIES>"
-    PRIVATE "$<TARGET_PROPERTY:SPIRV,INTERFACE_INCLUDE_DIRECTORIES>"
 )
 
 target_include_directories(
@@ -68,6 +65,7 @@ target_link_libraries(
     glslang
     SPIRV
     VulkanWrapper
+    MathLib
 )
 
 # This is for debugging the .exe since we have required resources here
