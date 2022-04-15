@@ -40,18 +40,18 @@ namespace Math
         }
     };
 
-    extern Vector3 operator + (Vector3 const & Left, Vector3 const & Right);
+    extern Vector3 const operator + (Vector3 const & Left, Vector3 const & Right);
 
     /* In an abstract sense we can also use this for difference between 3D Points */
-    extern Vector3 operator - (Vector3 const & Left, Vector3 const & Right);
+    extern Vector3 const operator - (Vector3 const & Left, Vector3 const & Right);
 
     /* Dot product */
-    extern float operator * (Vector3 const & Left, Vector3 const & Right);
+    extern float const operator * (Vector3 const & Left, Vector3 const & Right);
 
     /* Cross product */
-    extern Vector3 operator ^ (Vector3 const & Left, Vector3 const & Right);
+    extern Vector3 const operator ^ (Vector3 const & Left, Vector3 const & Right);
 
-    extern Vector3 operator * (Vector3 const & Vector, float const Scalar);
+    extern Vector3 const operator * (Vector3 const & Vector, float const Scalar);
 
-    extern Vector3 operator * (float const Scalar, Vector3 const & Vector);
+    extern Vector3 const operator * (float const Scalar, Vector3 const & Vector);
 }

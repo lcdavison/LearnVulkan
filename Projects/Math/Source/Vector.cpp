@@ -1,6 +1,6 @@
 #include "Vector.hpp"
 
-Math::Vector3 Math::operator + (Math::Vector3 const & Left, Math::Vector3 const & Right)
+Math::Vector3 const Math::operator + (Math::Vector3 const & Left, Math::Vector3 const & Right)
 {
     return Vector3
     {
@@ -10,7 +10,7 @@ Math::Vector3 Math::operator + (Math::Vector3 const & Left, Math::Vector3 const 
     };
 }
 
-Math::Vector3 Math::operator - (Math::Vector3 const & Left, Math::Vector3 const & Right)
+Math::Vector3 const Math::operator - (Math::Vector3 const & Left, Math::Vector3 const & Right)
 {
     return Vector3
     {
@@ -20,14 +20,14 @@ Math::Vector3 Math::operator - (Math::Vector3 const & Left, Math::Vector3 const 
     };
 }
 
-float Math::operator * (Math::Vector3 const & Left, Math::Vector3 const & Right)
+float const Math::operator * (Math::Vector3 const & Left, Math::Vector3 const & Right)
 {
     return Left.X * Right.X +
            Left.Y * Right.Y +
            Left.Z * Right.Z;
 }
 
-Math::Vector3 Math::operator ^ (Math::Vector3 const & Left, Math::Vector3 const & Right)
+Math::Vector3 const Math::operator ^ (Math::Vector3 const & Left, Math::Vector3 const & Right)
 {
     return Vector3
     {
@@ -37,7 +37,7 @@ Math::Vector3 Math::operator ^ (Math::Vector3 const & Left, Math::Vector3 const 
     };
 }
 
-Math::Vector3 Math::operator * (Math::Vector3 const & Vector, float const Scalar)
+Math::Vector3 const Math::operator * (Math::Vector3 const & Vector, float const Scalar)
 {
     return Vector3
     {
@@ -47,7 +47,7 @@ Math::Vector3 Math::operator * (Math::Vector3 const & Vector, float const Scalar
     };
 }
 
-Math::Vector3 Math::operator * (float const Scalar, Math::Vector3 const & Vector)
+Math::Vector3 const Math::operator * (float const Scalar, Math::Vector3 const & Vector)
 {
     return Vector * Scalar;
 }
