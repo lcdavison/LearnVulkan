@@ -1,6 +1,7 @@
 name: CMakeNightly
 
 on:
+  workflow_dispatch:
   schedule:
     # Mon-Fri 00:30AM
     - cron: '30 0 * * 1-5'
