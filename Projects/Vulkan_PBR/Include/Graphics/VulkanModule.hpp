@@ -27,12 +27,9 @@
                 ::MessageBox(nullptr, ErrorMessage.c_str(), TEXT("Vulkan Error"), MB_OK);\
                 ::PostQuitMessage(EXIT_FAILURE);\
             }\
-        }
+        } while(false)
 #else
-    #define VERIFY_VKRESULT(Function)\
-        {\
-            VkResult Result = Function;\
-        }   
+    #define VERIFY_VKRESULT(Function) Function
 #endif // _DEBUG
 
 namespace VulkanModule
