@@ -6,12 +6,15 @@
 
 static inline std::string const kOBJFileExtension = ".obj";
 
-static inline char const kOBJCommentCharacter = '#';
+static inline std::uint8_t const kOBJMaxVertexComponentCount = { 4u };
+static inline std::uint8_t const kOBJMaxTextureCoordinateComponentCount = { 3u };
+
 static inline char const kOBJAttributeCharacter = 'v';
 static inline char const kOBJTextureCoordinateCharacter = 't';
 static inline char const kOBJNormalCharacter = 'n';
 static inline char const kOBJFaceCharacter = 'f';
 static inline char const kOBJFaceDelimitingCharacter = '/';
+static inline char const kOBJNullIndexCharacter = '0';
 
 static inline char const kWhitespaceCharacter = ' ';
 
@@ -24,22 +27,23 @@ static void ProcessVertexAttribute(std::string const & AttributeLine, std::vecto
 {
     std::uint16_t CurrentCharacterIndex = { 0u };
 
+    std::string CurrentNumber = {};
+    CurrentNumber.reserve(256u);
+
     while (CurrentCharacterIndex < AttributeLine.size())
     {
         char const CurrentCharacter = AttributeLine [CurrentCharacterIndex];
 
         if (::IsCharacterANumber(CurrentCharacter))
         {
-            std::string Number = {};
-            Number.reserve(256u);
-
             while (CurrentCharacterIndex < AttributeLine.size() && AttributeLine [CurrentCharacterIndex] != kWhitespaceCharacter)
             {
-                Number += AttributeLine [CurrentCharacterIndex];
+                CurrentNumber += AttributeLine [CurrentCharacterIndex];
                 CurrentCharacterIndex++;
             }
 
-            OutputAttributeData.emplace_back(std::atof(Number.c_str()));
+            OutputAttributeData.push_back(std::stof(CurrentNumber));
+            CurrentNumber.clear();
         }
         else
         {
@@ -48,7 +52,7 @@ static void ProcessVertexAttribute(std::string const & AttributeLine, std::vecto
     }
 }
 
-static void ProcessFaceData(std::string const & FaceLine)
+static void ProcessFaceData(std::string const & FaceLine, std::vector<std::uint32_t> & VertexIndices, std::vector<std::uint32_t> & TextureCoordinateIndices, std::vector<std::uint32_t> & NormalIndices)
 {
     /*
     *   Faces laid out as follows
@@ -63,14 +67,24 @@ static void ProcessFaceData(std::string const & FaceLine)
 
     std::uint16_t CurrentCharacterIndex = { 0u };
 
+    /* Indices start at 1 so we can use 0 to indicate no index */
+    std::array<std::string, 3u> IndexStrings =
+    {
+        std::string(1u, kOBJNullIndexCharacter),
+        std::string(1u, kOBJNullIndexCharacter),
+        std::string(1u, kOBJNullIndexCharacter),
+    };
+
+    IndexStrings [0u].reserve(8u);
+    IndexStrings [1u].reserve(8u);
+    IndexStrings [2u].reserve(8u);
+
     while (CurrentCharacterIndex < FaceLine.size())
     {
         char const CurrentCharacter = FaceLine [CurrentCharacterIndex];
 
         if (::IsCharacterANumber(CurrentCharacter))
         {
-            std::array<std::string, 3u> Indices = {};
-
             std::uint8_t CurrentStringIndex = { 0u };
             while (CurrentCharacterIndex < FaceLine.size() && FaceLine [CurrentCharacterIndex] != kWhitespaceCharacter)
             {
@@ -80,23 +94,40 @@ static void ProcessFaceData(std::string const & FaceLine)
                 }
                 else
                 {
-                    Indices [CurrentStringIndex] += FaceLine [CurrentCharacterIndex];
-                    CurrentCharacterIndex++;
+                    IndexStrings [CurrentStringIndex] += FaceLine [CurrentCharacterIndex];
                 }
+
+                CurrentCharacterIndex++;
             }
+
+            VertexIndices.push_back(std::stoul(IndexStrings [0u]));
+            TextureCoordinateIndices.push_back(std::stoul(IndexStrings [1u]));
+            NormalIndices.push_back(std::stoul(IndexStrings [2u]));
+
+            IndexStrings [0u] = kOBJNullIndexCharacter;
+            IndexStrings [1u] = kOBJNullIndexCharacter;
+            IndexStrings [2u] = kOBJNullIndexCharacter;
+        }
+        else
+        {
+            CurrentCharacterIndex++;
         }
     }
 }
 
-static bool const ParseOBJFile(std::ifstream & OBJFileStream)
+static bool const ParseOBJFile(std::ifstream & OBJFileStream, OBJLoader::OBJMeshData & OutputMeshData)
 {
-    bool bResult = false;
-
     std::string CurrentFileLine = {};
 
-    std::vector Positions = std::vector<float>();
-    std::vector Normals = std::vector<float>();
+    std::vector Vertices = std::vector<float>();
     std::vector TextureCoordinates = std::vector<float>();
+    std::vector Normals = std::vector<float>();
+
+    std::vector FaceOffsets = std::vector<std::uint32_t>();
+
+    std::vector VertexIndices = std::vector<std::uint32_t>();
+    std::vector TextureCoordinateIndices = std::vector<std::uint32_t>();
+    std::vector NormalIndices = std::vector<std::uint32_t>();
 
     while (std::getline(OBJFileStream, CurrentFileLine))
     {
@@ -104,8 +135,6 @@ static bool const ParseOBJFile(std::ifstream & OBJFileStream)
 
         switch (LineStartCharacter)
         {
-            case kOBJCommentCharacter:
-                break;
             case kOBJAttributeCharacter:
             {
                 /* Vertex, Normal etc... */
@@ -115,35 +144,84 @@ static bool const ParseOBJFile(std::ifstream & OBJFileStream)
                 {
                     case kWhitespaceCharacter:
                     {
-                        std::uint32_t const CurrentPositionSize = Positions.size();
-                        ::ProcessVertexAttribute(CurrentFileLine, Positions);
+                        std::uint32_t const CurrentPositionSize = Vertices.size();
+                        ::ProcessVertexAttribute(CurrentFileLine, Vertices);
 
                         /* This should only be needed if 3 values are given instead of 4 */
-                        std::uint32_t const PaddingValueCount = 4u - (Positions.size() - CurrentPositionSize);
-                        Positions.insert(Positions.cend(), PaddingValueCount, 1.0f);
+                        std::uint32_t const PaddingValueCount = kOBJMaxVertexComponentCount - (Vertices.size() - CurrentPositionSize);
+                        Vertices.insert(Vertices.cend(), PaddingValueCount, 1.0f);
                     }
                     break;
                     case kOBJNormalCharacter:
+                    {
                         ::ProcessVertexAttribute(CurrentFileLine, Normals);
-                        break;
+                    }
+                    break;
                     case kOBJTextureCoordinateCharacter:
                     {
                         std::uint32_t const CurrentTextureCoordinatesSize = TextureCoordinates.size();
                         ::ProcessVertexAttribute(CurrentFileLine, TextureCoordinates);
 
-                        std::uint32_t const PaddingValueCount = 3u - (TextureCoordinates.size() - CurrentTextureCoordinatesSize);
+                        std::uint32_t const PaddingValueCount = kOBJMaxTextureCoordinateComponentCount - (TextureCoordinates.size() - CurrentTextureCoordinatesSize);
                         TextureCoordinates.insert(TextureCoordinates.cend(), PaddingValueCount, 0.0f);
                     }
                     break;
+                    default:
+                        break;
                 }
             }
             break;
             case kOBJFaceCharacter:
+            {
+                std::uint32_t const CurrentFaceOffset = VertexIndices.size();
+
+                ::ProcessFaceData(CurrentFileLine, VertexIndices, TextureCoordinateIndices, NormalIndices);
+
+                FaceOffsets.push_back(CurrentFaceOffset);
+            }
+            break;
+            default:
+                /* Just skip other lines */
                 break;
         }
     }
 
-    return bResult;
+    /* We could do the data organisation below concurrently, depending on the amount of data */
+
+    for (std::uint32_t CurrentVertexIndex = { 0u }; CurrentVertexIndex < Vertices.size(); CurrentVertexIndex += 4u)
+    {
+        OBJLoader::OBJVertex & CurrentVertex = OutputMeshData.Positions.emplace_back();
+
+        CurrentVertex.X = Vertices [CurrentVertexIndex + 0u];
+        CurrentVertex.Y = Vertices [CurrentVertexIndex + 1u];
+        CurrentVertex.Z = Vertices [CurrentVertexIndex + 2u];
+        CurrentVertex.W = Vertices [CurrentVertexIndex + 3u];
+    }
+
+    for (std::uint32_t CurrentTextureCoordinateIndex = { 0u }; CurrentTextureCoordinateIndex < TextureCoordinates.size(); CurrentTextureCoordinateIndex += 3u)
+    {
+        OBJLoader::OBJTextureCoordinate & CurrentTextureCoordinate = OutputMeshData.TextureCoordinates.emplace_back();
+
+        CurrentTextureCoordinate.U = TextureCoordinates [CurrentTextureCoordinateIndex + 0u];
+        CurrentTextureCoordinate.V = TextureCoordinates [CurrentTextureCoordinateIndex + 1u];
+        CurrentTextureCoordinate.W = TextureCoordinates [CurrentTextureCoordinateIndex + 2u];
+    }
+
+    for (std::uint32_t CurrentNormalIndex = { 0u }; CurrentNormalIndex < Normals.size(); CurrentNormalIndex += 3u)
+    {
+        OBJLoader::OBJNormal & CurrentNormal = OutputMeshData.Normals.emplace_back();
+
+        CurrentNormal.X = Normals [CurrentNormalIndex + 0u];
+        CurrentNormal.Y = Normals [CurrentNormalIndex + 1u];
+        CurrentNormal.Z = Normals [CurrentNormalIndex + 2u];
+    }
+
+    OutputMeshData.FaceOffsets = std::move(FaceOffsets);
+    OutputMeshData.FaceVertexIndices = std::move(VertexIndices);
+    OutputMeshData.FaceTextureCoordinateIndices = std::move(TextureCoordinateIndices);
+    OutputMeshData.FaceNormalIndices = std::move(NormalIndices);
+
+    return VertexIndices.size() > 0u || OutputMeshData.FaceOffsets.size() > 0u;
 }
 
 bool const OBJLoader::LoadFile(std::filesystem::path const & OBJFilePath, OBJMeshData & OutputMeshData)
@@ -155,7 +233,14 @@ bool const OBJLoader::LoadFile(std::filesystem::path const & OBJFilePath, OBJMes
     {
         std::ifstream FileStream = std::ifstream(OBJFilePath);
 
-        bResult = ::ParseOBJFile(FileStream);
+        OBJMeshData IntermediateMeshData = {};
+
+        bResult = ::ParseOBJFile(FileStream, IntermediateMeshData);
+
+        if (bResult)
+        {
+            OutputMeshData = std::move(IntermediateMeshData);
+        }
 
         FileStream.close();
     }
