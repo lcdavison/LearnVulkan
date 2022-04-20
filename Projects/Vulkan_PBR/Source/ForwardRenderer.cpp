@@ -175,6 +175,11 @@ static bool const CreateGraphicsPipeline()
     VertexShaderModule = ShaderLibrary::CreateShaderModule(DeviceState, VertexShaderHandle);
     FragmentShaderModule = ShaderLibrary::CreateShaderModule(DeviceState, FragmentShaderHandle);
 
+    if (VertexShaderModule == VK_NULL_HANDLE || FragmentShaderModule == VK_NULL_HANDLE)
+    {
+        return false;
+    }
+
     std::array<VkPipelineShaderStageCreateInfo, 2u> ShaderStages = {};
 
     {
