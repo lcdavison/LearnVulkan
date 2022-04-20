@@ -18,29 +18,48 @@ const float kGammaCorrectionExponent = 1.0f / 2.2f;
 *   There really isn't a need to do this (Vulkan implementations have *_SRGB surface formats).
 *   Bit of fun though.
 */
-vec3 LinearRGBToSRGB(vec3 LinearRGB)
+float LinearRGBToSRGB(float LinearValue)
 {
     const float SRGBTransferConstant = 0.0031308f;
 
+    return LinearValue > SRGBTransferConstant ?
+           1.055f * pow(LinearValue, kGammaCorrectionExponent) - 0.055f :
+           12.92f * LinearValue;
+}
+
+vec3 LinearRGBToSRGB(vec3 LinearRGB)
+{
     vec3 SRGB = vec3(0.0f);
-    SRGB.r = LinearRGB.r > SRGBTransferConstant ? 
-                           1.055f * pow(LinearRGB.r, kGammaCorrectionExponent) - 0.055f :
-                           12.92f * LinearRGB.r;
 
-    SRGB.g = LinearRGB.g > SRGBTransferConstant ? 
-                           1.055f * pow(LinearRGB.g, kGammaCorrectionExponent) - 0.055f :
-                           12.92f * LinearRGB.g;
-
-    SRGB.b = LinearRGB.b > SRGBTransferConstant ? 
-                           1.055f * pow(LinearRGB.b, kGammaCorrectionExponent) - 0.055f :
-                           12.92f * LinearRGB.b;
+    SRGB.r = LinearRGBToSRGB(LinearRGB.r);
+    SRGB.g = LinearRGBToSRGB(LinearRGB.g);
+    SRGB.b = LinearRGBToSRGB(LinearRGB.b);
 
     return SRGB;
 }
 
-void main()
+float LinearRGBToRec709(float LinearValue)
 {
-    vec3 LinearRGB = FragmentColour.rgb;
+    const float Rec709TransferConstant = 0.018f;
+
+    return LinearValue < 0.018f ?
+           4.500f * LinearValue :
+           1.099f * pow(LinearValue, 0.45f) - 0.099f;
+}
+
+vec3 LinearRGBToRec709(vec3 LinearRGB)
+{
+    vec3 Rec709 = vec3(0.0f);
+
+    Rec709.r = LinearRGBToRec709(LinearRGB.r);
+    Rec709.g = LinearRGBToRec709(LinearRGB.g);
+    Rec709.b = LinearRGBToRec709(LinearRGB.b);
+
+    return Rec709;
+}
+
+vec3 ToneMap(vec3 LinearRGB)
+{
     vec3 CIEXYZ = RGBToXYZ * LinearRGB;
 
     float ColourScaleFactor = 1.0f / (CIEXYZ.x + CIEXYZ.y + CIEXYZ.z + 1.0f);
@@ -53,9 +72,15 @@ void main()
     CIEXYZ.y = ToneMappedLuminance;
     CIEXYZ.z = (ToneMappedLuminance * (1.0f - CIEXYZ.x - CIEXYZ.y)) / CIEXYZ.y;
 
-    LinearRGB = XYZToRGB * CIEXYZ;
+    return XYZToRGB * CIEXYZ;
+}
 
-    vec3 SRGBOutput = LinearRGBToSRGB(LinearRGB);
+void main()
+{
+    vec3 LinearRGB = FragmentColour.rgb;
+    //LinearRGB = ToneMap(LinearRGB);
 
-    OutputFragmentColour = vec4(SRGBOutput, 1.0f);
+    vec3 OutputColour = LinearRGBToSRGB(LinearRGB);
+
+    OutputFragmentColour = vec4(OutputColour, 1.0f);
 }
