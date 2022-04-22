@@ -12,7 +12,7 @@ mat3x3 XYZToRGB = mat3x3( 2.36461385f, -0.89654057f, -0.46807328f,
                          -0.51516621f,  1.42640810f,  0.08875810f,
                           0.00520370f, -0.01440816f,  1.00920446f);
 
-const float kGammaCorrectionExponent = 1.0f / 2.2f;
+const float kGammaCorrectionExponent = 1.0f / 2.4f;
 
 /* 
 *   There really isn't a need to do this (Vulkan implementations have *_SRGB surface formats).
