@@ -55,6 +55,8 @@ static uint16 FragmentShaderHandle = {};
 static VkShaderModule VertexShaderModule = {};
 static VkShaderModule FragmentShaderModule = {};
 
+static VkDescriptorPool DescriptorPool = {};
+
 static void CreateFrameState()
 {
     FrameState.CurrentFrameStateIndex = 0u;
@@ -193,6 +195,23 @@ static bool const CreatePerFrameDescriptorSetLayout()
     return true;
 }
 
+static bool const CreateDescriptorPool()
+{
+    VkDescriptorPoolSize PoolSize = {};
+    PoolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    PoolSize.descriptorCount = 4u;
+
+    VkDescriptorPoolCreateInfo CreateInfo = {};
+    CreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    CreateInfo.poolSizeCount = 1u;
+    CreateInfo.pPoolSizes = &PoolSize;
+    CreateInfo.maxSets = 4u; /* Arbitrary at the moment */
+
+    VERIFY_VKRESULT(vkCreateDescriptorPool(DeviceState.Device, &CreateInfo, nullptr, &DescriptorPool));
+
+    return true;
+}
+
 static bool const CreateGraphicsPipeline()
 {
     {
@@ -320,6 +339,7 @@ bool const ForwardRenderer::Initialise(VkApplicationInfo const & ApplicationInfo
         bResult = ::CreateMainRenderPass();
 
         ::CreatePerFrameDescriptorSetLayout();
+        ::CreateDescriptorPool();
 
         bResult = ::CreateGraphicsPipeline();
 
@@ -359,6 +379,12 @@ bool const ForwardRenderer::Shutdown()
     {
         vkDestroyRenderPass(DeviceState.Device, MainRenderPass, nullptr);
         MainRenderPass = VK_NULL_HANDLE;
+    }
+
+    if (DescriptorPool)
+    {
+        vkDestroyDescriptorPool(DeviceState.Device, DescriptorPool, nullptr);
+        DescriptorPool = VK_NULL_HANDLE;
     }
 
     Vulkan::Viewport::DestroyViewport(DeviceState, ViewportState);

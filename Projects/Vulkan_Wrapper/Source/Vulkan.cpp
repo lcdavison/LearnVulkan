@@ -234,6 +234,11 @@ VkResult vkCreateGraphicsPipelines(VkDevice device, VkPipelineCache pipelineCach
     return Functions::vkCreateGraphicsPipelines(device, pipelineCache, createInfoCount, pCreateInfos, pAllocator, pPipelines);
 }
 
+VkResult vkCreateDescriptorPool(VkDevice device, VkDescriptorPoolCreateInfo const * pCreateInfo, VkAllocationCallbacks const * pAllocator, VkDescriptorPool * pDescriptorPool)
+{
+    return Functions::vkCreateDescriptorPool(device, pCreateInfo, pAllocator, pDescriptorPool);
+}
+
 VkResult vkCreateDescriptorSetLayout(VkDevice device, VkDescriptorSetLayoutCreateInfo const * pCreateInfo, VkAllocationCallbacks const * pAllocator, VkDescriptorSetLayout * pSetLayout)
 {
     return Functions::vkCreateDescriptorSetLayout(device, pCreateInfo, pAllocator, pSetLayout);
@@ -305,6 +310,11 @@ void vkDestroyPipeline(VkDevice device, VkPipeline pipeline, VkAllocationCallbac
     Functions::vkDestroyPipeline(device, pipeline, pAllocator);
 }
 
+void vkDestroyDescriptorPool(VkDevice device, VkDescriptorPool descriptorPool, VkAllocationCallbacks const * pAllocator)
+{
+    Functions::vkDestroyDescriptorPool(device, descriptorPool, pAllocator);
+}
+
 void vkDestroyDescriptorSetLayout(VkDevice device, VkDescriptorSetLayout descriptorSetLayout, VkAllocationCallbacks const * pAllocator)
 {
     Functions::vkDestroyDescriptorSetLayout(device, descriptorSetLayout, pAllocator);
@@ -347,9 +357,20 @@ VkResult vkAllocateCommandBuffers(VkDevice device, VkCommandBufferAllocateInfo c
     return Functions::vkAllocateCommandBuffers(device, pAllocateInfo, pCommandBuffers);
 }
 
+VkResult vkAllocateDescriptorSets(VkDevice device, VkDescriptorSetAllocateInfo const * pAllocateInfo, VkDescriptorSet * pDescriptorSets)
+{
+    return Functions::vkAllocateDescriptorSets(device, pAllocateInfo, pDescriptorSets);
+}
+
+
 void vkFreeCommandBuffers(VkDevice device, VkCommandPool commandPool, std::uint32_t commandBufferCount, VkCommandBuffer * pCommandBuffers)
 {
     return Functions::vkFreeCommandBuffers(device, commandPool, commandBufferCount, pCommandBuffers);
+}
+
+void vkFreeDescriptorSets(VkDevice device, VkDescriptorPool descriptorPool, std::uint32_t descriptorSetCount, VkDescriptorSet const* pDescriptorSets)
+{
+    Functions::vkFreeDescriptorSets(device, descriptorPool, descriptorSetCount, pDescriptorSets);
 }
 
 
