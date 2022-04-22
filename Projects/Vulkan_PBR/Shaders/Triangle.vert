@@ -1,5 +1,10 @@
 #version 450
 
+layout (set = 0, binding = 0) uniform PerFrameData
+{
+    mat4x4 ProjectionMatrix;
+};
+
 layout (location = 0) out vec3 FragmentColour;
 
 vec2 TriangleVertexPositions [3u] =
