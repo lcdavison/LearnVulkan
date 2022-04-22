@@ -7,6 +7,8 @@
 #include "Graphics/Viewport.hpp"
 #include "Graphics/ShaderLibrary.hpp"
 
+#include "Matrix.hpp"
+
 #include "VulkanPBR.hpp"
 
 #include <array>
@@ -20,7 +22,15 @@ struct FrameStateCollection
     std::vector<VkFence> Fences;
     std::vector<VkFramebuffer> FrameBuffers;
 
+    /* Descriptor Sets are Frame Data */
+    //std::vector<VkDescriptorSet> DescriptorSets;
+
     uint8 CurrentFrameStateIndex;
+};
+
+struct PerFrameUniformBufferData
+{
+    Math::Matrix4x4 ProjectionMatrix;
 };
 
 static std::string const kDefaultShaderEntryPointName = "main";
@@ -33,6 +43,8 @@ static FrameStateCollection FrameState = {};
 
 static VkRenderPass MainRenderPass = {};
 static VkShaderModule ShaderModule = {};
+
+static VkDescriptorSetLayout TestLayout = {};
 
 static VkPipelineLayout TrianglePipelineLayout = {};
 static VkPipeline TrianglePipelineState = {};
@@ -163,11 +175,31 @@ static bool const CreateMainRenderPass()
     return bResult;
 }
 
+static bool const CreatePerFrameDescriptorSetLayout()
+{
+    std::vector DescriptorSetLayoutBindings = std::vector<VkDescriptorSetLayoutBinding>(1u);
+    DescriptorSetLayoutBindings[0u].binding = 0u;
+    DescriptorSetLayoutBindings[0u].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+    DescriptorSetLayoutBindings[0u].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    DescriptorSetLayoutBindings[0u].descriptorCount = 1u; /* > 1 indicates that there is an array of data */
+
+    VkDescriptorSetLayoutCreateInfo CreateInfo = {};
+    CreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    CreateInfo.bindingCount = static_cast<uint32>(DescriptorSetLayoutBindings.size());
+    CreateInfo.pBindings = DescriptorSetLayoutBindings.data();
+
+    VERIFY_VKRESULT(vkCreateDescriptorSetLayout(DeviceState.Device, &CreateInfo, nullptr, &TestLayout));
+
+    return true;
+}
+
 static bool const CreateGraphicsPipeline()
 {
     {
         VkPipelineLayoutCreateInfo CreateInfo = {};
         CreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+        CreateInfo.setLayoutCount = 1u;
+        CreateInfo.pSetLayouts = &TestLayout;
 
         VERIFY_VKRESULT(vkCreatePipelineLayout(DeviceState.Device, &CreateInfo, nullptr, &TrianglePipelineLayout));
     }
@@ -287,6 +319,8 @@ bool const ForwardRenderer::Initialise(VkApplicationInfo const & ApplicationInfo
 
         bResult = ::CreateMainRenderPass();
 
+        ::CreatePerFrameDescriptorSetLayout();
+
         bResult = ::CreateGraphicsPipeline();
 
         ::CreateFrameState();
@@ -311,6 +345,12 @@ bool const ForwardRenderer::Shutdown()
     {
         vkDestroyPipelineLayout(DeviceState.Device, TrianglePipelineLayout, nullptr);
         TrianglePipelineLayout = VK_NULL_HANDLE;
+    }
+
+    if (TestLayout)
+    {
+        vkDestroyDescriptorSetLayout(DeviceState.Device, TestLayout, nullptr);
+        TestLayout = VK_NULL_HANDLE;
     }
 
     ShaderLibrary::DestroyShaderModules(DeviceState);

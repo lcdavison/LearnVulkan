@@ -224,14 +224,19 @@ VkResult vkCreateShaderModule(VkDevice device, VkShaderModuleCreateInfo const * 
     return Functions::vkCreateShaderModule(device, pCreateInfo, pAllocator, pShaderModule);
 }
 
+VkResult vkCreatePipelineLayout(VkDevice device, VkPipelineLayoutCreateInfo const * pCreateInfo, VkAllocationCallbacks const * pAllocator, VkPipelineLayout * pPipelineLayout)
+{
+    return Functions::vkCreatePipelineLayout(device, pCreateInfo, pAllocator, pPipelineLayout);
+}
+
 VkResult vkCreateGraphicsPipelines(VkDevice device, VkPipelineCache pipelineCache, std::uint32_t createInfoCount, VkGraphicsPipelineCreateInfo const * pCreateInfos, VkAllocationCallbacks const * pAllocator, VkPipeline * pPipelines)
 {
     return Functions::vkCreateGraphicsPipelines(device, pipelineCache, createInfoCount, pCreateInfos, pAllocator, pPipelines);
 }
 
-VkResult vkCreatePipelineLayout(VkDevice device, VkPipelineLayoutCreateInfo const * pCreateInfo, VkAllocationCallbacks const * pAllocator, VkPipelineLayout * pPipelineLayout)
+VkResult vkCreateDescriptorSetLayout(VkDevice device, VkDescriptorSetLayoutCreateInfo const * pCreateInfo, VkAllocationCallbacks const * pAllocator, VkDescriptorSetLayout * pSetLayout)
 {
-    return Functions::vkCreatePipelineLayout(device, pCreateInfo, pAllocator, pPipelineLayout);
+    return Functions::vkCreateDescriptorSetLayout(device, pCreateInfo, pAllocator, pSetLayout);
 }
 
 VkResult vkCreateWin32SurfaceKHR(VkInstance instance, VkWin32SurfaceCreateInfoKHR const * pCreateInfo, VkAllocationCallbacks const * pAllocator, VkSurfaceKHR * pSurface)
@@ -300,6 +305,11 @@ void vkDestroyPipeline(VkDevice device, VkPipeline pipeline, VkAllocationCallbac
     Functions::vkDestroyPipeline(device, pipeline, pAllocator);
 }
 
+void vkDestroyDescriptorSetLayout(VkDevice device, VkDescriptorSetLayout descriptorSetLayout, VkAllocationCallbacks const * pAllocator)
+{
+    Functions::vkDestroyDescriptorSetLayout(device, descriptorSetLayout, pAllocator);
+}
+
 void vkDestroySurfaceKHR(VkInstance instance, VkSurfaceKHR surface, VkAllocationCallbacks const * pAllocator)
 {
     Functions::vkDestroySurfaceKHR(instance, surface, pAllocator);
@@ -359,6 +369,14 @@ VkResult vkDeviceWaitIdle(VkDevice device)
 }
 
 
+void vkUpdateDescriptorSets(VkDevice device,
+                            std::uint32_t descriptorWriteCount, VkWriteDescriptorSet const* pDescriptorWrites,
+                            std::uint32_t descriptorCopyCount, VkCopyDescriptorSet const* pDescriptorCopies)
+{
+    Functions::vkUpdateDescriptorSets(device, descriptorWriteCount, pDescriptorWrites, descriptorCopyCount, pDescriptorCopies);
+}
+
+
 VkResult vkQueueSubmit(VkQueue queue, std::uint32_t submitCount, VkSubmitInfo const * pSubmits, VkFence fence)
 {
     return Functions::vkQueueSubmit(queue, submitCount, pSubmits, fence);
@@ -407,6 +425,11 @@ void vkCmdEndRenderPass(VkCommandBuffer commandBuffer)
 void vkCmdBindPipeline(VkCommandBuffer commandBuffer, VkPipelineBindPoint pipelineBindPoint, VkPipeline pipeline)
 {
     Functions::vkCmdBindPipeline(commandBuffer, pipelineBindPoint, pipeline);
+}
+
+void vkCmdBindDescriptorSets(VkCommandBuffer commandBuffer, VkPipelineBindPoint pipelineBindPoint, VkPipelineLayout layout, std::uint32_t firstSet, std::uint32_t descriptorSetCount, VkDescriptorSet const * pDescriptorSets, std::uint32_t dynamicOffsetCount, std::uint32_t const * pDynamicOffsets)
+{
+    Functions::vkCmdBindDescriptorSets(commandBuffer, pipelineBindPoint, layout, firstSet, descriptorSetCount, pDescriptorSets, dynamicOffsetCount, pDynamicOffsets);
 }
 
 void vkCmdDraw(VkCommandBuffer commandBuffer, std::uint32_t vertexCount, std::uint32_t instanceCount, std::uint32_t firstVertex, std::uint32_t firstInstance)

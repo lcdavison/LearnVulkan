@@ -100,6 +100,8 @@ VK_DEVICE_FUNCTION(vkResetCommandBuffer);
 
 VK_DEVICE_FUNCTION(vkQueueSubmit);
 
+VK_DEVICE_FUNCTION(vkUpdateDescriptorSets);
+
 VK_DEVICE_FUNCTION(vkBeginCommandBuffer);
 VK_DEVICE_FUNCTION(vkEndCommandBuffer);
 
@@ -108,6 +110,7 @@ VK_DEVICE_FUNCTION(vkCmdClearColorImage);
 VK_DEVICE_FUNCTION(vkCmdPipelineBarrier);
 
 VK_DEVICE_FUNCTION(vkCmdBindPipeline);
+VK_DEVICE_FUNCTION(vkCmdBindDescriptorSets);
 
 VK_DEVICE_FUNCTION(vkCmdDraw);
 
