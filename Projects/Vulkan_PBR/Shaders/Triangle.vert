@@ -26,7 +26,10 @@ vec3 Colours [3u] =
 
 void main()
 {
-    gl_Position = vec4(TriangleVertexPositions [gl_VertexIndex].xy, 0.0f, 1.0f);
+    const float kTriangleScaleFactor = 5.0f;
+    const float kTriangleViewSpaceZ = 15.0f;
+
+    gl_Position = PerspectiveMatrix * vec4(kTriangleScaleFactor * TriangleVertexPositions [gl_VertexIndex].xy, kTriangleViewSpaceZ, 1.0f);
 
     FragmentColour = Colours [gl_VertexIndex];
     FragmentBrightness = Brightness;
