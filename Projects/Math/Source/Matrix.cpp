@@ -1,4 +1,4 @@
-#include "Matrix.hpp"
+#include "Math/Matrix.hpp"
 
 #if USE_SSE2
 #include <xmmintrin.h>

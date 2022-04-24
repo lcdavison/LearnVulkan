@@ -7,10 +7,10 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 list(
     APPEND HeaderFiles
-    "Include/Vector.hpp"
-    "Include/Matrix.hpp"
-    "Include/Transform.hpp"
-    "Include/Utilities.hpp"
+    "Include/Math/Vector.hpp"
+    "Include/Math/Matrix.hpp"
+    "Include/Math/Transform.hpp"
+    "Include/Math/Utilities.hpp"
 )
 
 list(

@@ -7,9 +7,9 @@
 #include "Graphics/Viewport.hpp"
 #include "Graphics/ShaderLibrary.hpp"
 
-#include "Matrix.hpp"
-#include "Transform.hpp"
-#include "Utilities.hpp"
+#include <Math/Matrix.hpp>
+#include <Math/Transform.hpp>
+#include <Math/Utilities.hpp>
 
 #include "VulkanPBR.hpp"
 

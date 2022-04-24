@@ -1,4 +1,4 @@
-#include "Vector.hpp"
+#include "Math/Vector.hpp"
 
 Math::Vector3 const Math::operator + (Math::Vector3 const & Left, Math::Vector3 const & Right)
 {

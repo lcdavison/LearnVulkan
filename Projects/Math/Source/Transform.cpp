@@ -1,9 +1,9 @@
-#include "Transform.hpp"
+#include "Math/Transform.hpp"
 
 #include <cmath>
 
 #if USE_SSE2
-#include <xmmintrin.h>
+    #include <xmmintrin.h>
 #endif
 
 Math::Vector4 const Math::operator * (Math::Matrix4x4 const & Matrix, Math::Vector4 const & Vector)
