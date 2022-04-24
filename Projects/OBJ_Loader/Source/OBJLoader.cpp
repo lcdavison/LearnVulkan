@@ -1,4 +1,4 @@
-#include "OBJLoader.hpp"
+#include "OBJLoader/OBJLoader.hpp"
 
 #include <fstream>
 #include <string>

@@ -7,12 +7,12 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 list(
     APPEND HeaderFiles
-    "./Include/OBJLoader.hpp"
+    "Include/OBJLoader/OBJLoader.hpp"
 )
 
 list(
     APPEND SourceFiles
-    "./Source/OBJLoader.cpp"
+    "Source/OBJLoader.cpp"
 )
 
 add_library(OBJLoader SHARED)
