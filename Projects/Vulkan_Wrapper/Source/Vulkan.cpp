@@ -148,6 +148,11 @@ void vkGetPhysicalDeviceFeatures(VkPhysicalDevice physicalDevice, VkPhysicalDevi
     Functions::vkGetPhysicalDeviceFeatures(physicalDevice, pFeatures);
 }
 
+void vkGetPhysicalDeviceMemoryProperties(VkPhysicalDevice physicalDevice, VkPhysicalDeviceMemoryProperties * pMemoryProperties)
+{
+    Functions::vkGetPhysicalDeviceMemoryProperties(physicalDevice, pMemoryProperties);
+}
+
 void vkGetPhysicalDeviceQueueFamilyProperties(VkPhysicalDevice physicalDevice, std::uint32_t * pQueueFamilyPropertyCount, VkQueueFamilyProperties * pQueueFamilyProperties)
 {
     Functions::vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, pQueueFamilyPropertyCount, pQueueFamilyProperties);
@@ -171,6 +176,11 @@ VkResult vkGetPhysicalDeviceSurfaceCapabilitiesKHR(VkPhysicalDevice physicalDevi
 void vkGetDeviceQueue(VkDevice device, std::uint32_t queueFamilyIndex, std::uint32_t queueIndex, VkQueue * pQueue)
 {
     Functions::vkGetDeviceQueue(device, queueFamilyIndex, queueIndex, pQueue);
+}
+
+void vkGetBufferMemoryRequirements(VkDevice device, VkBuffer buffer, VkMemoryRequirements * pMemoryRequirements)
+{
+    Functions::vkGetBufferMemoryRequirements(device, buffer, pMemoryRequirements);
 }
 
 VkResult vkGetSwapchainImagesKHR(VkDevice device, VkSwapchainKHR swapchain, std::uint32_t * pSwapchainImageCount, VkImage * pSwapchainImages)
@@ -224,14 +234,34 @@ VkResult vkCreateShaderModule(VkDevice device, VkShaderModuleCreateInfo const * 
     return Functions::vkCreateShaderModule(device, pCreateInfo, pAllocator, pShaderModule);
 }
 
-VkResult vkCreateGraphicsPipelines(VkDevice device, VkPipelineCache pipelineCache, std::uint32_t createInfoCount, VkGraphicsPipelineCreateInfo const * pCreateInfos, VkAllocationCallbacks const * pAllocator, VkPipeline * pPipelines)
+VkResult vkCreateDescriptorPool(VkDevice device, VkDescriptorPoolCreateInfo const * pCreateInfo, VkAllocationCallbacks const * pAllocator, VkDescriptorPool * pDescriptorPool)
 {
-    return Functions::vkCreateGraphicsPipelines(device, pipelineCache, createInfoCount, pCreateInfos, pAllocator, pPipelines);
+    return Functions::vkCreateDescriptorPool(device, pCreateInfo, pAllocator, pDescriptorPool);
+}
+
+VkResult vkCreateDescriptorSetLayout(VkDevice device, VkDescriptorSetLayoutCreateInfo const * pCreateInfo, VkAllocationCallbacks const * pAllocator, VkDescriptorSetLayout * pSetLayout)
+{
+    return Functions::vkCreateDescriptorSetLayout(device, pCreateInfo, pAllocator, pSetLayout);
 }
 
 VkResult vkCreatePipelineLayout(VkDevice device, VkPipelineLayoutCreateInfo const * pCreateInfo, VkAllocationCallbacks const * pAllocator, VkPipelineLayout * pPipelineLayout)
 {
     return Functions::vkCreatePipelineLayout(device, pCreateInfo, pAllocator, pPipelineLayout);
+}
+
+VkResult vkCreateGraphicsPipelines(VkDevice device, VkPipelineCache pipelineCache, std::uint32_t createInfoCount, VkGraphicsPipelineCreateInfo const * pCreateInfos, VkAllocationCallbacks const * pAllocator, VkPipeline * pPipelines)
+{
+    return Functions::vkCreateGraphicsPipelines(device, pipelineCache, createInfoCount, pCreateInfos, pAllocator, pPipelines);
+}
+
+VkResult vkCreateBuffer(VkDevice device, VkBufferCreateInfo const * pCreateInfo, VkAllocationCallbacks const * pAllocator, VkBuffer * pBuffer)
+{
+    return Functions::vkCreateBuffer(device, pCreateInfo, pAllocator, pBuffer);
+}
+
+VkResult vkCreateBufferView(VkDevice device, VkBufferViewCreateInfo const * pCreateInfo, VkAllocationCallbacks const * pAllocator, VkBufferView * pView)
+{
+    return Functions::vkCreateBufferView(device, pCreateInfo, pAllocator, pView);
 }
 
 VkResult vkCreateWin32SurfaceKHR(VkInstance instance, VkWin32SurfaceCreateInfoKHR const * pCreateInfo, VkAllocationCallbacks const * pAllocator, VkSurfaceKHR * pSurface)
@@ -290,6 +320,16 @@ void vkDestroyShaderModule(VkDevice device, VkShaderModule shaderModule, VkAlloc
     Functions::vkDestroyShaderModule(device, shaderModule, pAllocator);
 }
 
+void vkDestroyDescriptorPool(VkDevice device, VkDescriptorPool descriptorPool, VkAllocationCallbacks const * pAllocator)
+{
+    Functions::vkDestroyDescriptorPool(device, descriptorPool, pAllocator);
+}
+
+void vkDestroyDescriptorSetLayout(VkDevice device, VkDescriptorSetLayout descriptorSetLayout, VkAllocationCallbacks const * pAllocator)
+{
+    Functions::vkDestroyDescriptorSetLayout(device, descriptorSetLayout, pAllocator);
+}
+
 void vkDestroyPipelineLayout(VkDevice device, VkPipelineLayout pipelineLayout, VkAllocationCallbacks const * pAllocator)
 {
     Functions::vkDestroyPipelineLayout(device, pipelineLayout, pAllocator);
@@ -298,6 +338,16 @@ void vkDestroyPipelineLayout(VkDevice device, VkPipelineLayout pipelineLayout, V
 void vkDestroyPipeline(VkDevice device, VkPipeline pipeline, VkAllocationCallbacks const * pAllocator)
 {
     Functions::vkDestroyPipeline(device, pipeline, pAllocator);
+}
+
+void vkDestroyBuffer(VkDevice device, VkBuffer buffer, VkAllocationCallbacks const * pAllocator)
+{
+    Functions::vkDestroyBuffer(device, buffer, pAllocator);
+}
+
+void vkDestroyBufferView(VkDevice device, VkBufferView bufferView, VkAllocationCallbacks const * pAllocator)
+{
+    Functions::vkDestroyBufferView(device, bufferView, pAllocator);
 }
 
 void vkDestroySurfaceKHR(VkInstance instance, VkSurfaceKHR surface, VkAllocationCallbacks const * pAllocator)
@@ -311,10 +361,34 @@ void vkDestroySwapchainKHR(VkDevice device, VkSwapchainKHR swapchain, VkAllocati
 }
 
 
+VkResult vkBindBufferMemory(VkDevice device, VkBuffer buffer, VkDeviceMemory memory, VkDeviceSize memoryOffset)
+{
+    return Functions::vkBindBufferMemory(device, buffer, memory, memoryOffset);
+}
+
+
+VkResult vkMapMemory(VkDevice device, VkDeviceMemory memory, VkDeviceSize offset, VkDeviceSize size, VkMemoryMapFlags flags, void ** ppData)
+{
+    return Functions::vkMapMemory(device, memory, offset, size, flags, ppData);
+}
+
+void vkUnmapMemory(VkDevice device, VkDeviceMemory memory)
+{
+    Functions::vkUnmapMemory(device, memory);
+}
+
+
+void vkUpdateDescriptorSets(VkDevice device, std::uint32_t descriptorWriteCount, VkWriteDescriptorSet const * pDescriptorWrites, std::uint32_t descriptorCopyCount, VkCopyDescriptorSet const * pDescriptorCopies)
+{
+    Functions::vkUpdateDescriptorSets(device, descriptorWriteCount, pDescriptorWrites, descriptorCopyCount, pDescriptorCopies);
+}
+
+
 VkResult vkWaitForFences(VkDevice device, std::uint32_t fenceCount, VkFence const * pFences, VkBool32 waitAll, std::uint64_t timeout)
 {
     return Functions::vkWaitForFences(device, fenceCount, pFences, waitAll, timeout);
 }
+
 
 VkResult vkResetFences(VkDevice device, std::uint32_t fenceCount, VkFence const * pFences)
 {
@@ -337,9 +411,30 @@ VkResult vkAllocateCommandBuffers(VkDevice device, VkCommandBufferAllocateInfo c
     return Functions::vkAllocateCommandBuffers(device, pAllocateInfo, pCommandBuffers);
 }
 
+VkResult vkAllocateDescriptorSets(VkDevice device, VkDescriptorSetAllocateInfo const * pAllocateInfo, VkDescriptorSet * pDescriptorSets)
+{
+    return Functions::vkAllocateDescriptorSets(device, pAllocateInfo, pDescriptorSets);
+}
+
+VkResult vkAllocateMemory(VkDevice device, VkMemoryAllocateInfo const * pAllocateInfo, VkAllocationCallbacks const * pAllocator, VkDeviceMemory * pMemory)
+{
+    return Functions::vkAllocateMemory(device, pAllocateInfo, pAllocator, pMemory);
+}
+
+
 void vkFreeCommandBuffers(VkDevice device, VkCommandPool commandPool, std::uint32_t commandBufferCount, VkCommandBuffer * pCommandBuffers)
 {
     return Functions::vkFreeCommandBuffers(device, commandPool, commandBufferCount, pCommandBuffers);
+}
+
+void vkFreeDescriptorSets(VkDevice device, VkDescriptorPool descriptorPool, std::uint32_t descriptorSetCount, VkDescriptorSet * pDescriptorSets)
+{
+    Functions::vkFreeDescriptorSets(device, descriptorPool, descriptorSetCount, pDescriptorSets);
+}
+
+void vkFreeMemory(VkDevice device, VkDeviceMemory memory, VkAllocationCallbacks const * pAllocator)
+{
+    Functions::vkFreeMemory(device, memory, pAllocator);
 }
 
 
@@ -407,6 +502,15 @@ void vkCmdEndRenderPass(VkCommandBuffer commandBuffer)
 void vkCmdBindPipeline(VkCommandBuffer commandBuffer, VkPipelineBindPoint pipelineBindPoint, VkPipeline pipeline)
 {
     Functions::vkCmdBindPipeline(commandBuffer, pipelineBindPoint, pipeline);
+}
+
+void vkCmdBindDescriptorSets(VkCommandBuffer commandBuffer, 
+                             VkPipelineBindPoint pipelineBindPoint, VkPipelineLayout layout, 
+                             std::uint32_t firstSet, 
+                             std::uint32_t descriptorSetCount, VkDescriptorSet const * pDescriptorSets, 
+                             std::uint32_t dynamicOffsetCount, std::uint32_t const * pDynamicOffsets)
+{
+    Functions::vkCmdBindDescriptorSets(commandBuffer, pipelineBindPoint, layout, firstSet, descriptorSetCount, pDescriptorSets, dynamicOffsetCount, pDynamicOffsets);
 }
 
 void vkCmdDraw(VkCommandBuffer commandBuffer, std::uint32_t vertexCount, std::uint32_t instanceCount, std::uint32_t firstVertex, std::uint32_t firstInstance)

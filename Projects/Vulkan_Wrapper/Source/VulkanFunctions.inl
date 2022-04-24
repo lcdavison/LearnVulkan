@@ -29,6 +29,7 @@ VK_INSTANCE_FUNCTION(vkEnumerateDeviceLayerProperties);
 
 VK_INSTANCE_FUNCTION(vkGetPhysicalDeviceProperties);
 VK_INSTANCE_FUNCTION(vkGetPhysicalDeviceFeatures);
+VK_INSTANCE_FUNCTION(vkGetPhysicalDeviceMemoryProperties);
 VK_INSTANCE_FUNCTION(vkGetPhysicalDeviceQueueFamilyProperties);
 
 VK_INSTANCE_FUNCTION(vkCreateDevice);
@@ -56,16 +57,17 @@ VK_INSTANCE_FUNCTION_FROM_EXTENSION(vkDestroySurfaceKHR, VK_KHR_SURFACE_EXTENSIO
 #endif
 
 VK_DEVICE_FUNCTION(vkGetDeviceQueue);
+VK_DEVICE_FUNCTION(vkGetBufferMemoryRequirements);
+
 VK_DEVICE_FUNCTION(vkDeviceWaitIdle);
 
 VK_DEVICE_FUNCTION(vkAllocateCommandBuffers);
 VK_DEVICE_FUNCTION(vkAllocateDescriptorSets);
+VK_DEVICE_FUNCTION(vkAllocateMemory);
 
 VK_DEVICE_FUNCTION(vkFreeCommandBuffers);
 VK_DEVICE_FUNCTION(vkFreeDescriptorSets);
-
-VK_DEVICE_FUNCTION(vkCreateBuffer);
-VK_DEVICE_FUNCTION(vkGetBufferMemoryRequirements);
+VK_DEVICE_FUNCTION(vkFreeMemory);
 
 VK_DEVICE_FUNCTION(vkCreateCommandPool);
 VK_DEVICE_FUNCTION(vkCreateSemaphore);
@@ -78,6 +80,8 @@ VK_DEVICE_FUNCTION(vkCreatePipelineLayout);
 VK_DEVICE_FUNCTION(vkCreateGraphicsPipelines);
 VK_DEVICE_FUNCTION(vkCreateDescriptorPool);
 VK_DEVICE_FUNCTION(vkCreateDescriptorSetLayout);
+VK_DEVICE_FUNCTION(vkCreateBuffer);
+VK_DEVICE_FUNCTION(vkCreateBufferView);
 
 VK_DEVICE_FUNCTION(vkDestroyDevice);
 VK_DEVICE_FUNCTION(vkDestroyCommandPool);
@@ -91,12 +95,22 @@ VK_DEVICE_FUNCTION(vkDestroyPipelineLayout);
 VK_DEVICE_FUNCTION(vkDestroyPipeline);
 VK_DEVICE_FUNCTION(vkDestroyDescriptorPool);
 VK_DEVICE_FUNCTION(vkDestroyDescriptorSetLayout);
+VK_DEVICE_FUNCTION(vkDestroyBuffer);
+VK_DEVICE_FUNCTION(vkDestroyBufferView);
+
+VK_DEVICE_FUNCTION(vkBindBufferMemory);
+
+VK_DEVICE_FUNCTION(vkMapMemory);
+VK_DEVICE_FUNCTION(vkUnmapMemory);
+
+VK_DEVICE_FUNCTION(vkUpdateDescriptorSets);
 
 VK_DEVICE_FUNCTION(vkWaitForFences);
 
 VK_DEVICE_FUNCTION(vkResetFences);
 VK_DEVICE_FUNCTION(vkResetCommandPool);
 VK_DEVICE_FUNCTION(vkResetCommandBuffer);
+VK_DEVICE_FUNCTION(vkResetDescriptorPool);
 
 VK_DEVICE_FUNCTION(vkQueueSubmit);
 
@@ -108,6 +122,7 @@ VK_DEVICE_FUNCTION(vkCmdClearColorImage);
 VK_DEVICE_FUNCTION(vkCmdPipelineBarrier);
 
 VK_DEVICE_FUNCTION(vkCmdBindPipeline);
+VK_DEVICE_FUNCTION(vkCmdBindDescriptorSets);
 
 VK_DEVICE_FUNCTION(vkCmdDraw);
 
