@@ -7,7 +7,23 @@
 #include <vector>
 #include <string>
 
-static std::vector<char const *> RequiredExtensionNames =
+struct ResourceCollection
+{
+    std::vector<VkBuffer> Buffers;
+};
+
+struct AllocationInfo
+{
+    VkDeviceMemory DeviceMemory;
+    VkDeviceSize DeviceMemoryOffset;
+    uint32 MemoryTypeIndex;
+    uint32 AllocationIndex;
+};
+
+static uint32 const kMaximumDeviceMemoryAllocationCount = { 4u };
+static uint64 const kDefaultMemoryAllocationSizeInBytes = { 4096u };
+
+static std::vector<char const *> const kRequiredExtensionNames =
 {
     VK_KHR_SWAPCHAIN_EXTENSION_NAME,
 };
@@ -58,7 +74,7 @@ static bool const HasRequiredExtensions(VkPhysicalDevice Device)
 
     uint16 MatchedExtensionCount = { 0u };
 
-    for (char const * ExtensionName : RequiredExtensionNames)
+    for (char const * ExtensionName : kRequiredExtensionNames)
     {
         for (VkExtensionProperties const & Extension : AvailableExtensions)
         {
@@ -70,7 +86,7 @@ static bool const HasRequiredExtensions(VkPhysicalDevice Device)
         }
     }
 
-    return MatchedExtensionCount == RequiredExtensionNames.size();
+    return MatchedExtensionCount == kRequiredExtensionNames.size();
 }
 
 inline static bool const IsSuitableDevice(VkPhysicalDeviceProperties const & DeviceProperties)
@@ -173,6 +189,67 @@ static bool const SelectQueueFamily(VkPhysicalDevice Device, VkSurfaceKHR Surfac
     return bResult;
 }
 
+static void FindMemoryTypeIndex(VkPhysicalDevice PhysicalDevice, uint32 const MemoryTypeMask, VkMemoryPropertyFlags RequiredMemoryTypeFlags, uint32 & OutputMemoryTypeIndex)
+{
+    VkPhysicalDeviceMemoryProperties MemoryProperties = {};
+    vkGetPhysicalDeviceMemoryProperties(PhysicalDevice, &MemoryProperties);
+
+    uint32 SelectedMemoryTypeIndex = { 0u };
+
+    for (uint8 CurrentMemoryTypeIndex = { 0u };
+         CurrentMemoryTypeIndex < MemoryProperties.memoryTypeCount;
+         CurrentMemoryTypeIndex++)
+    {
+        VkMemoryType const & CurrentMemoryType = MemoryProperties.memoryTypes [CurrentMemoryTypeIndex];
+
+        uint32 const MatchedBits = CurrentMemoryType.propertyFlags & RequiredMemoryTypeFlags;
+        bool const bSupportedMemoryType = (MemoryTypeMask & (1u << CurrentMemoryTypeIndex)) > 0u;
+
+        if (bSupportedMemoryType && (CurrentMemoryType.propertyFlags & RequiredMemoryTypeFlags) == RequiredMemoryTypeFlags)
+        {
+            SelectedMemoryTypeIndex = CurrentMemoryTypeIndex;
+            break;
+        }
+    }
+
+    OutputMemoryTypeIndex = SelectedMemoryTypeIndex;
+}
+
+static void GetDeviceMemory(Vulkan::Device::DeviceState & State, uint32 const MemoryTypeIndex, uint64 const RequiredSizeInBytes, VkDeviceMemory & OutputDeviceMemory, VkDeviceSize & OutputMemoryOffsetInBytes)
+{
+    uint32 const MemoryTypeBeginIndex = MemoryTypeIndex * kMaximumDeviceMemoryAllocationCount;
+
+    uint8 const MemoryAllocationMask = State.MemoryAllocationStatusMasks [MemoryTypeIndex];
+
+    for (uint32 CurrentMemoryAllocationIndex = MemoryTypeBeginIndex;
+         CurrentMemoryAllocationIndex < MemoryTypeBeginIndex + kMaximumDeviceMemoryAllocationCount;
+         CurrentMemoryAllocationIndex++)
+    {
+        /* If we have reached an empty block then previous blocks were not big enough, so allocate */
+        if ((MemoryAllocationMask & (1u << CurrentMemoryAllocationIndex)) == 0u)
+        {
+            VkMemoryAllocateInfo AllocationInfo = {};
+            AllocationInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+            AllocationInfo.allocationSize = kDefaultMemoryAllocationSizeInBytes;
+            AllocationInfo.memoryTypeIndex = MemoryTypeIndex;
+
+            VERIFY_VKRESULT(vkAllocateMemory(State.Device, &AllocationInfo, nullptr, &State.MemoryAllocations [CurrentMemoryAllocationIndex]));
+            State.MemoryAllocationOffsetsInBytes [CurrentMemoryAllocationIndex] = 0u;
+            State.MemoryAllocationStatusMasks [MemoryTypeIndex] |= (1u << (CurrentMemoryAllocationIndex & kMaximumDeviceMemoryAllocationCount - 1u));
+        }
+
+        if (State.MemoryAllocationOffsetsInBytes [CurrentMemoryAllocationIndex] + RequiredSizeInBytes < kDefaultMemoryAllocationSizeInBytes)
+        {
+            OutputDeviceMemory = State.MemoryAllocations [CurrentMemoryAllocationIndex];
+
+            OutputMemoryOffsetInBytes = State.MemoryAllocationOffsetsInBytes [CurrentMemoryAllocationIndex];
+            State.MemoryAllocationOffsetsInBytes [CurrentMemoryAllocationIndex] += RequiredSizeInBytes;
+
+            break;
+        }
+    }
+}
+
 bool const Vulkan::Device::CreateDevice(Vulkan::Instance::InstanceState const & InstanceState, Vulkan::Device::DeviceState & OutputState)
 {
     bool bResult = false;
@@ -196,8 +273,8 @@ bool const Vulkan::Device::CreateDevice(Vulkan::Instance::InstanceState const & 
         CreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
         CreateInfo.queueCreateInfoCount = 1u;
         CreateInfo.pQueueCreateInfos = &QueueCreateInfo;
-        CreateInfo.enabledExtensionCount = static_cast<uint32>(RequiredExtensionNames.size());
-        CreateInfo.ppEnabledExtensionNames = RequiredExtensionNames.data();
+        CreateInfo.enabledExtensionCount = static_cast<uint32>(kRequiredExtensionNames.size());
+        CreateInfo.ppEnabledExtensionNames = kRequiredExtensionNames.data();
         /* Need to figure out what features need to be enabled */
         //CreateInfo.pEnabledFeatures;
 
@@ -207,6 +284,13 @@ bool const Vulkan::Device::CreateDevice(Vulkan::Instance::InstanceState const & 
             ::LoadDeviceExtensionFunctions(IntermediateState.Device))
         {
             vkGetDeviceQueue(IntermediateState.Device, IntermediateState.GraphicsQueueFamilyIndex, 0u, &IntermediateState.GraphicsQueue);
+
+            vkGetPhysicalDeviceMemoryProperties(IntermediateState.PhysicalDevice, &IntermediateState.MemoryProperties);
+
+            /* Matrix of memory allocations */
+            IntermediateState.MemoryAllocations.resize(IntermediateState.MemoryProperties.memoryTypeCount * kMaximumDeviceMemoryAllocationCount);
+            IntermediateState.MemoryAllocationOffsetsInBytes.resize(IntermediateState.MemoryProperties.memoryTypeCount * kMaximumDeviceMemoryAllocationCount);
+            IntermediateState.MemoryAllocationStatusMasks.resize(IntermediateState.MemoryProperties.memoryTypeCount);
 
             OutputState = IntermediateState;
             bResult = true;
@@ -266,4 +350,42 @@ void Vulkan::Device::CreateFrameBuffer(DeviceState const & State, uint32 Width, 
     CreateInfo.pAttachments = Attachments.data();
 
     VERIFY_VKRESULT(vkCreateFramebuffer(State.Device, &CreateInfo, nullptr, &OutputFrameBuffer));
+}
+
+void Vulkan::Device::CreateBuffer(DeviceState & State, uint64 SizeInBytes, VkBufferUsageFlags UsageFlags, VkMemoryPropertyFlags MemoryFlags, VkBuffer & OutputBuffer, VkDeviceMemory & OutputDeviceMemory)
+{
+    VkBufferCreateInfo CreateInfo = {};
+    CreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    CreateInfo.size = SizeInBytes;
+    CreateInfo.usage = UsageFlags;
+    CreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+    VkBuffer NewBuffer = {};
+    VERIFY_VKRESULT(vkCreateBuffer(State.Device, &CreateInfo, nullptr, &NewBuffer));
+
+    VkMemoryRequirements MemoryRequirements = {};
+    vkGetBufferMemoryRequirements(State.Device, NewBuffer, &MemoryRequirements);
+
+    uint32 MemoryTypeIndex = {};
+    ::FindMemoryTypeIndex(State.PhysicalDevice, MemoryRequirements.memoryTypeBits, MemoryFlags, MemoryTypeIndex);
+
+    AllocationInfo BufferAllocationInfo = {};
+
+    VkDeviceMemory DeviceMemory = {};
+    VkDeviceSize DeviceMemoryOffset = {};
+    ::GetDeviceMemory(State, MemoryTypeIndex, MemoryRequirements.size, DeviceMemory, DeviceMemoryOffset);
+
+    VERIFY_VKRESULT(vkBindBufferMemory(State.Device, NewBuffer, DeviceMemory, DeviceMemoryOffset));
+
+    OutputBuffer = NewBuffer;
+    OutputDeviceMemory = DeviceMemory;
+}
+
+void Vulkan::Device::DestroyBuffer(Vulkan::Device::DeviceState const & State, VkBuffer & Buffer)
+{
+    if (Buffer != VK_NULL_HANDLE)
+    {
+        vkDestroyBuffer(State.Device, Buffer, nullptr);
+        Buffer = VK_NULL_HANDLE;
+    }
 }
