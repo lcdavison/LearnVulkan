@@ -1,6 +1,7 @@
 #version 450
 
 layout (location = 0) in vec3 FragmentColour;
+layout (location = 1) in float Brightness;
 
 layout (location = 0) out vec4 OutputFragmentColour;
 
@@ -12,7 +13,7 @@ mat3x3 XYZToRGB = mat3x3( 2.36461385f, -0.89654057f, -0.46807328f,
                          -0.51516621f,  1.42640810f,  0.08875810f,
                           0.00520370f, -0.01440816f,  1.00920446f);
 
-const float kGammaCorrectionExponent = 1.0f / 2.2f;
+const float kGammaCorrectionExponent = 1.0f / 2.4f;
 
 /* 
 *   There really isn't a need to do this (Vulkan implementations have *_SRGB surface formats).
@@ -81,6 +82,9 @@ void main()
     //LinearRGB = ToneMap(LinearRGB);
 
     vec3 OutputColour = LinearRGBToSRGB(LinearRGB);
+    //vec3 OutputColour = LinearRGBToRec709(LinearRGB);
+
+    OutputColour += Brightness;
 
     OutputFragmentColour = vec4(OutputColour, 1.0f);
 }

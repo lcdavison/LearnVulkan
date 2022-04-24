@@ -7,11 +7,23 @@
 #include "Graphics/Viewport.hpp"
 #include "Graphics/ShaderLibrary.hpp"
 
+#include "Matrix.hpp"
+#include "Transform.hpp"
+#include "Utilities.hpp"
+
 #include "VulkanPBR.hpp"
 
 #include <array>
 
 #undef max
+
+struct PerFrameUniformBufferData
+{
+    Math::Matrix4x4 PerspectiveMatrix;
+    float Brightness;
+};
+
+/* TODO: Create a linear allocator that we can use for the uniform buffers */
 
 struct FrameStateCollection
 {
@@ -19,6 +31,9 @@ struct FrameStateCollection
     std::vector<VkSemaphore> Semaphores;
     std::vector<VkFence> Fences;
     std::vector<VkFramebuffer> FrameBuffers;
+
+    //std::vector<VkBuffer> PerFrameUniformBuffers;
+    //std::vector<VkBufferView> PerFrameUniformBufferViews;
 
     uint8 CurrentFrameStateIndex;
 };
@@ -42,6 +57,13 @@ static uint16 FragmentShaderHandle = {};
 
 static VkShaderModule VertexShaderModule = {};
 static VkShaderModule FragmentShaderModule = {};
+
+static VkBuffer TestUniformBuffer = {};
+static VkDeviceMemory UniformBufferMemory = {};
+
+static VkDescriptorPool DescriptorPool = {};
+static VkDescriptorSetLayout DescriptorSetLayout = {};
+static VkDescriptorSet ShaderDescriptorSet = {};
 
 static void CreateFrameState()
 {
@@ -163,11 +185,31 @@ static bool const CreateMainRenderPass()
     return bResult;
 }
 
+static bool const CreateDescriptorSetLayout()
+{
+    std::vector DescriptorBindings = std::vector<VkDescriptorSetLayoutBinding>(1u);
+    DescriptorBindings [0u].binding = 0u;
+    DescriptorBindings [0u].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    DescriptorBindings [0u].descriptorCount = 1u;
+    DescriptorBindings [0u].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+
+    VkDescriptorSetLayoutCreateInfo CreateInfo = {};
+    CreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    CreateInfo.bindingCount = static_cast<uint32>(DescriptorBindings.size());
+    CreateInfo.pBindings = DescriptorBindings.data();
+
+    VERIFY_VKRESULT(vkCreateDescriptorSetLayout(DeviceState.Device, &CreateInfo, nullptr, &DescriptorSetLayout));
+
+    return true;
+}
+
 static bool const CreateGraphicsPipeline()
 {
     {
         VkPipelineLayoutCreateInfo CreateInfo = {};
         CreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+        CreateInfo.setLayoutCount = 1u;
+        CreateInfo.pSetLayouts = &DescriptorSetLayout;
 
         VERIFY_VKRESULT(vkCreatePipelineLayout(DeviceState.Device, &CreateInfo, nullptr, &TrianglePipelineLayout));
     }
@@ -269,6 +311,76 @@ static bool const CreateGraphicsPipeline()
     return true;
 }
 
+static bool const CreateDescriptorPool()
+{
+    std::vector PoolSizes = std::vector<VkDescriptorPoolSize>(1u);
+    PoolSizes [0u].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    PoolSizes [0u].descriptorCount = 4u;
+
+    VkDescriptorPoolCreateInfo CreateInfo = {};
+    CreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    CreateInfo.poolSizeCount = static_cast<uint32>(PoolSizes.size());
+    CreateInfo.pPoolSizes = PoolSizes.data();
+    CreateInfo.maxSets = 8u;
+
+    VERIFY_VKRESULT(vkCreateDescriptorPool(DeviceState.Device, &CreateInfo, nullptr, &DescriptorPool));
+
+    return true;
+}
+
+static bool const CreateUniformBuffer()
+{
+    Vulkan::Device::CreateBuffer(DeviceState, sizeof(PerFrameUniformBufferData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, TestUniformBuffer, UniformBufferMemory);
+
+    PerFrameUniformBufferData PerFrameData = {};
+    float const AspectRatio = static_cast<float>(ViewportState.ImageExtents.width) / static_cast<float>(ViewportState.ImageExtents.height);
+    PerFrameData.PerspectiveMatrix = Math::PerspectiveMatrix(Math::ConvertDegreesToRadians(90.0f), AspectRatio, 0.0001f, 1000.0f);
+
+    PerFrameData.Brightness = -0.25f;
+
+    /* Persistent mapping would probably be better */
+    {
+        void * MappedData = {};
+        VERIFY_VKRESULT(vkMapMemory(DeviceState.Device, UniformBufferMemory, 0u, sizeof(PerFrameData), 0u, &MappedData));
+
+        ::memcpy_s(MappedData, sizeof(PerFrameData), &PerFrameData, sizeof(PerFrameData));
+
+        vkUnmapMemory(DeviceState.Device, UniformBufferMemory);
+    }
+
+    {
+        VkDescriptorSetAllocateInfo AllocateInfo = {};
+        AllocateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+        AllocateInfo.descriptorPool = DescriptorPool;
+        AllocateInfo.descriptorSetCount = 1u;
+        AllocateInfo.pSetLayouts = &DescriptorSetLayout;
+
+        VERIFY_VKRESULT(vkAllocateDescriptorSets(DeviceState.Device, &AllocateInfo, &ShaderDescriptorSet));
+    }
+
+    return true;
+}
+
+static bool const UpdateDescriptors()
+{
+    VkDescriptorBufferInfo BufferInfo = {};
+    BufferInfo.buffer = TestUniformBuffer;
+    BufferInfo.offset = 0u;
+    BufferInfo.range = VK_WHOLE_SIZE;
+
+    VkWriteDescriptorSet DescriptorWrites = {};
+    DescriptorWrites.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    DescriptorWrites.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    DescriptorWrites.descriptorCount = 1u;
+    DescriptorWrites.dstSet = ShaderDescriptorSet;
+    DescriptorWrites.dstBinding = 0u;
+    DescriptorWrites.pBufferInfo = &BufferInfo;
+
+    vkUpdateDescriptorSets(DeviceState.Device, 1u, &DescriptorWrites, 0u, nullptr);
+
+    return true;
+}
+
 bool const ForwardRenderer::Initialise(VkApplicationInfo const & ApplicationInfo)
 {
     /* TODO: This should be moved into the Shader Library itself */
@@ -287,9 +399,17 @@ bool const ForwardRenderer::Initialise(VkApplicationInfo const & ApplicationInfo
 
         bResult = ::CreateMainRenderPass();
 
+        ::CreateDescriptorSetLayout();
+
         bResult = ::CreateGraphicsPipeline();
 
         ::CreateFrameState();
+
+        ::CreateDescriptorPool();
+
+        ::CreateUniformBuffer();
+
+        ::UpdateDescriptors();
     }
 
     return bResult;
@@ -299,7 +419,15 @@ bool const ForwardRenderer::Shutdown()
 {
     vkDeviceWaitIdle(DeviceState.Device);
 
+    Vulkan::Device::DestroyBuffer(DeviceState, TestUniformBuffer);
+
     ::DestroyFrameState();
+
+    if (DescriptorPool)
+    {
+        vkDestroyDescriptorPool(DeviceState.Device, DescriptorPool, nullptr);
+        DescriptorPool = VK_NULL_HANDLE;
+    }
 
     if (TrianglePipelineState)
     {
@@ -311,6 +439,12 @@ bool const ForwardRenderer::Shutdown()
     {
         vkDestroyPipelineLayout(DeviceState.Device, TrianglePipelineLayout, nullptr);
         TrianglePipelineLayout = VK_NULL_HANDLE;
+    }
+
+    if (DescriptorSetLayout)
+    {
+        vkDestroyDescriptorSetLayout(DeviceState.Device, DescriptorSetLayout, nullptr);
+        DescriptorSetLayout = VK_NULL_HANDLE;
     }
 
     ShaderLibrary::DestroyShaderModules(DeviceState);
@@ -358,6 +492,8 @@ void ForwardRenderer::Render()
 {
     vkWaitForFences(DeviceState.Device, 1u, &FrameState.Fences [FrameState.CurrentFrameStateIndex], VK_TRUE, std::numeric_limits<uint64>::max());
 
+    /* TODO: Update the descriptors here */
+
     uint32 CurrentImageIndex = {};
     VkResult ImageAcquireResult = vkAcquireNextImageKHR(DeviceState.Device, ViewportState.SwapChain, 0ull, FrameState.Semaphores [FrameState.CurrentFrameStateIndex], VK_NULL_HANDLE, &CurrentImageIndex);
 
@@ -403,6 +539,8 @@ void ForwardRenderer::Render()
     vkCmdSetScissor(CurrentCommandBuffer, 0u, 1u, &ViewportState.DynamicScissorRect);
 
     vkCmdBindPipeline(CurrentCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, TrianglePipelineState);
+    vkCmdBindDescriptorSets(CurrentCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, TrianglePipelineLayout, 0u, 1u, &ShaderDescriptorSet, 0u, nullptr);
+
     vkCmdDraw(CurrentCommandBuffer, 3u, 1u, 0u, 0u);
 
     vkCmdEndRenderPass(CurrentCommandBuffer);
