@@ -74,14 +74,15 @@ VK_DEVICE_FUNCTION(vkCreateSemaphore);
 VK_DEVICE_FUNCTION(vkCreateFence);
 VK_DEVICE_FUNCTION(vkCreateFramebuffer);
 VK_DEVICE_FUNCTION(vkCreateRenderPass);
-VK_DEVICE_FUNCTION(vkCreateImageView);
 VK_DEVICE_FUNCTION(vkCreateShaderModule);
 VK_DEVICE_FUNCTION(vkCreatePipelineLayout);
 VK_DEVICE_FUNCTION(vkCreateGraphicsPipelines);
 VK_DEVICE_FUNCTION(vkCreateDescriptorPool);
 VK_DEVICE_FUNCTION(vkCreateDescriptorSetLayout);
 VK_DEVICE_FUNCTION(vkCreateBuffer);
+VK_DEVICE_FUNCTION(vkCreateImage);
 VK_DEVICE_FUNCTION(vkCreateBufferView);
+VK_DEVICE_FUNCTION(vkCreateImageView);
 
 VK_DEVICE_FUNCTION(vkDestroyDevice);
 VK_DEVICE_FUNCTION(vkDestroyCommandPool);
@@ -89,14 +90,15 @@ VK_DEVICE_FUNCTION(vkDestroySemaphore);
 VK_DEVICE_FUNCTION(vkDestroyFence);
 VK_DEVICE_FUNCTION(vkDestroyRenderPass);
 VK_DEVICE_FUNCTION(vkDestroyFramebuffer);
-VK_DEVICE_FUNCTION(vkDestroyImageView);
 VK_DEVICE_FUNCTION(vkDestroyShaderModule);
 VK_DEVICE_FUNCTION(vkDestroyPipelineLayout);
 VK_DEVICE_FUNCTION(vkDestroyPipeline);
 VK_DEVICE_FUNCTION(vkDestroyDescriptorPool);
 VK_DEVICE_FUNCTION(vkDestroyDescriptorSetLayout);
 VK_DEVICE_FUNCTION(vkDestroyBuffer);
+VK_DEVICE_FUNCTION(vkDestroyImage);
 VK_DEVICE_FUNCTION(vkDestroyBufferView);
+VK_DEVICE_FUNCTION(vkDestroyImageView);
 
 VK_DEVICE_FUNCTION(vkBindBufferMemory);
 

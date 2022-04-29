@@ -39,7 +39,17 @@ namespace Vulkan::Device
 
     extern void CreateCommandBuffer(DeviceState const & State, VkCommandBufferLevel CommandBufferLevel, VkCommandBuffer & OutputCommandBuffer);
 
+    //extern void CreateSemaphore(DeviceState const & State, VkSemaphoreCreateFlags Flags, VkSemaphore & OutputSemaphore);
+
+    extern void DestroySemaphore(DeviceState const & State, VkSemaphore & Semaphore);
+
+    extern void CreateFence(DeviceState const & State, VkFenceCreateFlags Flags, VkFence & OutputFence);
+
+    extern void DestroyFence(DeviceState const & State, VkFence & Fence);
+
     extern void CreateFrameBuffer(DeviceState const & State, uint32 Width, uint32 Height, VkRenderPass RenderPass, std::vector<VkImageView> const & Attachments, VkFramebuffer & OutputFrameBuffer);
+
+    extern void DestroyFrameBuffer(DeviceState const & State, VkFramebuffer & FrameBuffer);
 
     extern void CreateBuffer(DeviceState & State, uint64 SizeInBytes, VkBufferUsageFlags UsageFlags, VkMemoryPropertyFlags MemoryFlags, VkBuffer & OutputBuffer, VkDeviceMemory & OutputDeviceMemory);
 

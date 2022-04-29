@@ -189,23 +189,22 @@ static bool const SelectQueueFamily(VkPhysicalDevice Device, VkSurfaceKHR Surfac
     return bResult;
 }
 
-static void FindMemoryTypeIndex(VkPhysicalDevice PhysicalDevice, uint32 const MemoryTypeMask, VkMemoryPropertyFlags RequiredMemoryTypeFlags, uint32 & OutputMemoryTypeIndex)
+static void FindMemoryTypeIndex(VkPhysicalDevice PhysicalDevice, uint32 MemoryTypeMask, VkMemoryPropertyFlags RequiredMemoryTypeFlags, uint32 & OutputMemoryTypeIndex)
 {
     VkPhysicalDeviceMemoryProperties MemoryProperties = {};
     vkGetPhysicalDeviceMemoryProperties(PhysicalDevice, &MemoryProperties);
 
     uint32 SelectedMemoryTypeIndex = { 0u };
 
-    for (uint8 CurrentMemoryTypeIndex = { 0u };
-         CurrentMemoryTypeIndex < MemoryProperties.memoryTypeCount;
-         CurrentMemoryTypeIndex++)
+    uint32 CurrentMemoryTypeIndex = {};
+    while (BitScanForward(reinterpret_cast<DWORD*>(&CurrentMemoryTypeIndex), MemoryTypeMask))
     {
+        /* Clear the bit from the mask */
+        MemoryTypeMask ^= (1u << CurrentMemoryTypeIndex);
+
         VkMemoryType const & CurrentMemoryType = MemoryProperties.memoryTypes [CurrentMemoryTypeIndex];
 
-        uint32 const MatchedBits = CurrentMemoryType.propertyFlags & RequiredMemoryTypeFlags;
-        bool const bSupportedMemoryType = (MemoryTypeMask & (1u << CurrentMemoryTypeIndex)) > 0u;
-
-        if (bSupportedMemoryType && (CurrentMemoryType.propertyFlags & RequiredMemoryTypeFlags) == RequiredMemoryTypeFlags)
+        if ((CurrentMemoryType.propertyFlags & RequiredMemoryTypeFlags) == RequiredMemoryTypeFlags)
         {
             SelectedMemoryTypeIndex = CurrentMemoryTypeIndex;
             break;
@@ -338,7 +337,30 @@ void Vulkan::Device::CreateCommandBuffer(Vulkan::Device::DeviceState const & Sta
     VERIFY_VKRESULT(vkAllocateCommandBuffers(State.Device, &AllocateInfo, &OutputCommandBuffer));
 }
 
-void Vulkan::Device::CreateFrameBuffer(DeviceState const & State, uint32 Width, uint32 Height, VkRenderPass RenderPass, std::vector<VkImageView> const & Attachments, VkFramebuffer & OutputFrameBuffer)
+void Vulkan::Device::DestroySemaphore(Vulkan::Device::DeviceState const & State, VkSemaphore & Semaphore)
+{
+    if (Semaphore != VK_NULL_HANDLE)
+    {
+        vkDestroySemaphore(State.Device, Semaphore, nullptr);
+        Semaphore = VK_NULL_HANDLE;
+    }
+}
+
+void Vulkan::Device::CreateFence(Vulkan::Device::DeviceState const & State, VkFenceCreateFlags Flags, VkFence & OutputFence)
+{
+
+}
+
+void Vulkan::Device::DestroyFence(Vulkan::Device::DeviceState const & State, VkFence & Fence)
+{
+    if (Fence != VK_NULL_HANDLE)
+    {
+        vkDestroyFence(State.Device, Fence, nullptr);
+        Fence = VK_NULL_HANDLE;
+    }
+}
+
+void Vulkan::Device::CreateFrameBuffer(Vulkan::Device::DeviceState const & State, uint32 Width, uint32 Height, VkRenderPass RenderPass, std::vector<VkImageView> const & Attachments, VkFramebuffer & OutputFrameBuffer)
 {
     VkFramebufferCreateInfo CreateInfo = {};
     CreateInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
@@ -352,7 +374,16 @@ void Vulkan::Device::CreateFrameBuffer(DeviceState const & State, uint32 Width, 
     VERIFY_VKRESULT(vkCreateFramebuffer(State.Device, &CreateInfo, nullptr, &OutputFrameBuffer));
 }
 
-void Vulkan::Device::CreateBuffer(DeviceState & State, uint64 SizeInBytes, VkBufferUsageFlags UsageFlags, VkMemoryPropertyFlags MemoryFlags, VkBuffer & OutputBuffer, VkDeviceMemory & OutputDeviceMemory)
+void Vulkan::Device::DestroyFrameBuffer(Vulkan::Device::DeviceState const & State, VkFramebuffer & FrameBuffer)
+{
+    if (FrameBuffer != VK_NULL_HANDLE)
+    {
+        vkDestroyFramebuffer(State.Device, FrameBuffer, nullptr);
+        FrameBuffer = VK_NULL_HANDLE;
+    }
+}
+
+void Vulkan::Device::CreateBuffer(Vulkan::Device::DeviceState & State, uint64 SizeInBytes, VkBufferUsageFlags UsageFlags, VkMemoryPropertyFlags MemoryFlags, VkBuffer & OutputBuffer, VkDeviceMemory & OutputDeviceMemory)
 {
     VkBufferCreateInfo CreateInfo = {};
     CreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
