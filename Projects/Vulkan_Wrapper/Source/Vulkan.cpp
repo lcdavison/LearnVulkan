@@ -398,12 +398,6 @@ void vkUnmapMemory(VkDevice device, VkDeviceMemory memory)
 }
 
 
-void vkUpdateDescriptorSets(VkDevice device, std::uint32_t descriptorWriteCount, VkWriteDescriptorSet const * pDescriptorWrites, std::uint32_t descriptorCopyCount, VkCopyDescriptorSet const * pDescriptorCopies)
-{
-    Functions::vkUpdateDescriptorSets(device, descriptorWriteCount, pDescriptorWrites, descriptorCopyCount, pDescriptorCopies);
-}
-
-
 VkResult vkWaitForFences(VkDevice device, std::uint32_t fenceCount, VkFence const * pFences, VkBool32 waitAll, std::uint64_t timeout)
 {
     return Functions::vkWaitForFences(device, fenceCount, pFences, waitAll, timeout);

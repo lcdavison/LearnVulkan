@@ -38,11 +38,6 @@ struct FrameStateCollection
     uint8 CurrentFrameStateIndex;
 };
 
-struct PerFrameUniformBufferData
-{
-    Math::Matrix4x4 ProjectionMatrix;
-};
-
 static std::string const kDefaultShaderEntryPointName = "main";
 static uint8 const kFrameStateCount = { 2u };
 
@@ -206,23 +201,6 @@ static bool const CreateDescriptorSetLayout()
     CreateInfo.pBindings = DescriptorBindings.data();
 
     VERIFY_VKRESULT(vkCreateDescriptorSetLayout(DeviceState.Device, &CreateInfo, nullptr, &DescriptorSetLayout));
-
-    return true;
-}
-
-static bool const CreateDescriptorPool()
-{
-    VkDescriptorPoolSize PoolSize = {};
-    PoolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    PoolSize.descriptorCount = 4u;
-
-    VkDescriptorPoolCreateInfo CreateInfo = {};
-    CreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-    CreateInfo.poolSizeCount = 1u;
-    CreateInfo.pPoolSizes = &PoolSize;
-    CreateInfo.maxSets = 4u; /* Arbitrary at the moment */
-
-    VERIFY_VKRESULT(vkCreateDescriptorPool(DeviceState.Device, &CreateInfo, nullptr, &DescriptorPool));
 
     return true;
 }
@@ -429,8 +407,6 @@ bool const ForwardRenderer::Initialise(VkApplicationInfo const & ApplicationInfo
         bResult = ::CreateGraphicsPipeline();
 
         ::CreateFrameState();
-
-        ::CreateDescriptorPool();
 
         ::CreateUniformBuffer();
 
