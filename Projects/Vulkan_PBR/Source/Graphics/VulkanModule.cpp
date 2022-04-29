@@ -9,16 +9,13 @@
 
 using namespace Vulkan;
 
-static HMODULE VulkanLibraryHandle = {};
-
 bool const VulkanModule::Start()
 {
-    bool bResult = false;
+    bool bResult = ::InitialiseVulkanWrapper();
 
-    VulkanLibraryHandle = ::LoadLibrary(TEXT("vulkan-1.dll"));
-    if (VulkanLibraryHandle)
+    if (bResult)
     {
-        bResult = ::LoadExportedFunctions(VulkanLibraryHandle) &&
+        bResult = ::LoadExportedFunctions() &&
                   ::LoadGlobalFunctions();
     }
     else
@@ -31,5 +28,5 @@ bool const VulkanModule::Start()
 
 bool const VulkanModule::Stop()
 {
-    return ::FreeLibrary(VulkanLibraryHandle) == TRUE;
+    return ::ShutdownVulkanWrapper();
 }

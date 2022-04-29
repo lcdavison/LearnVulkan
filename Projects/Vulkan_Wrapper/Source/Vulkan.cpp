@@ -1,5 +1,7 @@
 #include "Vulkan.hpp"
 
+#include <Windows.h>
+
 #include <cstring>
 
 namespace Functions
@@ -30,10 +32,25 @@ namespace Functions
 #undef VK_FUNCTION_DEFINITION
 }
 
-bool const LoadExportedFunctions(HMODULE VulkanDLL)
+static TCHAR const * kVulkanDLLName = TEXT("vulkan-1.dll");
+
+static HMODULE VulkanModule = {};
+
+bool const InitialiseVulkanWrapper()
+{
+    VulkanModule = ::LoadLibrary(kVulkanDLLName);
+    return VulkanModule;
+}
+
+bool const ShutdownVulkanWrapper()
+{
+    return ::FreeLibrary(VulkanModule) == TRUE;
+}
+
+bool const LoadExportedFunctions()
 {
 #define VK_EXPORTED_FUNCTION(Function)\
-    Functions::Function = reinterpret_cast<PFN_##Function>(::GetProcAddress(VulkanDLL, #Function));\
+    Functions::Function = reinterpret_cast<PFN_##Function>(::GetProcAddress(VulkanModule, #Function));\
     if (!Functions::Function) {\
 		return false;\
 	}

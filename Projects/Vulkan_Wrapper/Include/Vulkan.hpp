@@ -1,8 +1,6 @@
 #pragma once
 
 #include <vulkan/vulkan.h>
-#include <Windows.h>
-
 #include <cstdint>
 
 #ifdef VULKAN_WRAPPER_EXPORT
@@ -11,7 +9,10 @@
     #define VULKAN_WRAPPER_API __declspec(dllimport)
 #endif
 
-VULKAN_WRAPPER_API bool const LoadExportedFunctions(HMODULE VulkanDLL);
+VULKAN_WRAPPER_API bool const InitialiseVulkanWrapper();
+VULKAN_WRAPPER_API bool const ShutdownVulkanWrapper();
+
+VULKAN_WRAPPER_API bool const LoadExportedFunctions();
 VULKAN_WRAPPER_API bool const LoadGlobalFunctions();
 VULKAN_WRAPPER_API bool const LoadInstanceFunctions(VkInstance Instance);
 VULKAN_WRAPPER_API bool const LoadInstanceExtensionFunctions(VkInstance Instance, std::uint32_t const ExtensionNameCount, char const * const * ExtensionNames);
