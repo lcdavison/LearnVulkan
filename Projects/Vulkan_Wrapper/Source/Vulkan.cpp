@@ -454,6 +454,14 @@ VkResult vkDeviceWaitIdle(VkDevice device)
 }
 
 
+void vkUpdateDescriptorSets(VkDevice device,
+                            std::uint32_t descriptorWriteCount, VkWriteDescriptorSet const* pDescriptorWrites,
+                            std::uint32_t descriptorCopyCount, VkCopyDescriptorSet const* pDescriptorCopies)
+{
+    Functions::vkUpdateDescriptorSets(device, descriptorWriteCount, pDescriptorWrites, descriptorCopyCount, pDescriptorCopies);
+}
+
+
 VkResult vkQueueSubmit(VkQueue queue, std::uint32_t submitCount, VkSubmitInfo const * pSubmits, VkFence fence)
 {
     return Functions::vkQueueSubmit(queue, submitCount, pSubmits, fence);

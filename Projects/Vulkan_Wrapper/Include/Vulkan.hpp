@@ -99,6 +99,10 @@ VULKAN_WRAPPER_API VkResult vkEndCommandBuffer(VkCommandBuffer commandBuffer);
 
 VULKAN_WRAPPER_API VkResult vkDeviceWaitIdle(VkDevice device);
 
+VULKAN_WRAPPER_API void vkUpdateDescriptorSets(VkDevice device,
+                                               std::uint32_t descriptorWriteCount, VkWriteDescriptorSet const* pDescriptorWrites,
+                                               std::uint32_t descriptorCopyCount, VkCopyDescriptorSet const* pDescriptorCopies);
+
 VULKAN_WRAPPER_API VkResult vkQueueSubmit(VkQueue queue, std::uint32_t submitCount, VkSubmitInfo const * pSubmits, VkFence fence);
 VULKAN_WRAPPER_API VkResult vkQueuePresentKHR(VkQueue queue, VkPresentInfoKHR const * pPresentInfo);
 

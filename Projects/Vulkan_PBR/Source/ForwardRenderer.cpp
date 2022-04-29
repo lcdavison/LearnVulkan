@@ -38,6 +38,11 @@ struct FrameStateCollection
     uint8 CurrentFrameStateIndex;
 };
 
+struct PerFrameUniformBufferData
+{
+    Math::Matrix4x4 ProjectionMatrix;
+};
+
 static std::string const kDefaultShaderEntryPointName = "main";
 static uint8 const kFrameStateCount = { 2u };
 
@@ -48,6 +53,8 @@ static FrameStateCollection FrameState = {};
 
 static VkRenderPass MainRenderPass = {};
 static VkShaderModule ShaderModule = {};
+
+static VkDescriptorSetLayout TestLayout = {};
 
 static VkPipelineLayout TrianglePipelineLayout = {};
 static VkPipeline TrianglePipelineState = {};

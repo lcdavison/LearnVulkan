@@ -114,6 +114,8 @@ VK_DEVICE_FUNCTION(vkResetDescriptorPool);
 
 VK_DEVICE_FUNCTION(vkQueueSubmit);
 
+VK_DEVICE_FUNCTION(vkUpdateDescriptorSets);
+
 VK_DEVICE_FUNCTION(vkBeginCommandBuffer);
 VK_DEVICE_FUNCTION(vkEndCommandBuffer);
 
