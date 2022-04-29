@@ -3,7 +3,6 @@
 #include <vulkan/vulkan.h>
 #include <Windows.h>
 
-#include <unordered_set>
 #include <cstdint>
 
 #ifdef VULKAN_WRAPPER_EXPORT
@@ -15,7 +14,7 @@
 VULKAN_WRAPPER_API bool const LoadExportedFunctions(HMODULE VulkanDLL);
 VULKAN_WRAPPER_API bool const LoadGlobalFunctions();
 VULKAN_WRAPPER_API bool const LoadInstanceFunctions(VkInstance Instance);
-VULKAN_WRAPPER_API bool const LoadInstanceExtensionFunctions(VkInstance Instance, std::unordered_set<std::string> const & ExtensionNames);
+VULKAN_WRAPPER_API bool const LoadInstanceExtensionFunctions(VkInstance Instance, std::uint32_t const ExtensionNameCount, char const * const * ExtensionNames);
 VULKAN_WRAPPER_API bool const LoadDeviceFunctions(VkDevice Device);
 VULKAN_WRAPPER_API bool const LoadDeviceExtensionFunctions(VkDevice Device);
 

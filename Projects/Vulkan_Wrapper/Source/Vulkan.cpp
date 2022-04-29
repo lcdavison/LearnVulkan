@@ -1,5 +1,7 @@
 #include "Vulkan.hpp"
 
+#include <cstring>
+
 namespace Functions
 {
 #define VK_FUNCTION_DEFINITION(Function)\
@@ -67,18 +69,19 @@ bool const LoadInstanceFunctions(VkInstance Instance)
     return true;
 }
 
-bool const LoadInstanceExtensionFunctions(VkInstance Instance, std::unordered_set<std::string> const & ExtensionNames)
+bool const LoadInstanceExtensionFunctions(VkInstance Instance, std::uint32_t ExtensionNameCount, char const * const * ExtensionNames)
 {
 #define VK_INSTANCE_FUNCTION_FROM_EXTENSION(Function, Extension)\
-	{\
-		auto ExtensionFound = ExtensionNames.find(std::string(Extension));\
-		if (ExtensionFound != ExtensionNames.end()) {\
-			Functions::Function = reinterpret_cast<PFN_##Function>(Functions::vkGetInstanceProcAddr(Instance, #Function));\
-			if (!Functions::Function) {\
-				return false;\
-			}\
-		}\
-	}
+    for (std::uint32_t CurrentExtensionNameIndex = {0u};\
+            CurrentExtensionNameIndex < ExtensionNameCount;\
+            CurrentExtensionNameIndex++) {\
+            if (std::strcmp(Extension, ExtensionNames [CurrentExtensionNameIndex])) {\
+                Functions::Function = reinterpret_cast<PFN_##Function>(Functions::vkGetInstanceProcAddr(Instance, #Function));\
+                if (!Functions::Function) {\
+                    return false;\
+                }\
+            }\
+    }\
 
 #include "VulkanFunctions.inl"
 
