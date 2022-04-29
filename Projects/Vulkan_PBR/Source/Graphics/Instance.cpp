@@ -136,7 +136,7 @@ bool const Vulkan::Instance::CreateInstance(VkApplicationInfo const & Applicatio
         std::unordered_set const ExtensionSet = std::unordered_set<std::string>(kRequiredExtensionNames.cbegin(), kRequiredExtensionNames.cend());
 
         if (::LoadInstanceFunctions(IntermediateState.Instance) &&
-            ::LoadInstanceExtensionFunctions(IntermediateState.Instance, ExtensionSet))
+            ::LoadInstanceExtensionFunctions(IntermediateState.Instance, static_cast<uint32>(kRequiredExtensionNames.size()), kRequiredExtensionNames.data()))
         {
             VkWin32SurfaceCreateInfoKHR SurfaceCreateInfo = {};
             SurfaceCreateInfo.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;

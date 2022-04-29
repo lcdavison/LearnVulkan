@@ -1,9 +1,6 @@
 #pragma once
 
 #include <vulkan/vulkan.h>
-#include <Windows.h>
-
-#include <unordered_set>
 #include <cstdint>
 
 #ifdef VULKAN_WRAPPER_EXPORT
@@ -12,10 +9,13 @@
     #define VULKAN_WRAPPER_API __declspec(dllimport)
 #endif
 
-VULKAN_WRAPPER_API bool const LoadExportedFunctions(HMODULE VulkanDLL);
+VULKAN_WRAPPER_API bool const InitialiseVulkanWrapper();
+VULKAN_WRAPPER_API bool const ShutdownVulkanWrapper();
+
+VULKAN_WRAPPER_API bool const LoadExportedFunctions();
 VULKAN_WRAPPER_API bool const LoadGlobalFunctions();
 VULKAN_WRAPPER_API bool const LoadInstanceFunctions(VkInstance Instance);
-VULKAN_WRAPPER_API bool const LoadInstanceExtensionFunctions(VkInstance Instance, std::unordered_set<std::string> const & ExtensionNames);
+VULKAN_WRAPPER_API bool const LoadInstanceExtensionFunctions(VkInstance Instance, std::uint32_t const ExtensionNameCount, char const * const * ExtensionNames);
 VULKAN_WRAPPER_API bool const LoadDeviceFunctions(VkDevice Device);
 VULKAN_WRAPPER_API bool const LoadDeviceExtensionFunctions(VkDevice Device);
 
@@ -77,8 +77,6 @@ VULKAN_WRAPPER_API VkResult vkBindBufferMemory(VkDevice device, VkBuffer buffer,
 VULKAN_WRAPPER_API VkResult vkMapMemory(VkDevice device, VkDeviceMemory memory, VkDeviceSize offset, VkDeviceSize size, VkMemoryMapFlags flags, void ** ppData);
 VULKAN_WRAPPER_API void vkUnmapMemory(VkDevice device, VkDeviceMemory memory);
 
-VULKAN_WRAPPER_API void vkUpdateDescriptorSets(VkDevice device, std::uint32_t descriptorWriteCount, VkWriteDescriptorSet const * pDescriptorWrites, std::uint32_t descriptorCopyCount, VkCopyDescriptorSet const * pDescriptorCopies);
-
 VULKAN_WRAPPER_API VkResult vkWaitForFences(VkDevice device, std::uint32_t fenceCount, VkFence const * pFences, VkBool32 waitAll, std::uint64_t timeout);
 
 VULKAN_WRAPPER_API VkResult vkResetFences(VkDevice device, std::uint32_t fenceCount, VkFence const * pFences);
@@ -98,6 +96,10 @@ VULKAN_WRAPPER_API VkResult vkBeginCommandBuffer(VkCommandBuffer commandBuffer, 
 VULKAN_WRAPPER_API VkResult vkEndCommandBuffer(VkCommandBuffer commandBuffer);
 
 VULKAN_WRAPPER_API VkResult vkDeviceWaitIdle(VkDevice device);
+
+VULKAN_WRAPPER_API void vkUpdateDescriptorSets(VkDevice device,
+                                               std::uint32_t descriptorWriteCount, VkWriteDescriptorSet const* pDescriptorWrites,
+                                               std::uint32_t descriptorCopyCount, VkCopyDescriptorSet const* pDescriptorCopies);
 
 VULKAN_WRAPPER_API VkResult vkQueueSubmit(VkQueue queue, std::uint32_t submitCount, VkSubmitInfo const * pSubmits, VkFence fence);
 VULKAN_WRAPPER_API VkResult vkQueuePresentKHR(VkQueue queue, VkPresentInfoKHR const * pPresentInfo);

@@ -1,5 +1,9 @@
 #include "Vulkan.hpp"
 
+#include <Windows.h>
+
+#include <cstring>
+
 namespace Functions
 {
 #define VK_FUNCTION_DEFINITION(Function)\
@@ -28,10 +32,25 @@ namespace Functions
 #undef VK_FUNCTION_DEFINITION
 }
 
-bool const LoadExportedFunctions(HMODULE VulkanDLL)
+static TCHAR const * kVulkanDLLName = TEXT("vulkan-1.dll");
+
+static HMODULE VulkanModule = {};
+
+bool const InitialiseVulkanWrapper()
+{
+    VulkanModule = ::LoadLibrary(kVulkanDLLName);
+    return VulkanModule;
+}
+
+bool const ShutdownVulkanWrapper()
+{
+    return ::FreeLibrary(VulkanModule) == TRUE;
+}
+
+bool const LoadExportedFunctions()
 {
 #define VK_EXPORTED_FUNCTION(Function)\
-    Functions::Function = reinterpret_cast<PFN_##Function>(::GetProcAddress(VulkanDLL, #Function));\
+    Functions::Function = reinterpret_cast<PFN_##Function>(::GetProcAddress(VulkanModule, #Function));\
     if (!Functions::Function) {\
 		return false;\
 	}
@@ -67,18 +86,19 @@ bool const LoadInstanceFunctions(VkInstance Instance)
     return true;
 }
 
-bool const LoadInstanceExtensionFunctions(VkInstance Instance, std::unordered_set<std::string> const & ExtensionNames)
+bool const LoadInstanceExtensionFunctions(VkInstance Instance, std::uint32_t ExtensionNameCount, char const * const * ExtensionNames)
 {
 #define VK_INSTANCE_FUNCTION_FROM_EXTENSION(Function, Extension)\
-	{\
-		auto ExtensionFound = ExtensionNames.find(std::string(Extension));\
-		if (ExtensionFound != ExtensionNames.end()) {\
-			Functions::Function = reinterpret_cast<PFN_##Function>(Functions::vkGetInstanceProcAddr(Instance, #Function));\
-			if (!Functions::Function) {\
-				return false;\
-			}\
-		}\
-	}
+    for (std::uint32_t CurrentExtensionNameIndex = {0u};\
+            CurrentExtensionNameIndex < ExtensionNameCount;\
+            CurrentExtensionNameIndex++) {\
+            if (std::strcmp(Extension, ExtensionNames [CurrentExtensionNameIndex])) {\
+                Functions::Function = reinterpret_cast<PFN_##Function>(Functions::vkGetInstanceProcAddr(Instance, #Function));\
+                if (!Functions::Function) {\
+                    return false;\
+                }\
+            }\
+    }\
 
 #include "VulkanFunctions.inl"
 
@@ -378,12 +398,6 @@ void vkUnmapMemory(VkDevice device, VkDeviceMemory memory)
 }
 
 
-void vkUpdateDescriptorSets(VkDevice device, std::uint32_t descriptorWriteCount, VkWriteDescriptorSet const * pDescriptorWrites, std::uint32_t descriptorCopyCount, VkCopyDescriptorSet const * pDescriptorCopies)
-{
-    Functions::vkUpdateDescriptorSets(device, descriptorWriteCount, pDescriptorWrites, descriptorCopyCount, pDescriptorCopies);
-}
-
-
 VkResult vkWaitForFences(VkDevice device, std::uint32_t fenceCount, VkFence const * pFences, VkBool32 waitAll, std::uint64_t timeout)
 {
     return Functions::vkWaitForFences(device, fenceCount, pFences, waitAll, timeout);
@@ -451,6 +465,14 @@ VkResult vkEndCommandBuffer(VkCommandBuffer commandBuffer)
 VkResult vkDeviceWaitIdle(VkDevice device)
 {
     return Functions::vkDeviceWaitIdle(device);
+}
+
+
+void vkUpdateDescriptorSets(VkDevice device,
+                            std::uint32_t descriptorWriteCount, VkWriteDescriptorSet const* pDescriptorWrites,
+                            std::uint32_t descriptorCopyCount, VkCopyDescriptorSet const* pDescriptorCopies)
+{
+    Functions::vkUpdateDescriptorSets(device, descriptorWriteCount, pDescriptorWrites, descriptorCopyCount, pDescriptorCopies);
 }
 
 

@@ -421,6 +421,8 @@ bool const ForwardRenderer::Initialise(VkApplicationInfo const & ApplicationInfo
 
         ::CreateFrameState();
 
+        ::CreatePerFrameUniformBuffer();
+
         /* Create Frame Allocation Block */
         Vulkan::Device::CreateBuffer(DeviceState, kFrameAllocationMemorySizeInBytes, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, FrameAllocationBuffer, FrameAllocationMemory);
     }
@@ -466,6 +468,12 @@ bool const ForwardRenderer::Shutdown()
     {
         vkDestroyRenderPass(DeviceState.Device, MainRenderPass, nullptr);
         MainRenderPass = VK_NULL_HANDLE;
+    }
+
+    if (DescriptorPool)
+    {
+        vkDestroyDescriptorPool(DeviceState.Device, DescriptorPool, nullptr);
+        DescriptorPool = VK_NULL_HANDLE;
     }
 
     Vulkan::Viewport::DestroyViewport(DeviceState, ViewportState);
@@ -556,7 +564,6 @@ void ForwardRenderer::Render()
 
     vkCmdBindPipeline(CurrentCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, TrianglePipelineState);
 
-    /* TODO: Bind per frame descriptor set */
     vkCmdBindDescriptorSets(CurrentCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, TrianglePipelineLayout, 0u, 1u, &FrameState.DescriptorSets [FrameState.CurrentFrameStateIndex], 0u, nullptr);
 
     vkCmdDraw(CurrentCommandBuffer, 3u, 1u, 0u, 0u);
