@@ -9,6 +9,8 @@
 #include <string_view>
 #include <unordered_map>
 
+using namespace Platform;
+
 /* Too many underscores, can't ... type .. fast */
 using GLSLangInput = glslang_input_t;
 using GLSLangStage = glslang_stage_t;
@@ -250,7 +252,7 @@ GLSLangStage GetShaderStage(std::filesystem::path const & ShaderFilePath)
     return ShaderStageMap.at(ShaderFileExtension.string());
 }
 
-bool const ShaderCompiler::CompileShader(std::filesystem::path const & ShaderFilePath, unsigned int *& OutputByteCode, uint64 & OutputByteCodeSizeInBytes, std::basic_string<TCHAR> & OutputErrorMessage)
+bool const ShaderCompiler::CompileShader(std::filesystem::path const & ShaderFilePath, unsigned int *& OutputByteCode, uint64 & OutputByteCodeSizeInBytes, std::basic_string<Windows::TCHAR> & OutputErrorMessage)
 {
     bool bResult = false;
 
@@ -288,7 +290,7 @@ bool const ShaderCompiler::CompileShader(std::filesystem::path const & ShaderFil
                 /* This returns int, but this is implicitly cast from a bool */
                 if (!glslang_shader_preprocess(Shader, &Input))
                 {
-                    std::basic_stringstream ErrorOutput = std::basic_stringstream<TCHAR>();
+                    std::basic_stringstream ErrorOutput = std::basic_stringstream<Windows::TCHAR>();
                     ErrorOutput << "Info Log:\n" << glslang_shader_get_info_log(Shader) << "\n";
                     ErrorOutput << "Debug Info Log:\n" << glslang_shader_get_info_debug_log(Shader) << "\n";
 
@@ -298,7 +300,7 @@ bool const ShaderCompiler::CompileShader(std::filesystem::path const & ShaderFil
 
                 if (!glslang_shader_parse(Shader, &Input))
                 {
-                    std::basic_stringstream ErrorOutput = std::basic_stringstream<TCHAR>();
+                    std::basic_stringstream ErrorOutput = std::basic_stringstream<Windows::TCHAR>();
                     ErrorOutput << "Info Log:\n" << glslang_shader_get_info_log(Shader);
                     ErrorOutput << "Debug Info Log:\n" << glslang_shader_get_info_debug_log(Shader);
 
@@ -311,7 +313,7 @@ bool const ShaderCompiler::CompileShader(std::filesystem::path const & ShaderFil
 
                 if (!glslang_program_link(Program, 0l))
                 {
-                    std::basic_stringstream ErrorOutput = std::basic_stringstream<TCHAR>();
+                    std::basic_stringstream ErrorOutput = std::basic_stringstream<Windows::TCHAR>();
                     ErrorOutput << "Info Log:\n" << glslang_program_get_info_log(Program) << "\n";
                     ErrorOutput << "Debug Info Log:\n" << glslang_program_get_info_debug_log(Program) << "\n";
 
@@ -330,7 +332,7 @@ bool const ShaderCompiler::CompileShader(std::filesystem::path const & ShaderFil
 
                 if (SPIRVMessages)
                 {
-                    std::basic_stringstream SPIRVOutput = std::basic_stringstream<TCHAR>();
+                    std::basic_stringstream SPIRVOutput = std::basic_stringstream<Windows::TCHAR>();
                     SPIRVOutput << "SPIRV Output:\n" << SPIRVMessages;
 
                     OutputErrorMessage = SPIRVOutput.str();
