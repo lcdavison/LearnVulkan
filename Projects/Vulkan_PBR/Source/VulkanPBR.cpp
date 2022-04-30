@@ -4,6 +4,8 @@
 #include "Graphics/ShaderLibrary.hpp"
 #include "ForwardRenderer.hpp"
 
+#include <Windows.h>
+
 extern Application::ApplicationState Application::State = Application::ApplicationState();
 
 static LRESULT CALLBACK WindowProcedure(HWND Window, UINT Message, WPARAM WParam, LPARAM LParam)
@@ -57,8 +59,8 @@ static bool const Initialise()
         bResult = Application::State.WindowHandle != INVALID_HANDLE_VALUE;
     }
 
-    ::ShowWindow(Application::State.WindowHandle, TRUE);
-    ::UpdateWindow(Application::State.WindowHandle);
+    ::ShowWindow(reinterpret_cast<HWND>(Application::State.WindowHandle), TRUE);
+    ::UpdateWindow(reinterpret_cast<HWND>(Application::State.WindowHandle));
 
     Application::State.ProcessHandle = CurrentInstance;
 

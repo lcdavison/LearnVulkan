@@ -1,15 +1,16 @@
 #pragma once
 
-#include <Windows.h>
-
+#include "Common.hpp"
 #include "CommonTypes.hpp"
+
+#include "Platform/Windows.hpp"
 
 namespace Application
 {
     struct ApplicationState
     {
-        HINSTANCE ProcessHandle;
-        HWND WindowHandle;
+        Platform::Windows::Handle ProcessHandle;
+        Platform::Windows::Handle WindowHandle;
 
         uint32 CurrentWindowWidth;
         uint32 CurrentWindowHeight;
@@ -17,8 +18,8 @@ namespace Application
         bool bRunning;
     };
 
-    static TCHAR const * kWindowClassName = TEXT("Vulkan-PBR");
-    static TCHAR const * kWindowName = TEXT("PBR Window");
+    static Platform::Windows::TCHAR const * kWindowClassName = PBR_TEXT("Vulkan-PBR");
+    static Platform::Windows::TCHAR const * kWindowName = PBR_TEXT("PBR Window");
 
     static uint32 const kApplicationVersionNo = 0u;
 
