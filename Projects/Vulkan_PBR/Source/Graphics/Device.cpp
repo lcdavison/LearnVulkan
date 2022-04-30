@@ -280,7 +280,7 @@ bool const Vulkan::Device::CreateDevice(Vulkan::Instance::InstanceState const & 
         VERIFY_VKRESULT(vkCreateDevice(IntermediateState.PhysicalDevice, &CreateInfo, nullptr, &IntermediateState.Device));
 
         if (::LoadDeviceFunctions(IntermediateState.Device) &&
-            ::LoadDeviceExtensionFunctions(IntermediateState.Device))
+            ::LoadDeviceExtensionFunctions(IntermediateState.Device, static_cast<uint32>(kRequiredExtensionNames.size()), kRequiredExtensionNames.data()))
         {
             vkGetDeviceQueue(IntermediateState.Device, IntermediateState.GraphicsQueueFamilyIndex, 0u, &IntermediateState.GraphicsQueue);
 

@@ -86,25 +86,6 @@ bool const LoadInstanceFunctions(VkInstance Instance)
     return true;
 }
 
-bool const LoadInstanceExtensionFunctions(VkInstance Instance, std::uint32_t ExtensionNameCount, char const * const * ExtensionNames)
-{
-#define VK_INSTANCE_FUNCTION_FROM_EXTENSION(Function, Extension)\
-    for (std::uint32_t CurrentExtensionNameIndex = {0u};\
-            CurrentExtensionNameIndex < ExtensionNameCount;\
-            CurrentExtensionNameIndex++) {\
-            if (std::strcmp(Extension, ExtensionNames [CurrentExtensionNameIndex])) {\
-                Functions::Function = reinterpret_cast<PFN_##Function>(Functions::vkGetInstanceProcAddr(Instance, #Function));\
-                if (!Functions::Function) {\
-                    return false;\
-                }\
-            }\
-    }\
-
-#include "VulkanFunctions.inl"
-
-    return true;
-}
-
 bool const LoadDeviceFunctions(VkDevice Device)
 {
 #define VK_DEVICE_FUNCTION(Function)\
@@ -118,13 +99,38 @@ bool const LoadDeviceFunctions(VkDevice Device)
     return true;
 }
 
-bool const LoadDeviceExtensionFunctions(VkDevice Device)
+bool const LoadInstanceExtensionFunctions(VkInstance Instance, std::uint32_t const ExtensionNameCount, char const * const * ExtensionNames)
+{
+#define VK_INSTANCE_FUNCTION_FROM_EXTENSION(Function, Extension)\
+    for (std::uint32_t CurrentExtensionNameIndex = {0u};\
+            CurrentExtensionNameIndex < ExtensionNameCount;\
+            CurrentExtensionNameIndex++) {\
+            if (std::strcmp(Extension, ExtensionNames [CurrentExtensionNameIndex]) == 0l) {\
+                Functions::Function = reinterpret_cast<PFN_##Function>(Functions::vkGetInstanceProcAddr(Instance, #Function));\
+                if (!Functions::Function) {\
+                    return false;\
+                }\
+            }\
+    }
+
+#include "VulkanFunctions.inl"
+
+    return true;
+}
+
+bool const LoadDeviceExtensionFunctions(VkDevice Device, std::uint32_t const ExtensionNameCount, char const * const * ExtensionNames)
 {
 #define VK_DEVICE_FUNCTION_FROM_EXTENSION(Function, Extension)\
-	Functions::Function = reinterpret_cast<PFN_##Function>(Functions::vkGetDeviceProcAddr(Device, #Function));\
-	if(!Functions::Function) {\
-		return false;\
-	}
+	for (std::uint32_t CurrentExtensionNameIndex = { 0u };\
+            CurrentExtensionNameIndex < ExtensionNameCount;\
+            CurrentExtensionNameIndex++) {\
+            if (std::strcmp(Extension, ExtensionNames [CurrentExtensionNameIndex]) == 0l) {\
+                Functions::Function = reinterpret_cast<PFN_##Function>(Functions::vkGetDeviceProcAddr(Device, #Function));\
+                if (!Functions::Function) {\
+                    return false;\
+                }\
+            }\
+    }
 
 #include "VulkanFunctions.inl"
 

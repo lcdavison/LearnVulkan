@@ -15,9 +15,9 @@ VULKAN_WRAPPER_API bool const ShutdownVulkanWrapper();
 VULKAN_WRAPPER_API bool const LoadExportedFunctions();
 VULKAN_WRAPPER_API bool const LoadGlobalFunctions();
 VULKAN_WRAPPER_API bool const LoadInstanceFunctions(VkInstance Instance);
-VULKAN_WRAPPER_API bool const LoadInstanceExtensionFunctions(VkInstance Instance, std::uint32_t const ExtensionNameCount, char const * const * ExtensionNames);
 VULKAN_WRAPPER_API bool const LoadDeviceFunctions(VkDevice Device);
-VULKAN_WRAPPER_API bool const LoadDeviceExtensionFunctions(VkDevice Device);
+VULKAN_WRAPPER_API bool const LoadInstanceExtensionFunctions(VkInstance Instance, std::uint32_t const ExtensionNameCount, char const * const * ExtensionNames);
+VULKAN_WRAPPER_API bool const LoadDeviceExtensionFunctions(VkDevice Device, std::uint32_t const ExtensionNameCount, char const * const * ExtensionNames);
 
 VULKAN_WRAPPER_API VkResult vkEnumerateInstanceExtensionProperties(char const * pLayerName, std::uint32_t * pPropertyCount, VkExtensionProperties * pProperties);
 VULKAN_WRAPPER_API VkResult vkEnumerateInstanceLayerProperties(std::uint32_t * pPropertyCount, VkLayerProperties * pProperties);
