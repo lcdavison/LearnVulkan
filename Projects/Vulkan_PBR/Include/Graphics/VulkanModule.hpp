@@ -42,5 +42,3 @@ namespace VulkanModule
     extern bool const Start();
     extern bool const Stop();
 }
-
-#include "CommonTypes.hpp"

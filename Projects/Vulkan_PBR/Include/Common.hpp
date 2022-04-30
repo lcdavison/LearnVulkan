@@ -1,5 +1,7 @@
 #pragma once
 
+#include "CommonTypes.hpp"
+
 #if _DEBUG
     #include <intrin.h>
 #endif
