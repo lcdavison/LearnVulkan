@@ -35,7 +35,7 @@ namespace Functions
 #undef VK_FUNCTION_DEFINITION
 }
 
-static TCHAR const * kVulkanDLLName = TEXT("vulkan-1.dll");
+static TCHAR const * const kVulkanDLLName = TEXT("vulkan-1.dll");
 
 static HMODULE VulkanModule = {};
 
