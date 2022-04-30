@@ -1,5 +1,10 @@
 #include <Vulkan.hpp>
 
+#include "Common.hpp"
+
+#include "Platform/Windows.hpp"
+#include "Logging.hpp"
+
 #if defined(_DEBUG)
     #include <string>
 
@@ -14,18 +19,18 @@
             VkResult Result = Function;\
             if (Result != VK_SUCCESS)\
             {\
-                std::basic_string<TCHAR> ErrorMessage = TEXT("");\
-                ErrorMessage += TEXT("Function [");\
-                ErrorMessage += TEXT(#Function);\
-                ErrorMessage += TEXT("]\nFailed with Error Code [");\
-                ErrorMessage += TO_STRING(Result);\
-                ErrorMessage += TEXT("]\nIn File [");\
-                ErrorMessage += __FILE__;\
-                ErrorMessage += TEXT("]\nLine [");\
-                ErrorMessage += TO_STRING(__LINE__);\
-                ErrorMessage += TEXT("]");\
-                ::MessageBox(nullptr, ErrorMessage.c_str(), TEXT("Vulkan Error"), MB_OK);\
-                ::PostQuitMessage(EXIT_FAILURE);\
+                std::basic_string<Platform::Windows::TCHAR> ErrorMessage = PBR_TEXT(""); \
+                ErrorMessage += PBR_TEXT("Function ["); \
+                ErrorMessage += PBR_TEXT(#Function); \
+                ErrorMessage += PBR_TEXT("]\nFailed with Error Code ["); \
+                ErrorMessage += TO_STRING(Result); \
+                ErrorMessage += PBR_TEXT("]\nIn File ["); \
+                ErrorMessage += __FILE__; \
+                ErrorMessage += PBR_TEXT("]\nLine ["); \
+                ErrorMessage += TO_STRING(__LINE__); \
+                ErrorMessage += PBR_TEXT("]"); \
+                Logging::FatalError(ErrorMessage.c_str()); \
+                Platform::Windows::PostQuitMessage(EXIT_FAILURE); \
             }\
         } while(false)
 #else
