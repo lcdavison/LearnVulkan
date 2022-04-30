@@ -1,13 +1,13 @@
 #include "Graphics/Instance.hpp"
 
+#include <VulkanWin32.hpp>
+
 #include "VulkanPBR.hpp"
 
-#include <Windows.h>
 #include "CommonTypes.hpp"
 
 #include <vector>
 #include <string>
-#include <unordered_set>
 
 static std::vector<char const *> const kRequiredExtensionNames = 
 {
@@ -103,7 +103,7 @@ static bool const HasRequiredExtensions()
     {
         for (VkExtensionProperties const & Extension : AvailableExtensions)
         {
-            if (std::strcmp(ExtensionName, Extension.extensionName))
+            if (std::strcmp(ExtensionName, Extension.extensionName) == 0l)
             {
                 MatchedExtensionCount++;
                 break;
@@ -133,15 +133,13 @@ bool const Vulkan::Instance::CreateInstance(VkApplicationInfo const & Applicatio
 
         VERIFY_VKRESULT(vkCreateInstance(&InstanceCreateInfo, nullptr, &IntermediateState.Instance));
 
-        std::unordered_set const ExtensionSet = std::unordered_set<std::string>(kRequiredExtensionNames.cbegin(), kRequiredExtensionNames.cend());
-
         if (::LoadInstanceFunctions(IntermediateState.Instance) &&
             ::LoadInstanceExtensionFunctions(IntermediateState.Instance, static_cast<uint32>(kRequiredExtensionNames.size()), kRequiredExtensionNames.data()))
         {
             VkWin32SurfaceCreateInfoKHR SurfaceCreateInfo = {};
             SurfaceCreateInfo.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
-            SurfaceCreateInfo.hinstance = Application::State.ProcessHandle;
-            SurfaceCreateInfo.hwnd = Application::State.WindowHandle;
+            SurfaceCreateInfo.hinstance = reinterpret_cast<HINSTANCE>(Application::State.ProcessHandle);
+            SurfaceCreateInfo.hwnd = reinterpret_cast<HWND>(Application::State.WindowHandle);
 
             VERIFY_VKRESULT(vkCreateWin32SurfaceKHR(IntermediateState.Instance, &SurfaceCreateInfo, nullptr, &IntermediateState.Surface));
 
