@@ -5,6 +5,8 @@ project(VulkanPBR)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+set(USE_UNICODE OFF)
+
 list(
     APPEND HeaderFiles
     "Include/VulkanPBR.hpp"
@@ -14,7 +16,11 @@ list(
     "Include/Graphics/Viewport.hpp"
     "Include/Graphics/ShaderLibrary.hpp"
     "Include/ShaderCompiler/ShaderCompiler.hpp"
+    "Include/Platform/Windows.hpp"
+    "Include/Common.hpp"
+    "Include/Logging.hpp"
     "Include/ForwardRenderer.hpp"
+    "Include/AssetManager.hpp"
 )
 
 list(
@@ -26,7 +32,10 @@ list(
     "Source/Graphics/Viewport.cpp"
     "Source/Graphics/ShaderLibrary.cpp"
     "Source/ShaderCompiler/ShaderCompiler.cpp"
+    "Source/Platform/Windows.cpp"
+    "Source/Logging.cpp"
     "Source/ForwardRenderer.cpp"
+    "Source/AssetManager.cpp"
 )
 
 add_executable(VulkanPBR WIN32)
@@ -48,9 +57,12 @@ target_sources(
     PRIVATE ${SourceFiles}
 )
 
+# TODO: Setup Unicode stuff properly
 target_compile_definitions(
     VulkanPBR
-    PRIVATE "$<TARGET_PROPERTY:VulkanWrapper,INTERFACE_COMPILE_DEFINITIONS>"
+    PRIVATE $<TARGET_PROPERTY:VulkanWrapper,INTERFACE_COMPILE_DEFINITIONS>
+    PRIVATE USE_UNICODE=$<IF:$<BOOL:${USE_UNICODE}>,1,0>
+    PRIVATE $<$<BOOL:${USE_UNICODE}>:_UNICODE>
 )
 
 target_compile_options(
