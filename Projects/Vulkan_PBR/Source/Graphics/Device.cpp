@@ -2,10 +2,9 @@
 
 #include "Graphics/Instance.hpp"
 
-#include <Windows.h>
-
 #include <vector>
 #include <string>
+#include <functional>
 
 struct ResourceCollection
 {
@@ -67,7 +66,7 @@ static bool const HasRequiredExtensions(VkPhysicalDevice Device)
             ExtensionName += Extension.extensionName;
             ExtensionName += "\n";
 
-            ::OutputDebugStringA(ExtensionName.c_str());
+            Platform::Windows::OutputDebugString(ExtensionName.c_str());
         }
     }
 #endif
@@ -78,7 +77,7 @@ static bool const HasRequiredExtensions(VkPhysicalDevice Device)
     {
         for (VkExtensionProperties const & Extension : AvailableExtensions)
         {
-            if (std::strcmp(ExtensionName, Extension.extensionName))
+            if (std::strcmp(ExtensionName, Extension.extensionName) == 0l)
             {
                 MatchedExtensionCount++;
                 break;
@@ -89,12 +88,7 @@ static bool const HasRequiredExtensions(VkPhysicalDevice Device)
     return MatchedExtensionCount == kRequiredExtensionNames.size();
 }
 
-inline static bool const IsSuitableDevice(VkPhysicalDeviceProperties const & DeviceProperties)
-{
-    return DeviceProperties.deviceType == VkPhysicalDeviceType::VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU;
-}
-
-static bool const EnumerateDevices(VkInstance Instance, std::vector<VkPhysicalDevice> & OutputPhysicalDevices)
+static bool const GetPhysicalDeviceList(VkInstance Instance, std::vector<VkPhysicalDevice> & OutputPhysicalDevices)
 {
     bool bResult = false;
 
@@ -111,51 +105,48 @@ static bool const EnumerateDevices(VkInstance Instance, std::vector<VkPhysicalDe
     }
     else
     {
-        ::MessageBox(nullptr, TEXT("Failed to find a device with Vulkan support."), TEXT("Fatal Error"), MB_OK);
+        Logging::FatalError(PBR_TEXT("Failed to find a device with Vulkan support."));
     }
 
     return bResult;
 }
 
-static bool const SelectPhysicalDevice(VkInstance Instance, VkPhysicalDevice & OutputSelectedDevice)
+static bool const GetPhysicalDevice(VkInstance Instance, std::function<bool(VkPhysicalDeviceProperties const &)> PhysicalDeviceRequirementPredicate, VkPhysicalDevice & OutputPhysicalDevice)
 {
     bool bResult = false;
 
-    std::vector Devices = std::vector<VkPhysicalDevice>();
-    if (::EnumerateDevices(Instance, Devices))
+    std::vector PhysicalDevices = std::vector<VkPhysicalDevice>();
+    if (::GetPhysicalDeviceList(Instance, PhysicalDevices))
     {
-        VkPhysicalDevice SelectedDevice = {};
-
-        for (VkPhysicalDevice Device : Devices)
+        for (VkPhysicalDevice CurrentPhysicalDevice : PhysicalDevices)
         {
             VkPhysicalDeviceProperties DeviceProperties = {};
-            vkGetPhysicalDeviceProperties(Device, &DeviceProperties);
+            vkGetPhysicalDeviceProperties(CurrentPhysicalDevice, &DeviceProperties);
 
             VkPhysicalDeviceFeatures DeviceFeatures = {};
-            vkGetPhysicalDeviceFeatures(Device, &DeviceFeatures);
+            vkGetPhysicalDeviceFeatures(CurrentPhysicalDevice, &DeviceFeatures);
 
-            if (::IsSuitableDevice(DeviceProperties))
+            if (PhysicalDeviceRequirementPredicate(DeviceProperties))
             {
 #if defined(_DEBUG)
                 std::basic_string Output = "Selected Device: ";
                 Output += DeviceProperties.deviceName;
                 Output += "\n";
-                ::OutputDebugStringA(Output.c_str());
+
+                Platform::Windows::OutputDebugString(Output.c_str());
 #endif
 
-                SelectedDevice = Device;
+                OutputPhysicalDevice = CurrentPhysicalDevice;
+                bResult = true;
                 break;
             }
         }
-
-        OutputSelectedDevice = SelectedDevice;
-        bResult = true;
     }
 
     return bResult;
 }
 
-static bool const SelectQueueFamily(VkPhysicalDevice Device, VkSurfaceKHR Surface, uint32 & OutputFamilyIndex)
+static bool const GetQueueFamilyIndex(VkPhysicalDevice Device, VkQueueFlags RequiredFlags, bool const bSupportPresentation, VkSurfaceKHR Surface, uint32 & OutputQueueFamilyIndex)
 {
     bool bResult = false;
 
@@ -169,14 +160,21 @@ static bool const SelectQueueFamily(VkPhysicalDevice Device, VkSurfaceKHR Surfac
         uint32 CurrentFamilyIndex = {};
         for (VkQueueFamilyProperties const & FamilyProperties : Properties)
         {
-            if (FamilyProperties.queueFlags & VkQueueFlagBits::VK_QUEUE_GRAPHICS_BIT)
+            if (FamilyProperties.queueFlags & RequiredFlags)
             {
-                VkBool32 SupportsPresentation = {};
-                VERIFY_VKRESULT(vkGetPhysicalDeviceSurfaceSupportKHR(Device, CurrentFamilyIndex, Surface, &SupportsPresentation));
+                bool bSelectQueueFamily = true;
 
-                if (SupportsPresentation == VK_TRUE)
+                if (bSupportPresentation)
                 {
-                    OutputFamilyIndex = CurrentFamilyIndex;
+                    VkBool32 SupportsPresentation = {};
+                    VERIFY_VKRESULT(vkGetPhysicalDeviceSurfaceSupportKHR(Device, CurrentFamilyIndex, Surface, &SupportsPresentation));
+
+                    bSelectQueueFamily = bSelectQueueFamily && SupportsPresentation == VK_TRUE;
+                }
+
+                if (bSelectQueueFamily)
+                {
+                    OutputQueueFamilyIndex = CurrentFamilyIndex;
                     bResult = true;
                     break;
                 }
@@ -189,7 +187,7 @@ static bool const SelectQueueFamily(VkPhysicalDevice Device, VkSurfaceKHR Surfac
     return bResult;
 }
 
-static void FindMemoryTypeIndex(VkPhysicalDevice PhysicalDevice, uint32 MemoryTypeMask, VkMemoryPropertyFlags RequiredMemoryTypeFlags, uint32 & OutputMemoryTypeIndex)
+static void GetMemoryTypeIndex(VkPhysicalDevice PhysicalDevice, uint32 MemoryTypeMask, VkMemoryPropertyFlags RequiredMemoryTypeFlags, uint32 & OutputMemoryTypeIndex)
 {
     VkPhysicalDeviceMemoryProperties MemoryProperties = {};
     vkGetPhysicalDeviceMemoryProperties(PhysicalDevice, &MemoryProperties);
@@ -197,7 +195,7 @@ static void FindMemoryTypeIndex(VkPhysicalDevice PhysicalDevice, uint32 MemoryTy
     uint32 SelectedMemoryTypeIndex = { 0u };
 
     uint32 CurrentMemoryTypeIndex = {};
-    while (BitScanForward(reinterpret_cast<DWORD*>(&CurrentMemoryTypeIndex), MemoryTypeMask))
+    while (_BitScanForward(reinterpret_cast<unsigned long *>(&CurrentMemoryTypeIndex), MemoryTypeMask))
     {
         /* Clear the bit from the mask */
         MemoryTypeMask ^= (1u << CurrentMemoryTypeIndex);
@@ -249,50 +247,86 @@ static void GetDeviceMemory(Vulkan::Device::DeviceState & State, uint32 const Me
     }
 }
 
+static void CreateDescriptorPool(Vulkan::Device::DeviceState & State)
+{
+    std::vector PoolSizes = std::vector<VkDescriptorPoolSize>
+    {
+        VkDescriptorPoolSize { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 4u },
+    };
+
+    VkDescriptorPoolCreateInfo CreateInfo = {};
+    CreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    CreateInfo.poolSizeCount = static_cast<uint32>(PoolSizes.size());
+    CreateInfo.pPoolSizes = PoolSizes.data();
+    CreateInfo.maxSets = 8u;
+
+    VERIFY_VKRESULT(vkCreateDescriptorPool(State.Device, &CreateInfo, nullptr, &State.DescriptorPool));
+}
+
 bool const Vulkan::Device::CreateDevice(Vulkan::Instance::InstanceState const & InstanceState, Vulkan::Device::DeviceState & OutputState)
 {
-    bool bResult = false;
-
     /* Use this for atomicity, we don't want to partially fill OutputState */
     DeviceState IntermediateState = {};
 
-    if (::SelectPhysicalDevice(InstanceState.Instance, IntermediateState.PhysicalDevice) &&
-        ::HasRequiredExtensions(IntermediateState.PhysicalDevice) &&
-        ::SelectQueueFamily(IntermediateState.PhysicalDevice, InstanceState.Surface, IntermediateState.GraphicsQueueFamilyIndex))
+    bool bResult = ::GetPhysicalDevice(InstanceState.Instance,
+                                       [](VkPhysicalDeviceProperties const & Properties)
+                                       {
+                                           return Properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU;
+                                       },
+                                       IntermediateState.PhysicalDevice);
+
+    if (bResult)
     {
-        float const QueuePriority = 1.0f;
-
-        VkDeviceQueueCreateInfo QueueCreateInfo = {};
-        QueueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-        QueueCreateInfo.queueFamilyIndex = IntermediateState.GraphicsQueueFamilyIndex;
-        QueueCreateInfo.queueCount = 1u;
-        QueueCreateInfo.pQueuePriorities = &QueuePriority;
-
-        VkDeviceCreateInfo CreateInfo = {};
-        CreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-        CreateInfo.queueCreateInfoCount = 1u;
-        CreateInfo.pQueueCreateInfos = &QueueCreateInfo;
-        CreateInfo.enabledExtensionCount = static_cast<uint32>(kRequiredExtensionNames.size());
-        CreateInfo.ppEnabledExtensionNames = kRequiredExtensionNames.data();
-        /* Need to figure out what features need to be enabled */
-        //CreateInfo.pEnabledFeatures;
-
-        VERIFY_VKRESULT(vkCreateDevice(IntermediateState.PhysicalDevice, &CreateInfo, nullptr, &IntermediateState.Device));
-
-        if (::LoadDeviceFunctions(IntermediateState.Device) &&
-            ::LoadDeviceExtensionFunctions(IntermediateState.Device, static_cast<uint32>(kRequiredExtensionNames.size()), kRequiredExtensionNames.data()))
+        if (::HasRequiredExtensions(IntermediateState.PhysicalDevice) &&
+            ::GetQueueFamilyIndex(IntermediateState.PhysicalDevice, VK_QUEUE_GRAPHICS_BIT, true, InstanceState.Surface, IntermediateState.GraphicsQueueFamilyIndex))
         {
-            vkGetDeviceQueue(IntermediateState.Device, IntermediateState.GraphicsQueueFamilyIndex, 0u, &IntermediateState.GraphicsQueue);
+            float const QueuePriority = 1.0f;
 
-            vkGetPhysicalDeviceMemoryProperties(IntermediateState.PhysicalDevice, &IntermediateState.MemoryProperties);
+            VkDeviceQueueCreateInfo QueueCreateInfo = {};
+            QueueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+            QueueCreateInfo.queueFamilyIndex = IntermediateState.GraphicsQueueFamilyIndex;
+            QueueCreateInfo.queueCount = 1u;
+            QueueCreateInfo.pQueuePriorities = &QueuePriority;
 
-            /* Matrix of memory allocations */
-            IntermediateState.MemoryAllocations.resize(IntermediateState.MemoryProperties.memoryTypeCount * kMaximumDeviceMemoryAllocationCount);
-            IntermediateState.MemoryAllocationOffsetsInBytes.resize(IntermediateState.MemoryProperties.memoryTypeCount * kMaximumDeviceMemoryAllocationCount);
-            IntermediateState.MemoryAllocationStatusMasks.resize(IntermediateState.MemoryProperties.memoryTypeCount);
+            {
+                VkDeviceCreateInfo CreateInfo = {};
+                CreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+                CreateInfo.queueCreateInfoCount = 1u;
+                CreateInfo.pQueueCreateInfos = &QueueCreateInfo;
+                CreateInfo.enabledExtensionCount = static_cast<uint32>(kRequiredExtensionNames.size());
+                CreateInfo.ppEnabledExtensionNames = kRequiredExtensionNames.data();
+                /* Need to figure out what features need to be enabled */
+                //CreateInfo.pEnabledFeatures;
 
-            OutputState = IntermediateState;
-            bResult = true;
+                VERIFY_VKRESULT(vkCreateDevice(IntermediateState.PhysicalDevice, &CreateInfo, nullptr, &IntermediateState.Device));
+            }
+
+            if (::LoadDeviceFunctions(IntermediateState.Device) &&
+                ::LoadDeviceExtensionFunctions(IntermediateState.Device, static_cast<uint32>(kRequiredExtensionNames.size()), kRequiredExtensionNames.data()))
+            {
+                vkGetDeviceQueue(IntermediateState.Device, IntermediateState.GraphicsQueueFamilyIndex, 0u, &IntermediateState.GraphicsQueue);
+
+                {
+                    VkCommandPoolCreateInfo CreateInfo = {};
+                    CreateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+                    CreateInfo.queueFamilyIndex = IntermediateState.GraphicsQueueFamilyIndex;
+                    CreateInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+
+                    VERIFY_VKRESULT(vkCreateCommandPool(IntermediateState.Device, &CreateInfo, nullptr, &IntermediateState.CommandPool));
+                }
+
+                ::CreateDescriptorPool(IntermediateState);
+
+                vkGetPhysicalDeviceMemoryProperties(IntermediateState.PhysicalDevice, &IntermediateState.MemoryProperties);
+
+                /* Matrix of memory allocations */
+                IntermediateState.MemoryAllocations.resize(IntermediateState.MemoryProperties.memoryTypeCount * kMaximumDeviceMemoryAllocationCount);
+                IntermediateState.MemoryAllocationOffsetsInBytes.resize(IntermediateState.MemoryProperties.memoryTypeCount * kMaximumDeviceMemoryAllocationCount);
+                IntermediateState.MemoryAllocationStatusMasks.resize(IntermediateState.MemoryProperties.memoryTypeCount);
+
+                OutputState = IntermediateState;
+                bResult = true;
+            }
         }
     }
 
@@ -302,6 +336,21 @@ bool const Vulkan::Device::CreateDevice(Vulkan::Instance::InstanceState const & 
 void Vulkan::Device::DestroyDevice(Vulkan::Device::DeviceState & State)
 {
     VERIFY_VKRESULT(vkDeviceWaitIdle(State.Device));
+
+    for (VkDeviceMemory & MemoryAllocation : State.MemoryAllocations)
+    {
+        if (MemoryAllocation)
+        {
+            vkFreeMemory(State.Device, MemoryAllocation, nullptr);
+            MemoryAllocation = VK_NULL_HANDLE;
+        }
+    }
+
+    if (State.DescriptorPool)
+    {
+        vkDestroyDescriptorPool(State.Device, State.DescriptorPool, nullptr);
+        State.DescriptorPool = VK_NULL_HANDLE;
+    }
 
     if (State.CommandPool)
     {
@@ -316,25 +365,33 @@ void Vulkan::Device::DestroyDevice(Vulkan::Device::DeviceState & State)
     }
 }
 
-void Vulkan::Device::CreateCommandPool(Vulkan::Device::DeviceState const & State, VkCommandPool & OutputCommandPool)
+void Vulkan::Device::CreateCommandBuffers(DeviceState const & State, VkCommandBufferLevel CommandBufferLevel, uint32 const CommandBufferCount, std::vector<VkCommandBuffer> & OutputCommandBuffers)
 {
-    VkCommandPoolCreateInfo CreateInfo = {};
-    CreateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-    CreateInfo.queueFamilyIndex = State.GraphicsQueueFamilyIndex;
-    CreateInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+    std::vector CommandBuffers = std::vector<VkCommandBuffer>(CommandBufferCount);
 
-    VERIFY_VKRESULT(vkCreateCommandPool(State.Device, &CreateInfo, nullptr, &OutputCommandPool));
-}
-
-void Vulkan::Device::CreateCommandBuffer(Vulkan::Device::DeviceState const & State, VkCommandBufferLevel CommandBufferLevel, VkCommandBuffer & OutputCommandBuffer)
-{
     VkCommandBufferAllocateInfo AllocateInfo = {};
     AllocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
     AllocateInfo.commandPool = State.CommandPool;
-    AllocateInfo.commandBufferCount = 1u;
+    AllocateInfo.commandBufferCount = CommandBufferCount;
     AllocateInfo.level = CommandBufferLevel;
 
-    VERIFY_VKRESULT(vkAllocateCommandBuffers(State.Device, &AllocateInfo, &OutputCommandBuffer));
+    VERIFY_VKRESULT(vkAllocateCommandBuffers(State.Device, &AllocateInfo, CommandBuffers.data()));
+
+    OutputCommandBuffers = std::move(CommandBuffers);
+}
+
+void Vulkan::Device::DestroyCommandBuffers(Vulkan::Device::DeviceState const & State, std::vector<VkCommandBuffer> & CommandBuffers)
+{
+    vkFreeCommandBuffers(State.Device, State.CommandPool, static_cast<uint32>(CommandBuffers.size()), CommandBuffers.data());
+}
+
+void Vulkan::Device::CreateSemaphore(Vulkan::Device::DeviceState const & State, VkSemaphoreCreateFlags Flags, VkSemaphore & OutputSemaphore)
+{
+    VkSemaphoreCreateInfo CreateInfo = {};
+    CreateInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+    CreateInfo.flags = Flags;
+
+    VERIFY_VKRESULT(vkCreateSemaphore(State.Device, &CreateInfo, nullptr, &OutputSemaphore));
 }
 
 void Vulkan::Device::DestroySemaphore(Vulkan::Device::DeviceState const & State, VkSemaphore & Semaphore)
@@ -348,7 +405,11 @@ void Vulkan::Device::DestroySemaphore(Vulkan::Device::DeviceState const & State,
 
 void Vulkan::Device::CreateFence(Vulkan::Device::DeviceState const & State, VkFenceCreateFlags Flags, VkFence & OutputFence)
 {
+    VkFenceCreateInfo CreateInfo = {};
+    CreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+    CreateInfo.flags = Flags;
 
+    VERIFY_VKRESULT(vkCreateFence(State.Device, &CreateInfo, nullptr, &OutputFence));
 }
 
 void Vulkan::Device::DestroyFence(Vulkan::Device::DeviceState const & State, VkFence & Fence)
@@ -398,7 +459,7 @@ void Vulkan::Device::CreateBuffer(Vulkan::Device::DeviceState & State, uint64 Si
     vkGetBufferMemoryRequirements(State.Device, NewBuffer, &MemoryRequirements);
 
     uint32 MemoryTypeIndex = {};
-    ::FindMemoryTypeIndex(State.PhysicalDevice, MemoryRequirements.memoryTypeBits, MemoryFlags, MemoryTypeIndex);
+    ::GetMemoryTypeIndex(State.PhysicalDevice, MemoryRequirements.memoryTypeBits, MemoryFlags, MemoryTypeIndex);
 
     AllocationInfo BufferAllocationInfo = {};
 

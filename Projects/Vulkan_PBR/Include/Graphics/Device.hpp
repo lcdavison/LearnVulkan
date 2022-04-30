@@ -1,7 +1,5 @@
 #include "VulkanModule.hpp"
 
-#include "CommonTypes.hpp"
-
 #include <vector>
 
 namespace Vulkan::Instance
@@ -29,17 +27,18 @@ namespace Vulkan::Device
 
         /* Can put this here to begin with, but for multithreading each thread should use its own Pool*/
         VkCommandPool CommandPool;
+        VkDescriptorPool DescriptorPool;
     };
 
     extern bool const CreateDevice(Vulkan::Instance::InstanceState const & InstanceState, DeviceState & OutputDeviceState);
 
     extern void DestroyDevice(DeviceState & State);
 
-    extern void CreateCommandPool(DeviceState const & State, VkCommandPool & OutputCommandPool);
+    extern void CreateCommandBuffers(DeviceState const & State, VkCommandBufferLevel CommandBufferLevel, uint32 const CommandBufferCount, std::vector<VkCommandBuffer> & OutputCommandBuffers);
 
-    extern void CreateCommandBuffer(DeviceState const & State, VkCommandBufferLevel CommandBufferLevel, VkCommandBuffer & OutputCommandBuffer);
-
-    //extern void CreateSemaphore(DeviceState const & State, VkSemaphoreCreateFlags Flags, VkSemaphore & OutputSemaphore);
+    extern void DestroyCommandBuffers(DeviceState const & State, std::vector<VkCommandBuffer> & CommandBuffers);
+    
+    extern void CreateSemaphore(DeviceState const & State, VkSemaphoreCreateFlags Flags, VkSemaphore & OutputSemaphore);
 
     extern void DestroySemaphore(DeviceState const & State, VkSemaphore & Semaphore);
 
