@@ -10,6 +10,8 @@
 #include <mutex>
 #include <condition_variable>
 
+using namespace Platform;
+
 struct ShaderData
 {
     uint64 ByteCodeSizeInBytes;
@@ -31,10 +33,19 @@ struct ShaderCollection
     uint16 ShaderCount;
 };
 
+static std::filesystem::path const kShaderDirectoryPath = std::filesystem::current_path() / "Shaders";
+
 static ShaderCollection Shaders;
 
 namespace ShaderCompilationThread
 {
+    struct CompileTaskParameters
+    {
+        std::filesystem::path ShaderFilePath;
+    };
+
+    using CompileTask = std::packaged_task<ShaderData(CompileTaskParameters const &)>;
+
     static std::wstring const kThreadName = L"Shader Compilation Thread";
 
     static std::thread Thread;
@@ -43,13 +54,16 @@ namespace ShaderCompilationThread
 
     static std::mutex WorkQueueMutex;
     static std::condition_variable WorkCondition;
-    static std::queue<std::packaged_task<ShaderData(void)>> WorkQueue;
+
+    static std::queue<CompileTaskParameters> TaskParameterQueue;
+    static std::queue<CompileTask> TaskQueue;
 
     static void Main()
     {
         while (!bStopThread)
         {
-            std::packaged_task<ShaderData(void)> CurrentTask;
+            CompileTaskParameters CurrentTaskParameters;
+            CompileTask CurrentTask;
 
             {
                 std::unique_lock QueueLock = std::unique_lock(WorkQueueMutex);
@@ -57,19 +71,22 @@ namespace ShaderCompilationThread
                 WorkCondition.wait(QueueLock,
                                    []()
                                    {
-                                       return WorkQueue.size() > 0u || bStopThread;
+                                       return TaskQueue.size() > 0u || bStopThread;
                                    });
 
-                if (WorkQueue.size() > 0u)
+                if (TaskQueue.size() > 0u)
                 {
-                    CurrentTask = std::move(WorkQueue.front());
-                    WorkQueue.pop();
+                    CurrentTaskParameters = std::move(TaskParameterQueue.front());
+                    CurrentTask = std::move(TaskQueue.front());
+
+                    TaskParameterQueue.pop();
+                    TaskQueue.pop();
                 }
             }
 
             if (CurrentTask.valid())
             {
-                CurrentTask();
+                CurrentTask(CurrentTaskParameters);
             }
         }
     }
@@ -79,7 +96,7 @@ namespace ShaderCompilationThread
         bStopThread = false;
         Thread = std::thread(Main);
 
-        ::SetThreadDescription(Thread.native_handle(), kThreadName.c_str());
+        Windows::SetThreadDescription(Thread.native_handle(), kThreadName.c_str());
     }
 
     static void Stop()
@@ -89,6 +106,56 @@ namespace ShaderCompilationThread
 
         Thread.join();
     }
+}
+
+static ShaderData CompileShader(std::filesystem::path const FilePath)
+{
+    ShaderData CompiledOutput = {};
+
+    bool bShaderCompiledSuccessfully = false;
+
+    while (!bShaderCompiledSuccessfully)
+    {
+        std::basic_string<Windows::TCHAR> ErrorMessage = {};
+        bShaderCompiledSuccessfully = ShaderCompiler::CompileShader(FilePath, CompiledOutput.ByteCode, CompiledOutput.ByteCodeSizeInBytes, ErrorMessage);
+
+        if (!bShaderCompiledSuccessfully)
+        {
+            std::basic_string<Windows::TCHAR> ErrorOutput = PBR_TEXT("");
+            ErrorOutput += PBR_TEXT("Error Compiling: ");
+            ErrorOutput += FilePath.generic_string();
+            ErrorOutput += PBR_TEXT("\n");
+            ErrorOutput += ErrorMessage;
+            ErrorOutput += PBR_TEXT("\n");
+            ErrorOutput += PBR_TEXT("Would you like to retry?");
+
+            Windows::MessageBoxResults MessageBoxResult = Windows::MessageBox(Windows::MessageBoxTypes::YesNo, ErrorOutput.c_str(), PBR_TEXT("Shader Compile Error"));
+
+            if (MessageBoxResult == Windows::MessageBoxResults::No)
+            {
+                break;
+            }
+        }
+    }
+
+    return CompiledOutput;
+}
+
+static bool const WaitForShaderToLoad(uint16 const ShaderIndex)
+{
+    if (!Shaders.ReadyShaders [ShaderIndex])
+    {
+        ShaderData CompilerOutput = Shaders.PendingShaderMap [ShaderIndex].get();
+
+        Shaders.ByteCodes [ShaderIndex].reset(CompilerOutput.ByteCode);
+        Shaders.ByteCodeSizesInBytes [ShaderIndex] = CompilerOutput.ByteCodeSizeInBytes;
+
+        Shaders.PendingShaderMap.erase(ShaderIndex);
+
+        Shaders.ReadyShaders [ShaderIndex] = CompilerOutput.ByteCode != nullptr;
+    }
+
+    return Shaders.ReadyShaders [ShaderIndex];
 }
 
 bool const ShaderLibrary::Initialise()
@@ -110,42 +177,16 @@ void ShaderLibrary::Destroy()
     ShaderCompiler::Destroy();
 }
 
-static ShaderData CompileShader(std::filesystem::path const FilePath)
+bool const ShaderLibrary::LoadShader(std::filesystem::path const FilePath, uint16 & OutputShaderIndex)
 {
-    ShaderData CompiledOutput = {};
-
-    bool bShaderCompiledSuccessfully = false;
-
-    while (!bShaderCompiledSuccessfully)
-    {
-        std::basic_string<TCHAR> ErrorMessage = {};
-        bShaderCompiledSuccessfully = ShaderCompiler::CompileShader(FilePath, CompiledOutput.ByteCode, CompiledOutput.ByteCodeSizeInBytes, ErrorMessage);
-
-        if (!bShaderCompiledSuccessfully)
-        {
-            std::basic_stringstream ErrorOutput = std::basic_stringstream<TCHAR>();
-            ErrorOutput << TEXT("Error Compiling: ") << FilePath.generic_string() << TEXT("\n");
-            ErrorOutput << ErrorMessage << TEXT("\n");
-            ErrorOutput << TEXT("Would you like to retry?");
-
-            int32 MessageBoxResult = ::MessageBox(nullptr, ErrorOutput.str().c_str(), TEXT("Compile Error"), MB_YESNO | MB_ICONEXCLAMATION);
-
-            if (MessageBoxResult == IDNO)
-            {
-                break;
-            }
-        }
-    }
-
-    return CompiledOutput;
-}
-
-uint16 ShaderLibrary::LoadShader(std::filesystem::path const FilePath)
-{
+    bool bResult = false;
     uint16 NewShaderIndex = {};
 
+    std::filesystem::path const ShaderFilePath = kShaderDirectoryPath / FilePath;
+    std::string const ShaderFileName = FilePath.filename().string();
+
     /* Lets not duplicate any shader data */
-    auto FoundShaderIndex = Shaders.ShaderIndices.find(FilePath.filename().string());
+    auto FoundShaderIndex = Shaders.ShaderIndices.find(ShaderFileName);
 
     if (FoundShaderIndex != Shaders.ShaderIndices.end())
     {
@@ -153,70 +194,67 @@ uint16 ShaderLibrary::LoadShader(std::filesystem::path const FilePath)
     }
     else
     {
-        NewShaderIndex = { Shaders.ShaderCount };
-        Shaders.ShaderCount++;
-
-        Shaders.ByteCodes.emplace_back();
-        Shaders.ByteCodeSizesInBytes.emplace_back();
-        Shaders.ReadyShaders.emplace_back(false);
-        Shaders.ShaderModules.emplace_back(VK_NULL_HANDLE);
-        Shaders.ShaderIndices [FilePath.filename().string()] = NewShaderIndex;
-
+        if (std::filesystem::exists(ShaderFilePath))
         {
-            std::scoped_lock QueueLock = std::scoped_lock(ShaderCompilationThread::WorkQueueMutex);
+            NewShaderIndex = { Shaders.ShaderCount };
+            Shaders.ShaderCount++;
 
-            std::packaged_task NewTask = std::packaged_task(
-                [FilePath]()
+            Shaders.ByteCodes.emplace_back();
+            Shaders.ByteCodeSizesInBytes.emplace_back();
+            Shaders.ReadyShaders.emplace_back(false);
+            Shaders.ShaderModules.emplace_back(VK_NULL_HANDLE);
+            Shaders.ShaderIndices [ShaderFileName] = NewShaderIndex;
+
+            ShaderCompilationThread::CompileTask NewTask = ShaderCompilationThread::CompileTask(
+                [](ShaderCompilationThread::CompileTaskParameters const & Parameters)
                 {
-                    return ::CompileShader(FilePath);
+                    return ::CompileShader(Parameters.ShaderFilePath);
                 });
 
             Shaders.PendingShaderMap [NewShaderIndex] = NewTask.get_future();
 
-            ShaderCompilationThread::WorkQueue.emplace(std::move(NewTask));
+            {
+                std::scoped_lock QueueLock = std::scoped_lock(ShaderCompilationThread::WorkQueueMutex);
+
+                ShaderCompilationThread::TaskParameterQueue.emplace(ShaderCompilationThread::CompileTaskParameters { std::move(ShaderFilePath) });
+                ShaderCompilationThread::TaskQueue.emplace(std::move(NewTask));
+            }
+
+            ShaderCompilationThread::WorkCondition.notify_one();
+            
+            bResult = true;
         }
-
-        ShaderCompilationThread::WorkCondition.notify_one();
     }
 
-    return NewShaderIndex;
+    OutputShaderIndex = NewShaderIndex;
+
+    return bResult;
 }
 
-static bool const WaitForShaderToLoad(uint16 const ShaderIndex)
-{
-    if (!Shaders.ReadyShaders [ShaderIndex])
-    {
-        ShaderData CompilerOutput = Shaders.PendingShaderMap [ShaderIndex].get();
-
-        Shaders.ByteCodes [ShaderIndex].reset(CompilerOutput.ByteCode);
-        Shaders.ByteCodeSizesInBytes [ShaderIndex] = CompilerOutput.ByteCodeSizeInBytes;
-
-        Shaders.PendingShaderMap.erase(ShaderIndex);
-
-        Shaders.ReadyShaders [ShaderIndex] = CompilerOutput.ByteCode != nullptr;
-    }
-
-    return Shaders.ReadyShaders [ShaderIndex];
-}
-
-VkShaderModule ShaderLibrary::CreateShaderModule(Vulkan::Device::DeviceState const & DeviceState, uint16 const ShaderIndex)
+bool const ShaderLibrary::CreateShaderModule(Vulkan::Device::DeviceState const & DeviceState, uint16 const ShaderIndex, VkShaderModule & OutputShaderModule)
 {
     VkShaderModule & ShaderModule = Shaders.ShaderModules [ShaderIndex];
 
     if (ShaderModule == VK_NULL_HANDLE)
     {
-        if (WaitForShaderToLoad(ShaderIndex))
-        {
-            VkShaderModuleCreateInfo CreateInfo = {};
-            CreateInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-            CreateInfo.codeSize = Shaders.ByteCodeSizesInBytes [ShaderIndex];
-            CreateInfo.pCode = Shaders.ByteCodes [ShaderIndex].get();
+        ::WaitForShaderToLoad(ShaderIndex);
 
-            VERIFY_VKRESULT(vkCreateShaderModule(DeviceState.Device, &CreateInfo, nullptr, &ShaderModule));
-        }
+        PBR_ASSERT(Shaders.ByteCodes [ShaderIndex] != nullptr)
+
+        VkShaderModuleCreateInfo CreateInfo = {};
+        CreateInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+        CreateInfo.codeSize = Shaders.ByteCodeSizesInBytes [ShaderIndex];
+        CreateInfo.pCode = Shaders.ByteCodes [ShaderIndex].get();
+
+        VERIFY_VKRESULT(vkCreateShaderModule(DeviceState.Device, &CreateInfo, nullptr, &ShaderModule));
+
+        /* We don't really need the bytecode after this */
+        Shaders.ByteCodes [ShaderIndex].reset();
     }
 
-    return ShaderModule;
+    OutputShaderModule = ShaderModule;
+
+    return ShaderModule != VK_NULL_HANDLE;
 }
 
 void ShaderLibrary::DestroyShaderModules(Vulkan::Device::DeviceState const & DeviceState)

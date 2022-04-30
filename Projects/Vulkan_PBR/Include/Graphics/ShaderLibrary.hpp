@@ -17,9 +17,9 @@ namespace ShaderLibrary
     extern void Destroy();
 
     /* This could event be uint8, not planning on having 2^16 shaders */
-    extern uint16 LoadShader(std::filesystem::path const FilePath);
+    extern bool const LoadShader(std::filesystem::path const FilePath, uint16 & OutputShaderIndex);
 
-    extern VkShaderModule CreateShaderModule(Vulkan::Device::DeviceState const & DeviceState, uint16 const ShaderIndex);
+    extern bool const CreateShaderModule(Vulkan::Device::DeviceState const & DeviceState, uint16 const ShaderIndex, VkShaderModule & OutputShaderModule);
 
     extern void DestroyShaderModules(Vulkan::Device::DeviceState const & DeviceState);
 }
