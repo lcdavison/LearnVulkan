@@ -55,8 +55,8 @@ bool const LoadExportedFunctions()
 #define VK_EXPORTED_FUNCTION(Function)\
     Functions::Function = reinterpret_cast<PFN_##Function>(::GetProcAddress(VulkanModule, #Function));\
     if (!Functions::Function) {\
-		return false;\
-	}
+        return false;\
+    }
 
 #include "VulkanFunctions.inl"
 
@@ -79,10 +79,10 @@ bool const LoadGlobalFunctions()
 bool const LoadInstanceFunctions(VkInstance Instance)
 {
 #define VK_INSTANCE_FUNCTION(Function)\
-	Functions::Function = reinterpret_cast<PFN_##Function>(Functions::vkGetInstanceProcAddr(Instance, #Function));\
-	if (!Functions::Function) {\
-		return false;\
-	}
+    Functions::Function = reinterpret_cast<PFN_##Function>(Functions::vkGetInstanceProcAddr(Instance, #Function));\
+    if (!Functions::Function) {\
+        return false;\
+    }
 
 #include "VulkanFunctions.inl"
 
@@ -92,10 +92,10 @@ bool const LoadInstanceFunctions(VkInstance Instance)
 bool const LoadDeviceFunctions(VkDevice Device)
 {
 #define VK_DEVICE_FUNCTION(Function)\
-	Functions::Function = reinterpret_cast<PFN_##Function>(Functions::vkGetDeviceProcAddr(Device, #Function));\
-	if (!Functions::Function) {\
-		return false;\
-	}
+    Functions::Function = reinterpret_cast<PFN_##Function>(Functions::vkGetDeviceProcAddr(Device, #Function));\
+    if (!Functions::Function) {\
+        return false;\
+    }
 
 #include "VulkanFunctions.inl"
 
@@ -106,8 +106,8 @@ bool const LoadInstanceExtensionFunctions(VkInstance Instance, std::uint32_t con
 {
 #define VK_INSTANCE_FUNCTION_FROM_EXTENSION(Function, Extension)\
     for (std::uint32_t CurrentExtensionNameIndex = {0u};\
-            CurrentExtensionNameIndex < ExtensionNameCount;\
-            CurrentExtensionNameIndex++) {\
+         CurrentExtensionNameIndex < ExtensionNameCount;\
+         CurrentExtensionNameIndex++) {\
             if (std::strcmp(Extension, ExtensionNames [CurrentExtensionNameIndex]) == 0l) {\
                 Functions::Function = reinterpret_cast<PFN_##Function>(Functions::vkGetInstanceProcAddr(Instance, #Function));\
                 if (!Functions::Function) {\
@@ -124,9 +124,9 @@ bool const LoadInstanceExtensionFunctions(VkInstance Instance, std::uint32_t con
 bool const LoadDeviceExtensionFunctions(VkDevice Device, std::uint32_t const ExtensionNameCount, char const * const * ExtensionNames)
 {
 #define VK_DEVICE_FUNCTION_FROM_EXTENSION(Function, Extension)\
-	for (std::uint32_t CurrentExtensionNameIndex = { 0u };\
-            CurrentExtensionNameIndex < ExtensionNameCount;\
-            CurrentExtensionNameIndex++) {\
+    for (std::uint32_t CurrentExtensionNameIndex = { 0u };\
+         CurrentExtensionNameIndex < ExtensionNameCount;\
+         CurrentExtensionNameIndex++) {\
             if (std::strcmp(Extension, ExtensionNames [CurrentExtensionNameIndex]) == 0l) {\
                 Functions::Function = reinterpret_cast<PFN_##Function>(Functions::vkGetDeviceProcAddr(Device, #Function));\
                 if (!Functions::Function) {\
@@ -478,8 +478,8 @@ VkResult vkDeviceWaitIdle(VkDevice device)
 
 
 void vkUpdateDescriptorSets(VkDevice device,
-                            std::uint32_t descriptorWriteCount, VkWriteDescriptorSet const* pDescriptorWrites,
-                            std::uint32_t descriptorCopyCount, VkCopyDescriptorSet const* pDescriptorCopies)
+                            std::uint32_t descriptorWriteCount, VkWriteDescriptorSet const * pDescriptorWrites,
+                            std::uint32_t descriptorCopyCount, VkCopyDescriptorSet const * pDescriptorCopies)
 {
     Functions::vkUpdateDescriptorSets(device, descriptorWriteCount, pDescriptorWrites, descriptorCopyCount, pDescriptorCopies);
 }
@@ -535,10 +535,10 @@ void vkCmdBindPipeline(VkCommandBuffer commandBuffer, VkPipelineBindPoint pipeli
     Functions::vkCmdBindPipeline(commandBuffer, pipelineBindPoint, pipeline);
 }
 
-void vkCmdBindDescriptorSets(VkCommandBuffer commandBuffer, 
-                             VkPipelineBindPoint pipelineBindPoint, VkPipelineLayout layout, 
-                             std::uint32_t firstSet, 
-                             std::uint32_t descriptorSetCount, VkDescriptorSet const * pDescriptorSets, 
+void vkCmdBindDescriptorSets(VkCommandBuffer commandBuffer,
+                             VkPipelineBindPoint pipelineBindPoint, VkPipelineLayout layout,
+                             std::uint32_t firstSet,
+                             std::uint32_t descriptorSetCount, VkDescriptorSet const * pDescriptorSets,
                              std::uint32_t dynamicOffsetCount, std::uint32_t const * pDynamicOffsets)
 {
     Functions::vkCmdBindDescriptorSets(commandBuffer, pipelineBindPoint, layout, firstSet, descriptorSetCount, pDescriptorSets, dynamicOffsetCount, pDynamicOffsets);
