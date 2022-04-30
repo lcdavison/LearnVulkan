@@ -15,8 +15,6 @@
 
 #include <array>
 
-#undef max
-
 struct PerFrameUniformBufferData
 {
     Math::Matrix4x4 PerspectiveMatrix;
@@ -50,7 +48,6 @@ static Vulkan::Viewport::ViewportState ViewportState = {};
 static FrameStateCollection FrameState = {};
 
 static VkRenderPass MainRenderPass = {};
-static VkShaderModule ShaderModule = {};
 
 static VkPipelineLayout TrianglePipelineLayout = {};
 static VkPipeline TrianglePipelineState = {};
@@ -61,12 +58,12 @@ static uint16 FragmentShaderHandle = {};
 static VkShaderModule VertexShaderModule = {};
 static VkShaderModule FragmentShaderModule = {};
 
-static VkDescriptorPool DescriptorPool = {};
 static VkDescriptorSetLayout DescriptorSetLayout = {};
 static VkDescriptorSet ShaderDescriptorSet = {};
 
 static VkDeviceMemory FrameAllocationMemory = {};
 static VkBuffer FrameAllocationBuffer = {};
+static void * FrameAllocationBufferMappedAddress = {};
 
 static void CreateFrameState()
 {
@@ -80,10 +77,7 @@ static void CreateFrameState()
     FrameState.CurrentFrameAllocationBlockOffsetsInBytes.resize(kFrameStateCount);
     FrameState.PerFrameUniformBufferOffsetsInBytes.resize(kFrameStateCount);
 
-    for (VkCommandBuffer & CommandBuffer : FrameState.CommandBuffers)
-    {
-        Vulkan::Device::CreateCommandBuffer(DeviceState, VK_COMMAND_BUFFER_LEVEL_PRIMARY, CommandBuffer);
-    }
+    Vulkan::Device::CreateCommandBuffers(DeviceState, VK_COMMAND_BUFFER_LEVEL_PRIMARY, kFrameStateCount, FrameState.CommandBuffers);
 
     {
         uint8 CurrentImageViewIndex = { 0u };
@@ -100,25 +94,14 @@ static void CreateFrameState()
         }
     }
 
+    for (VkSemaphore & Semaphore : FrameState.Semaphores)
     {
-        VkSemaphoreCreateInfo CreateInfo = {};
-        CreateInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-
-        for (VkSemaphore & Semaphore : FrameState.Semaphores)
-        {
-            VERIFY_VKRESULT(vkCreateSemaphore(DeviceState.Device, &CreateInfo, nullptr, &Semaphore));
-        }
+        Vulkan::Device::CreateSemaphore(DeviceState, 0u, Semaphore);
     }
-
+ 
+    for (VkFence & Fence : FrameState.Fences)
     {
-        VkFenceCreateInfo CreateInfo = {};
-        CreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-        CreateInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
-
-        for (VkFence & Fence : FrameState.Fences)
-        {
-            VERIFY_VKRESULT(vkCreateFence(DeviceState.Device, &CreateInfo, nullptr, &Fence));
-        }
+        Vulkan::Device::CreateFence(DeviceState, VK_FENCE_CREATE_SIGNALED_BIT, Fence);
     }
 
     {
@@ -126,7 +109,7 @@ static void CreateFrameState()
 
         VkDescriptorSetAllocateInfo AllocateInfo = {};
         AllocateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-        AllocateInfo.descriptorPool = DescriptorPool;
+        AllocateInfo.descriptorPool = DeviceState.DescriptorPool;
         AllocateInfo.descriptorSetCount = static_cast<uint32>(FrameState.DescriptorSets.size());
         AllocateInfo.pSetLayouts = DescriptorSetLayouts.data();
 
@@ -162,7 +145,7 @@ static void DestroyFrameState()
         Vulkan::Device::DestroyFrameBuffer(DeviceState, FrameBuffer);
     }
 
-    vkFreeCommandBuffers(DeviceState.Device, DeviceState.CommandPool, static_cast<uint32>(FrameState.CommandBuffers.size()), FrameState.CommandBuffers.data());
+    Vulkan::Device::DestroyCommandBuffers(DeviceState, FrameState.CommandBuffers);
 }
 
 static bool const CreateMainRenderPass()
@@ -231,8 +214,8 @@ static bool const CreateGraphicsPipeline()
         VERIFY_VKRESULT(vkCreatePipelineLayout(DeviceState.Device, &CreateInfo, nullptr, &TrianglePipelineLayout));
     }
 
-    VertexShaderModule = ShaderLibrary::CreateShaderModule(DeviceState, VertexShaderHandle);
-    FragmentShaderModule = ShaderLibrary::CreateShaderModule(DeviceState, FragmentShaderHandle);
+    ShaderLibrary::CreateShaderModule(DeviceState, VertexShaderHandle, VertexShaderModule);
+    ShaderLibrary::CreateShaderModule(DeviceState, FragmentShaderHandle, FragmentShaderModule);
 
     if (VertexShaderModule == VK_NULL_HANDLE || FragmentShaderModule == VK_NULL_HANDLE)
     {
@@ -328,23 +311,6 @@ static bool const CreateGraphicsPipeline()
     return true;
 }
 
-static bool const CreateDescriptorPool()
-{
-    std::vector PoolSizes = std::vector<VkDescriptorPoolSize>(1u);
-    PoolSizes [0u].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    PoolSizes [0u].descriptorCount = 4u;
-
-    VkDescriptorPoolCreateInfo CreateInfo = {};
-    CreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-    CreateInfo.poolSizeCount = static_cast<uint32>(PoolSizes.size());
-    CreateInfo.pPoolSizes = PoolSizes.data();
-    CreateInfo.maxSets = 8u;
-
-    VERIFY_VKRESULT(vkCreateDescriptorPool(DeviceState.Device, &CreateInfo, nullptr, &DescriptorPool));
-
-    return true;
-}
-
 static bool const CreatePerFrameUniformBuffer()
 {
     PerFrameUniformBufferData PerFrameData = {};
@@ -355,14 +321,8 @@ static bool const CreatePerFrameUniformBuffer()
 
     uint32 CurrentAllocationOffset = FrameState.CurrentFrameAllocationBlockOffsetsInBytes [FrameState.CurrentFrameStateIndex];
 
-    {
-        void * MappedData = {};
-        VERIFY_VKRESULT(vkMapMemory(DeviceState.Device, FrameAllocationMemory, CurrentAllocationOffset, sizeof(PerFrameData), 0u, &MappedData));
-
-        ::memcpy_s(MappedData, sizeof(PerFrameData), &PerFrameData, sizeof(PerFrameData));
-
-        vkUnmapMemory(DeviceState.Device, FrameAllocationMemory);
-    }
+    std::byte * DestinationAddress = reinterpret_cast<std::byte *>(FrameAllocationBufferMappedAddress) + CurrentAllocationOffset;
+    ::memcpy_s(DestinationAddress, kFrameAllocationMemorySizeInBytes - CurrentAllocationOffset, &PerFrameData, sizeof(PerFrameData));
 
     FrameState.PerFrameUniformBufferOffsetsInBytes [FrameState.CurrentFrameStateIndex] = CurrentAllocationOffset;
     FrameState.CurrentFrameAllocationBlockOffsetsInBytes [FrameState.CurrentFrameStateIndex] += sizeof(PerFrameData);
@@ -395,13 +355,35 @@ static void ResetFrameAllocationBlock()
     FrameState.CurrentFrameAllocationBlockOffsetsInBytes [FrameState.CurrentFrameStateIndex] = FrameState.CurrentFrameStateIndex * kPerFrameAllocationBlockSizeInBytes;
 }
 
+static void ResizeViewport()
+{
+    VERIFY_VKRESULT(vkDeviceWaitIdle(DeviceState.Device));
+
+    Vulkan::Viewport::ResizeViewport(InstanceState, DeviceState, ViewportState);
+
+    {
+        uint8 CurrentImageIndex = { 0u };
+        for (VkFramebuffer & FrameBuffer : FrameState.FrameBuffers)
+        {
+            vkDestroyFramebuffer(DeviceState.Device, FrameBuffer, nullptr);
+
+            std::vector<VkImageView> FrameBufferAttachments =
+            {
+                ViewportState.SwapChainImageViews [CurrentImageIndex],
+            };
+
+            Vulkan::Device::CreateFrameBuffer(DeviceState, Application::State.CurrentWindowWidth, Application::State.CurrentWindowHeight, MainRenderPass, FrameBufferAttachments, FrameBuffer);
+
+            CurrentImageIndex++;
+        }
+    }
+}
+
 bool const ForwardRenderer::Initialise(VkApplicationInfo const & ApplicationInfo)
 {
-    /* TODO: This should be moved into the Shader Library itself */
-    std::filesystem::path const WorkingDirectory = std::filesystem::current_path();
-
-    VertexShaderHandle = ShaderLibrary::LoadShader(WorkingDirectory / std::filesystem::path("Shaders/Triangle.vert"));
-    FragmentShaderHandle = ShaderLibrary::LoadShader(WorkingDirectory / std::filesystem::path("Shaders/Triangle.frag"));
+    /* These are loaded and compiled async, doing them here should mean they will be ready by the time we create the pipeline state */
+    ShaderLibrary::LoadShader("Triangle.vert", VertexShaderHandle);
+    ShaderLibrary::LoadShader("Triangle.frag", FragmentShaderHandle);
 
     bool bResult = false;
 
@@ -409,20 +391,18 @@ bool const ForwardRenderer::Initialise(VkApplicationInfo const & ApplicationInfo
         Vulkan::Device::CreateDevice(InstanceState, DeviceState) &&
         Vulkan::Viewport::CreateViewport(InstanceState, DeviceState, ViewportState))
     {
-        Vulkan::Device::CreateCommandPool(DeviceState, DeviceState.CommandPool);
-
         bResult = ::CreateMainRenderPass();
 
         ::CreateDescriptorSetLayout();
 
         bResult = ::CreateGraphicsPipeline();
 
-        ::CreateDescriptorPool();
-
         ::CreateFrameState();
 
         /* Create Frame Allocation Block */
         Vulkan::Device::CreateBuffer(DeviceState, kFrameAllocationMemorySizeInBytes, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, FrameAllocationBuffer, FrameAllocationMemory);
+
+        VERIFY_VKRESULT(vkMapMemory(DeviceState.Device, FrameAllocationMemory, 0u, kFrameAllocationMemorySizeInBytes, 0u, &FrameAllocationBufferMappedAddress));
     }
 
     return bResult;
@@ -432,15 +412,11 @@ bool const ForwardRenderer::Shutdown()
 {
     vkDeviceWaitIdle(DeviceState.Device);
 
+    vkUnmapMemory(DeviceState.Device, FrameAllocationMemory);
+
     Vulkan::Device::DestroyBuffer(DeviceState, FrameAllocationBuffer);
 
     ::DestroyFrameState();
-
-    if (DescriptorPool)
-    {
-        vkDestroyDescriptorPool(DeviceState.Device, DescriptorPool, nullptr);
-        DescriptorPool = VK_NULL_HANDLE;
-    }
 
     if (TrianglePipelineState)
     {
@@ -468,12 +444,6 @@ bool const ForwardRenderer::Shutdown()
         MainRenderPass = VK_NULL_HANDLE;
     }
 
-    if (DescriptorPool)
-    {
-        vkDestroyDescriptorPool(DeviceState.Device, DescriptorPool, nullptr);
-        DescriptorPool = VK_NULL_HANDLE;
-    }
-
     Vulkan::Viewport::DestroyViewport(DeviceState, ViewportState);
 
     Vulkan::Device::DestroyDevice(DeviceState);
@@ -481,30 +451,6 @@ bool const ForwardRenderer::Shutdown()
     Vulkan::Instance::DestroyInstance(InstanceState);
 
     return true;
-}
-
-static void ResizeViewport()
-{
-    VERIFY_VKRESULT(vkDeviceWaitIdle(DeviceState.Device));
-
-    Vulkan::Viewport::ResizeViewport(InstanceState, DeviceState, ViewportState);
-
-    {
-        uint8 CurrentImageIndex = { 0u };
-        for (VkFramebuffer & FrameBuffer : FrameState.FrameBuffers)
-        {
-            vkDestroyFramebuffer(DeviceState.Device, FrameBuffer, nullptr);
-
-            std::vector<VkImageView> FrameBufferAttachments =
-            {
-                ViewportState.SwapChainImageViews [CurrentImageIndex],
-            };
-
-            Vulkan::Device::CreateFrameBuffer(DeviceState, Application::State.CurrentWindowWidth, Application::State.CurrentWindowHeight, MainRenderPass, FrameBufferAttachments, FrameBuffer);
-
-            CurrentImageIndex++;
-        }
-    }
 }
 
 void ForwardRenderer::Render()
