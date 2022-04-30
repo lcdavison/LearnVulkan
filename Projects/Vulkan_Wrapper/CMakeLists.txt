@@ -8,6 +8,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 list(
     APPEND HeaderFiles
     "Include/Vulkan.hpp"
+    "Include/VulkanWin32.hpp"
 )
 
 list(

@@ -1,4 +1,7 @@
 #include "Vulkan.hpp"
+#include "VulkanWin32.hpp"
+
+#include <vulkan/vulkan.h>
 
 #include <Windows.h>
 
