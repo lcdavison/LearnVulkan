@@ -17,39 +17,130 @@ static inline char const kOBJFaceDelimitingCharacter = '/';
 static inline char const kOBJNullIndexCharacter = '0';
 
 static inline char const kWhitespaceCharacter = ' ';
+static inline char const kNegativeSignCharacter = '-';
+static inline char const kDecimalPointCharacter = '.';
+static inline char const kEndOfLineCharacter = '\0';
 
-inline static bool const IsCharacterANumber(char const Character)
+inline static bool const IsTokenANumber(char const Token)
 {
-    return Character >= '0' && Character <= '9';
+    return Token >= '0' && Token <= '9';
 }
 
-static void ProcessVertexAttribute(std::string const & AttributeLine, std::vector<float> & OutputAttributeData)
+inline static bool const IsTokenACharacter(char const Token)
 {
-    std::uint16_t CurrentCharacterIndex = { 0u };
+    return std::tolower(Token) >= 'a' && std::tolower(Token) <= 'z';
+}
 
-    std::string CurrentNumber = {};
-    CurrentNumber.reserve(256u);
-
-    while (CurrentCharacterIndex < AttributeLine.size())
+inline static void GetNextToken(std::string const & AttributeLine, std::uint16_t & CurrentTokenIndex, char & OutputToken)
+{
+    if (CurrentTokenIndex >= AttributeLine.size())
     {
-        char const CurrentCharacter = AttributeLine [CurrentCharacterIndex];
+        OutputToken = kEndOfLineCharacter;
+    }
+    else
+    {
+        CurrentTokenIndex++;
+        OutputToken = AttributeLine [CurrentTokenIndex];
+    }
+}
 
-        if (::IsCharacterANumber(CurrentCharacter))
+inline static bool const MatchToken(char const Token, char const ExpectedToken)
+{
+    return Token == ExpectedToken;
+}
+
+inline static bool const ParseNumber(std::string const & AttributeLine, std::uint16_t & CurrentTokenIndex, char & OutputFinalToken, std::string & OutputNumber)
+{
+    char CurrentToken = AttributeLine [CurrentTokenIndex];
+
+    while (CurrentTokenIndex < AttributeLine.size() &&
+           ::IsTokenANumber(CurrentToken))
+    {
+        OutputNumber += CurrentToken;
+        ::GetNextToken(AttributeLine, CurrentTokenIndex, CurrentToken);
+    }
+
+    OutputFinalToken = CurrentToken;
+    
+    return true;
+}
+
+static bool const ProcessVertexAttribute(std::string const & ExpectedAttributeToken, std::string const & AttributeLine, std::vector<float> & OutputAttributeData)
+{
+    bool bResult = true;
+
+    std::uint16_t CurrentTokenIndex = { 0u };
+    char CurrentToken = AttributeLine [CurrentTokenIndex];
+
+    std::string AttributeString = {};
+    while (::IsTokenACharacter(CurrentToken))
+    {
+        AttributeString += CurrentToken;
+        ::GetNextToken(AttributeLine, CurrentTokenIndex, CurrentToken);
+    }
+
+    if (AttributeString == ExpectedAttributeToken)
+    {
+        std::string CurrentNumber = {};
+        CurrentNumber.reserve(256u);
+
+        while (CurrentToken != kEndOfLineCharacter)
         {
-            while (CurrentCharacterIndex < AttributeLine.size() && AttributeLine [CurrentCharacterIndex] != kWhitespaceCharacter)
+            while (CurrentToken == kWhitespaceCharacter)
             {
-                CurrentNumber += AttributeLine [CurrentCharacterIndex];
-                CurrentCharacterIndex++;
+                ::GetNextToken(AttributeLine, CurrentTokenIndex, CurrentToken);
             }
 
-            OutputAttributeData.push_back(std::stof(CurrentNumber));
-            CurrentNumber.clear();
-        }
-        else
-        {
-            CurrentCharacterIndex++;
+            if (MatchToken(CurrentToken, kNegativeSignCharacter))
+            {
+                CurrentNumber += CurrentToken;
+                ::GetNextToken(AttributeLine, CurrentTokenIndex, CurrentToken);
+            }
+
+            if (IsTokenANumber(CurrentToken))
+            {
+                ::ParseNumber(AttributeLine, CurrentTokenIndex, CurrentToken, CurrentNumber);
+
+                if (::MatchToken(CurrentToken, kDecimalPointCharacter))
+                {
+                    CurrentNumber += CurrentToken;
+                    ::GetNextToken(AttributeLine, CurrentTokenIndex, CurrentToken);
+
+                    if (IsTokenANumber(CurrentToken))
+                    {
+                        ::ParseNumber(AttributeLine, CurrentTokenIndex, CurrentToken, CurrentNumber);
+                    }
+                    else
+                    {
+                        bResult = false;
+                        break;
+                    }
+                }
+
+                if (!(::MatchToken(CurrentToken, kWhitespaceCharacter) || ::MatchToken(CurrentToken, kEndOfLineCharacter)))
+                {
+                    bResult = false;
+                    break;
+                }
+
+                OutputAttributeData.push_back(std::stof(CurrentNumber));
+
+                CurrentNumber.clear();
+            }
+            else
+            {
+                // Expected a number return false
+                bResult = false;
+                break;
+            }
         }
     }
+    else
+    {
+        bResult = false;
+    }
+
+    return bResult;
 }
 
 static void ProcessFaceData(std::string const & FaceLine, std::vector<std::uint32_t> & VertexIndices, std::vector<std::uint32_t> & TextureCoordinateIndices, std::vector<std::uint32_t> & NormalIndices)
@@ -83,7 +174,7 @@ static void ProcessFaceData(std::string const & FaceLine, std::vector<std::uint3
     {
         char const CurrentCharacter = FaceLine [CurrentCharacterIndex];
 
-        if (::IsCharacterANumber(CurrentCharacter))
+        if (::IsTokenANumber(CurrentCharacter))
         {
             std::uint8_t CurrentStringIndex = { 0u };
             while (CurrentCharacterIndex < FaceLine.size() && FaceLine [CurrentCharacterIndex] != kWhitespaceCharacter)
@@ -115,6 +206,7 @@ static void ProcessFaceData(std::string const & FaceLine, std::vector<std::uint3
     }
 }
 
+/* TODO: This function needs to be more structured, should use a single return statement */
 static bool const ParseOBJFile(std::ifstream & OBJFileStream, OBJLoader::OBJMeshData & OutputMeshData)
 {
     std::string CurrentFileLine = {};
@@ -145,7 +237,10 @@ static bool const ParseOBJFile(std::ifstream & OBJFileStream, OBJLoader::OBJMesh
                     case kWhitespaceCharacter:
                     {
                         std::uint32_t const CurrentPositionSize = Vertices.size();
-                        ::ProcessVertexAttribute(CurrentFileLine, Vertices);
+                        if (!::ProcessVertexAttribute("v", CurrentFileLine, Vertices))
+                        {
+                            return false;
+                        }
 
                         /* This should only be needed if 3 values are given instead of 4 */
                         std::uint32_t const PaddingValueCount = kOBJMaxVertexComponentCount - (Vertices.size() - CurrentPositionSize);
@@ -154,13 +249,19 @@ static bool const ParseOBJFile(std::ifstream & OBJFileStream, OBJLoader::OBJMesh
                     break;
                     case kOBJNormalCharacter:
                     {
-                        ::ProcessVertexAttribute(CurrentFileLine, Normals);
+                        if (!::ProcessVertexAttribute("vn", CurrentFileLine, Normals))
+                        {
+                            return false;
+                        }
                     }
                     break;
                     case kOBJTextureCoordinateCharacter:
                     {
                         std::uint32_t const CurrentTextureCoordinatesSize = TextureCoordinates.size();
-                        ::ProcessVertexAttribute(CurrentFileLine, TextureCoordinates);
+                        if (!::ProcessVertexAttribute("vt", CurrentFileLine, TextureCoordinates))
+                        {
+                            return false;
+                        }
 
                         std::uint32_t const PaddingValueCount = kOBJMaxTextureCoordinateComponentCount - (TextureCoordinates.size() - CurrentTextureCoordinatesSize);
                         TextureCoordinates.insert(TextureCoordinates.cend(), PaddingValueCount, 0.0f);
