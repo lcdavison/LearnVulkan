@@ -313,6 +313,8 @@ static bool const CreateGraphicsPipeline()
 
 static bool const CreatePerFrameUniformBuffer()
 {
+    /* TODO: Check but I think the offset will need to be aligned */
+
     PerFrameUniformBufferData PerFrameData = {};
     float const AspectRatio = static_cast<float>(ViewportState.ImageExtents.width) / static_cast<float>(ViewportState.ImageExtents.height);
     PerFrameData.PerspectiveMatrix = Math::PerspectiveMatrix(Math::ConvertDegreesToRadians(90.0f), AspectRatio, 0.0001f, 1000.0f);
@@ -377,6 +379,8 @@ static void ResizeViewport()
             CurrentImageIndex++;
         }
     }
+
+    FrameState.CurrentFrameStateIndex = 0u;
 }
 
 bool const ForwardRenderer::Initialise(VkApplicationInfo const & ApplicationInfo)
@@ -457,8 +461,6 @@ void ForwardRenderer::Render()
 {
     vkWaitForFences(DeviceState.Device, 1u, &FrameState.Fences [FrameState.CurrentFrameStateIndex], VK_TRUE, std::numeric_limits<uint64>::max());
 
-    ::ResetFrameAllocationBlock();
-
     uint32 CurrentImageIndex = {};
     VkResult ImageAcquireResult = vkAcquireNextImageKHR(DeviceState.Device, ViewportState.SwapChain, 0ull, FrameState.Semaphores [FrameState.CurrentFrameStateIndex], VK_NULL_HANDLE, &CurrentImageIndex);
 
@@ -469,6 +471,8 @@ void ForwardRenderer::Render()
 
         VERIFY_VKRESULT(vkAcquireNextImageKHR(DeviceState.Device, ViewportState.SwapChain, 0ull, FrameState.Semaphores [FrameState.CurrentFrameStateIndex], VK_NULL_HANDLE, &CurrentImageIndex));
     }
+
+    ::ResetFrameAllocationBlock();
 
     ::CreatePerFrameUniformBuffer();
     ::UpdateDescriptors();
@@ -526,7 +530,7 @@ void ForwardRenderer::Render()
         SubmitInfo.waitSemaphoreCount = 1u;
         SubmitInfo.pWaitSemaphores = &FrameState.Semaphores [FrameState.CurrentFrameStateIndex];
         SubmitInfo.signalSemaphoreCount = 1u;
-        SubmitInfo.pSignalSemaphores = &FrameState.Semaphores [FrameState.CurrentFrameStateIndex + 1u];
+        SubmitInfo.pSignalSemaphores = &FrameState.Semaphores [kFrameStateCount + FrameState.CurrentFrameStateIndex];
         SubmitInfo.pWaitDstStageMask = &PipelineWaitStage;
 
         VERIFY_VKRESULT(vkQueueSubmit(DeviceState.GraphicsQueue, 1u, &SubmitInfo, FrameState.Fences [FrameState.CurrentFrameStateIndex]));
@@ -538,7 +542,7 @@ void ForwardRenderer::Render()
         PresentInfo.swapchainCount = 1u;
         PresentInfo.pSwapchains = &ViewportState.SwapChain;
         PresentInfo.waitSemaphoreCount = 1u;
-        PresentInfo.pWaitSemaphores = &FrameState.Semaphores [FrameState.CurrentFrameStateIndex + 1u];
+        PresentInfo.pWaitSemaphores = &FrameState.Semaphores [kFrameStateCount + FrameState.CurrentFrameStateIndex];
         PresentInfo.pImageIndices = &CurrentImageIndex;
 
         vkQueuePresentKHR(DeviceState.GraphicsQueue, &PresentInfo);
