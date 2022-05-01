@@ -49,8 +49,9 @@ inline static bool const MatchToken(char const Token, char const ExpectedToken)
     return Token == ExpectedToken;
 }
 
-inline static bool const ParseNumber(std::string const & AttributeLine, std::uint16_t & CurrentTokenIndex, char & OutputFinalToken, std::string & OutputNumber)
+static bool const ParseNumber(std::string const & AttributeLine, std::uint16_t const StartTokenIndex, std::uint16_t & OutputFinalTokenIndex, std::string & OutputNumber)
 {
+    std::uint16_t CurrentTokenIndex = { StartTokenIndex };
     char CurrentToken = AttributeLine [CurrentTokenIndex];
 
     while (CurrentTokenIndex < AttributeLine.size() &&
@@ -60,9 +61,47 @@ inline static bool const ParseNumber(std::string const & AttributeLine, std::uin
         ::GetNextToken(AttributeLine, CurrentTokenIndex, CurrentToken);
     }
 
-    OutputFinalToken = CurrentToken;
+    OutputFinalTokenIndex = CurrentTokenIndex;
     
     return true;
+}
+
+static bool const MatchNumber(std::string const & AttributeLine, std::uint16_t const StartTokenIndex, bool const bBeforeDecimalPoint, std::uint16_t & OutputFinalTokenIndex, std::string & OutputNumber)
+{
+    bool bResult = true;
+
+    std::uint16_t CurrentTokenIndex = { StartTokenIndex };
+    char CurrentToken = AttributeLine [CurrentTokenIndex];
+    
+    if (bBeforeDecimalPoint && 
+        ::MatchToken(CurrentToken, kNegativeSignCharacter))
+    {
+        OutputNumber += CurrentToken;
+        ::GetNextToken(AttributeLine, CurrentTokenIndex, CurrentToken);
+    }
+
+    if (::IsTokenANumber(CurrentToken))
+    {
+        ::ParseNumber(AttributeLine, CurrentTokenIndex, CurrentTokenIndex, OutputNumber);
+        CurrentToken = AttributeLine [CurrentTokenIndex];
+
+        if (bBeforeDecimalPoint && 
+            ::MatchToken(CurrentToken, kDecimalPointCharacter))
+        {
+            OutputNumber += CurrentToken;
+            ::GetNextToken(AttributeLine, CurrentTokenIndex, CurrentToken);
+
+            bResult = MatchNumber(AttributeLine, CurrentTokenIndex, false, CurrentTokenIndex, OutputNumber);
+        }
+    }
+    else
+    {
+        bResult = false;
+    }
+
+    OutputFinalTokenIndex = CurrentTokenIndex;
+
+    return bResult;
 }
 
 static bool const ProcessVertexAttribute(std::string const & ExpectedAttributeToken, std::string const & AttributeLine, std::vector<float> & OutputAttributeData)
@@ -91,31 +130,9 @@ static bool const ProcessVertexAttribute(std::string const & ExpectedAttributeTo
                 ::GetNextToken(AttributeLine, CurrentTokenIndex, CurrentToken);
             }
 
-            if (MatchToken(CurrentToken, kNegativeSignCharacter))
+            if (::MatchNumber(AttributeLine, CurrentTokenIndex, true, CurrentTokenIndex, CurrentNumber))
             {
-                CurrentNumber += CurrentToken;
-                ::GetNextToken(AttributeLine, CurrentTokenIndex, CurrentToken);
-            }
-
-            if (IsTokenANumber(CurrentToken))
-            {
-                ::ParseNumber(AttributeLine, CurrentTokenIndex, CurrentToken, CurrentNumber);
-
-                if (::MatchToken(CurrentToken, kDecimalPointCharacter))
-                {
-                    CurrentNumber += CurrentToken;
-                    ::GetNextToken(AttributeLine, CurrentTokenIndex, CurrentToken);
-
-                    if (IsTokenANumber(CurrentToken))
-                    {
-                        ::ParseNumber(AttributeLine, CurrentTokenIndex, CurrentToken, CurrentNumber);
-                    }
-                    else
-                    {
-                        bResult = false;
-                        break;
-                    }
-                }
+                CurrentToken = AttributeLine [CurrentTokenIndex];
 
                 if (!(::MatchToken(CurrentToken, kWhitespaceCharacter) || ::MatchToken(CurrentToken, kEndOfLineCharacter)))
                 {
@@ -129,7 +146,6 @@ static bool const ProcessVertexAttribute(std::string const & ExpectedAttributeTo
             }
             else
             {
-                // Expected a number return false
                 bResult = false;
                 break;
             }
