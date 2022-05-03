@@ -65,6 +65,22 @@ static VkDeviceMemory FrameAllocationMemory = {};
 static VkBuffer FrameAllocationBuffer = {};
 static void * FrameAllocationBufferMappedAddress = {};
 
+/*    
+    For reference.
+    World Space is:
+
+  z |  / y
+    | /
+    .____ x
+
+    View Space is:
+      / z
+     /
+    ._____ x
+    |
+    | y
+*/
+
 static void CreateFrameState()
 {
     FrameState.CurrentFrameStateIndex = 0u;
@@ -128,11 +144,7 @@ static void DestroyFrameState()
 {
     for (VkFence & Fence : FrameState.Fences)
     {
-        if (Fence)
-        {
-            vkDestroyFence(DeviceState.Device, Fence, nullptr);
-            Fence = VK_NULL_HANDLE;
-        }
+        Vulkan::Device::DestroyFence(DeviceState, Fence);
     }
 
     for (VkSemaphore & Semaphore : FrameState.Semaphores)
