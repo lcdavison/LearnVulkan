@@ -21,6 +21,7 @@ list(
     "Include/Logging.hpp"
     "Include/ForwardRenderer.hpp"
     "Include/AssetManager.hpp"
+    "Include/Memory.hpp"
 )
 
 list(
@@ -36,6 +37,7 @@ list(
     "Source/Logging.cpp"
     "Source/ForwardRenderer.cpp"
     "Source/AssetManager.cpp"
+    "Source/Memory.cpp"
 )
 
 add_executable(VulkanPBR WIN32)
