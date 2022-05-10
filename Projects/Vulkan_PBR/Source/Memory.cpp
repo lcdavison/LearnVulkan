@@ -77,11 +77,7 @@ static bool const GetDeviceMemoryBlockIndex(MemoryPool const & SelectedMemoryPoo
 
 bool const DeviceMemoryAllocator::AllocateMemory(Vulkan::Device::DeviceState const & DeviceState, VkMemoryRequirements const & MemoryRequirements, VkMemoryPropertyFlags const MemoryFlags, Allocation & OutputAllocation)
 {
-    /* TODO: Take into account memory alignment */
-
-    /* Return aligned offset, but need to reclaim the small chunk of memory before the allocation on free */
-
-    bool bResult = false;
+    bool bResult = true;
 
     uint32 MemoryTypeIndex = {};
     ::GetDeviceMemoryTypeIndex(DeviceState, MemoryRequirements.memoryTypeBits, MemoryFlags, MemoryTypeIndex);
@@ -110,18 +106,20 @@ bool const DeviceMemoryAllocator::AllocateMemory(Vulkan::Device::DeviceState con
 
     /* Offsets should be aligned in the memory block */
     /* We will cause fragmentation due to the alignment, so when freeing it would be worth */
-    uint64 MemoryBlockBaseOffset = SelectedMemoryPool.BlockFreeListOffsetsInBytes [MemoryBlockIndex][FreeListIndex];
-    uint64 MemoryBlockAlignedOffset = (MemoryBlockBaseOffset + MemoryRequirements.alignment - 1u) & ~(MemoryRequirements.alignment - 1u);
+    uint64 const MemoryBlockBaseOffset = SelectedMemoryPool.BlockFreeListOffsetsInBytes [MemoryBlockIndex][FreeListIndex];
+    uint64 const MemoryBlockAlignedOffset = (MemoryBlockBaseOffset + MemoryRequirements.alignment - 1u) & ~(MemoryRequirements.alignment - 1u);
+    uint16 const MemoryBlockAlignmentWasteInBytes = static_cast<uint16>(MemoryBlockAlignedOffset - MemoryBlockBaseOffset);
 
-    uint64 MemoryBlockSize = SelectedMemoryPool.BlockFreeListSizesInBytes [MemoryBlockIndex][FreeListIndex];
+    uint64 const MemoryBlockSize = SelectedMemoryPool.BlockFreeListSizesInBytes [MemoryBlockIndex][FreeListIndex];
+    uint64 const AllocationSizeInBytes = MemoryBlockAlignmentWasteInBytes + MemoryRequirements.size;
 
     SelectedMemoryPool.BlockFreeListOffsetsInBytes [MemoryBlockIndex].pop_back();
     SelectedMemoryPool.BlockFreeListSizesInBytes [MemoryBlockIndex].pop_back();
 
     if (MemoryBlockSize > MemoryRequirements.size)
     {
-        uint64 OffsetAfterSplit = MemoryBlockOffset + MemoryRequirements.size;
-        uint64 SizeAfterSplit = MemoryBlockSize - MemoryRequirements.size;
+        uint64 const OffsetAfterSplit = MemoryBlockBaseOffset + AllocationSizeInBytes;
+        uint64 const SizeAfterSplit = MemoryBlockSize - AllocationSizeInBytes;
 
         SelectedMemoryPool.BlockFreeListOffsetsInBytes [MemoryBlockIndex].push_back(OffsetAfterSplit);
         SelectedMemoryPool.BlockFreeListSizesInBytes [MemoryBlockIndex].push_back(SizeAfterSplit);
@@ -136,18 +134,19 @@ bool const DeviceMemoryAllocator::AllocateMemory(Vulkan::Device::DeviceState con
         }
     }
 
+    /* OffsetInBytes - AlignmentWaste == BaseAllocationOffset */
+
     OutputAllocation.AllocationID = (static_cast<uint64>(MemoryTypeIndex) << 32u) | static_cast<uint64>(MemoryBlockIndex);
-    OutputAllocation.OffsetInBytes = MemoryBlockOffset;
-    OutputAllocation.SizeInBytes = MemoryRequirements.size;
+    OutputAllocation.OffsetInBytes = MemoryBlockAlignedOffset;
+    OutputAllocation.SizeInBytes = AllocationSizeInBytes;
+    OutputAllocation.AlignmentWasteInBytes = MemoryBlockAlignmentWasteInBytes;
 
     return bResult;
 }
 
-bool const DeviceMemoryAllocator::FreeMemory(DeviceMemoryAllocator::Allocation & Allocation, Vulkan::Device::DeviceState const & DeviceState)
+bool const DeviceMemoryAllocator::FreeMemory(DeviceMemoryAllocator::Allocation & /*Allocation*/, Vulkan::Device::DeviceState const & /*DeviceState*/)
 {
     bool bResult = false;
-
-
 
     return bResult;
 }
@@ -182,17 +181,14 @@ bool const LinearBufferAllocator::CreateAllocator(Vulkan::Device::DeviceState co
     return bResult;
 }
 
-bool const LinearBufferAllocator::DestroyAllocator(LinearBufferAllocator::AllocatorState & State, Vulkan::Device::DeviceState & DeviceState)
+bool const LinearBufferAllocator::DestroyAllocator(LinearBufferAllocator::AllocatorState & /*State*/, Vulkan::Device::DeviceState & /*DeviceState*/)
 {
     bool bResult = false;
-
-
-
 
     return bResult;
 }
 
-bool const LinearBufferAllocator::Allocate(LinearBufferAllocator::AllocatorState & /*State*/, Vulkan::Device::DeviceState const & /*DeviceState*/, uint64 const /*BufferSizeInBytes*/, VkBufferUsageFlags const /*UsageFlags*/, Allocation & /*OutputAllocation*/)
+bool const LinearBufferAllocator::Allocate(LinearBufferAllocator::AllocatorState & /*State*/, Vulkan::Device::DeviceState const & /*DeviceState*/, uint64 const /*BufferSizeInBytes*/, Allocation & /*OutputAllocation*/)
 {
     bool bResult = true;
 

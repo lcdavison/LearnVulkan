@@ -13,12 +13,10 @@ namespace DeviceMemoryAllocator
     struct Allocation
     {
         uint64 AllocationID; /* Pool / Block */
-        uint64 AlignedSizeInBytes;
-        uint64 AlignedOffsetInBytes;
-
-        /* These are here just to reclaim alignment waste */
-        uint64 BaseOffsetInBytes;
-        uint64 BaseSizeInBytes;
+        uint64 SizeInBytes;
+        uint64 OffsetInBytes;
+        
+        uint64 AlignmentWasteInBytes;
     };
 
     extern bool const AllocateMemory(Vulkan::Device::DeviceState const & Device, VkMemoryRequirements const & MemoryRequirements, VkMemoryPropertyFlags const MemoryFlags, Allocation & OutputAllocation);
@@ -32,7 +30,6 @@ namespace LinearBufferAllocator
     struct Allocation
     {
         VkBuffer Buffer;
-        uint64 AllocationID; // Use this to identify which block of memory this belongs to
         uint64 OffsetInBytes;
         uint64 SizeInBytes;
     };
@@ -50,5 +47,7 @@ namespace LinearBufferAllocator
 
     extern bool const DestroyAllocator(AllocatorState & State, Vulkan::Device::DeviceState & DeviceState);
 
-    extern bool const Allocate(AllocatorState & State, Vulkan::Device::DeviceState const & DeviceState, uint64 const BufferSizeInBytes, VkBufferUsageFlags const UsageFlags, Allocation & OutputAllocation);
+    extern bool const Allocate(AllocatorState & State, Vulkan::Device::DeviceState const & DeviceState, uint64 const BufferSizeInBytes, Allocation & OutputAllocation);
+
+    extern bool const Reset(AllocatorState & State);
 }
