@@ -12,6 +12,7 @@ namespace AssetManager
     struct MeshAsset
     {
         std::vector<Math::Vector3> Vertices;
+        std::vector<Math::Vector3> Normals;
         std::vector<uint32> Indices;
     };
 

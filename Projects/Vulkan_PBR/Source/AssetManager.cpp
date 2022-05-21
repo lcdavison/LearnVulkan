@@ -88,6 +88,9 @@ static void ProcessOBJMeshData(OBJLoader::OBJMeshData const & OBJMeshData, Asset
                 OBJLoader::OBJVertex const & VertexData = OBJMeshData.Positions [VertexIndex - 1u];
                 IntermediateAsset.Vertices.emplace_back(Math::Vector3 { VertexData.X, VertexData.Y, VertexData.Z });
 
+                OBJLoader::OBJNormal const & NormalData = OBJMeshData.Normals [NormalIndex - 1u];
+                IntermediateAsset.Normals.emplace_back(Math::Vector3 { NormalData.X, NormalData.Y, NormalData.Z });
+
                 Index = static_cast<uint32>(IntermediateAsset.Vertices.size()) - 1u;
                 VertexLookUpTable [VertexHash] = Index;
             }
