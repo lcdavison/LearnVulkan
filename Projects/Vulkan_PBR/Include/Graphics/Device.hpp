@@ -2,6 +2,12 @@
 
 #include <vector>
 
+/* TODO: Separate resource management, still use this for Create\Destroy Buffer */
+namespace DeviceMemoryAllocator
+{
+    struct Allocation;
+}
+
 namespace Vulkan::Instance
 {
     struct InstanceState;
@@ -11,12 +17,6 @@ namespace Vulkan::Device
 {
     struct DeviceState
     {
-        std::vector<VkDeviceMemory> MemoryAllocations;
-        std::vector<uint64> MemoryAllocationOffsetsInBytes;
-
-        /* Bit == 1 -> Allocated | Bit == 0 -> Free */
-        std::vector<uint8> MemoryAllocationStatusMasks;
-
         VkPhysicalDeviceMemoryProperties MemoryProperties;
 
         VkPhysicalDevice PhysicalDevice;
@@ -50,7 +50,7 @@ namespace Vulkan::Device
 
     extern void DestroyFrameBuffer(DeviceState const & State, VkFramebuffer & FrameBuffer);
 
-    extern void CreateBuffer(DeviceState & State, uint64 SizeInBytes, VkBufferUsageFlags UsageFlags, VkMemoryPropertyFlags MemoryFlags, VkBuffer & OutputBuffer, VkDeviceMemory & OutputDeviceMemory);
+    extern void CreateBuffer(DeviceState const & State, uint64 SizeInBytes, VkBufferUsageFlags UsageFlags, VkMemoryPropertyFlags MemoryFlags, VkBuffer & OutputBuffer, DeviceMemoryAllocator::Allocation & OutputDeviceMemory);
 
     extern void DestroyBuffer(DeviceState const & State, VkBuffer & Buffer);
 }

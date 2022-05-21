@@ -2,25 +2,11 @@
 
 #include "Graphics/Instance.hpp"
 
+#include "Memory.hpp"
+
 #include <vector>
 #include <string>
 #include <functional>
-
-struct ResourceCollection
-{
-    std::vector<VkBuffer> Buffers;
-};
-
-struct AllocationInfo
-{
-    VkDeviceMemory DeviceMemory;
-    VkDeviceSize DeviceMemoryOffset;
-    uint32 MemoryTypeIndex;
-    uint32 AllocationIndex;
-};
-
-static uint32 const kMaximumDeviceMemoryAllocationCount = { 4u };
-static uint64 const kDefaultMemoryAllocationSizeInBytes = { 4096u };
 
 static std::vector<char const *> const kRequiredExtensionNames =
 {
@@ -187,66 +173,6 @@ static bool const GetQueueFamilyIndex(VkPhysicalDevice Device, VkQueueFlags Requ
     return bResult;
 }
 
-static void GetMemoryTypeIndex(VkPhysicalDevice PhysicalDevice, uint32 MemoryTypeMask, VkMemoryPropertyFlags RequiredMemoryTypeFlags, uint32 & OutputMemoryTypeIndex)
-{
-    VkPhysicalDeviceMemoryProperties MemoryProperties = {};
-    vkGetPhysicalDeviceMemoryProperties(PhysicalDevice, &MemoryProperties);
-
-    uint32 SelectedMemoryTypeIndex = { 0u };
-
-    uint32 CurrentMemoryTypeIndex = {};
-    while (_BitScanForward(reinterpret_cast<unsigned long *>(&CurrentMemoryTypeIndex), MemoryTypeMask))
-    {
-        /* Clear the bit from the mask */
-        MemoryTypeMask ^= (1u << CurrentMemoryTypeIndex);
-
-        VkMemoryType const & CurrentMemoryType = MemoryProperties.memoryTypes [CurrentMemoryTypeIndex];
-
-        if ((CurrentMemoryType.propertyFlags & RequiredMemoryTypeFlags) == RequiredMemoryTypeFlags)
-        {
-            SelectedMemoryTypeIndex = CurrentMemoryTypeIndex;
-            break;
-        }
-    }
-
-    OutputMemoryTypeIndex = SelectedMemoryTypeIndex;
-}
-
-static void GetDeviceMemory(Vulkan::Device::DeviceState & State, uint32 const MemoryTypeIndex, uint64 const RequiredSizeInBytes, VkDeviceMemory & OutputDeviceMemory, VkDeviceSize & OutputMemoryOffsetInBytes)
-{
-    uint32 const MemoryTypeBeginIndex = MemoryTypeIndex * kMaximumDeviceMemoryAllocationCount;
-
-    uint8 const MemoryAllocationMask = State.MemoryAllocationStatusMasks [MemoryTypeIndex];
-
-    for (uint32 CurrentMemoryAllocationIndex = MemoryTypeBeginIndex;
-         CurrentMemoryAllocationIndex < MemoryTypeBeginIndex + kMaximumDeviceMemoryAllocationCount;
-         CurrentMemoryAllocationIndex++)
-    {
-        /* If we have reached an empty block then previous blocks were not big enough, so allocate */
-        if ((MemoryAllocationMask & (1u << CurrentMemoryAllocationIndex)) == 0u)
-        {
-            VkMemoryAllocateInfo AllocationInfo = {};
-            AllocationInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-            AllocationInfo.allocationSize = kDefaultMemoryAllocationSizeInBytes;
-            AllocationInfo.memoryTypeIndex = MemoryTypeIndex;
-
-            VERIFY_VKRESULT(vkAllocateMemory(State.Device, &AllocationInfo, nullptr, &State.MemoryAllocations [CurrentMemoryAllocationIndex]));
-            State.MemoryAllocationOffsetsInBytes [CurrentMemoryAllocationIndex] = 0u;
-            State.MemoryAllocationStatusMasks [MemoryTypeIndex] |= (1u << (CurrentMemoryAllocationIndex & kMaximumDeviceMemoryAllocationCount - 1u));
-        }
-
-        if (State.MemoryAllocationOffsetsInBytes [CurrentMemoryAllocationIndex] + RequiredSizeInBytes < kDefaultMemoryAllocationSizeInBytes)
-        {
-            OutputDeviceMemory = State.MemoryAllocations [CurrentMemoryAllocationIndex];
-
-            OutputMemoryOffsetInBytes = State.MemoryAllocationOffsetsInBytes [CurrentMemoryAllocationIndex];
-            State.MemoryAllocationOffsetsInBytes [CurrentMemoryAllocationIndex] += RequiredSizeInBytes;
-
-            break;
-        }
-    }
-}
-
 static void CreateDescriptorPool(Vulkan::Device::DeviceState & State)
 {
     std::vector PoolSizes = std::vector<VkDescriptorPoolSize>
@@ -319,11 +245,6 @@ bool const Vulkan::Device::CreateDevice(Vulkan::Instance::InstanceState const & 
 
                 vkGetPhysicalDeviceMemoryProperties(IntermediateState.PhysicalDevice, &IntermediateState.MemoryProperties);
 
-                /* Matrix of memory allocations */
-                IntermediateState.MemoryAllocations.resize(IntermediateState.MemoryProperties.memoryTypeCount * kMaximumDeviceMemoryAllocationCount);
-                IntermediateState.MemoryAllocationOffsetsInBytes.resize(IntermediateState.MemoryProperties.memoryTypeCount * kMaximumDeviceMemoryAllocationCount);
-                IntermediateState.MemoryAllocationStatusMasks.resize(IntermediateState.MemoryProperties.memoryTypeCount);
-
                 OutputState = IntermediateState;
                 bResult = true;
             }
@@ -336,15 +257,6 @@ bool const Vulkan::Device::CreateDevice(Vulkan::Instance::InstanceState const & 
 void Vulkan::Device::DestroyDevice(Vulkan::Device::DeviceState & State)
 {
     VERIFY_VKRESULT(vkDeviceWaitIdle(State.Device));
-
-    for (VkDeviceMemory & MemoryAllocation : State.MemoryAllocations)
-    {
-        if (MemoryAllocation)
-        {
-            vkFreeMemory(State.Device, MemoryAllocation, nullptr);
-            MemoryAllocation = VK_NULL_HANDLE;
-        }
-    }
 
     if (State.DescriptorPool)
     {
@@ -444,7 +356,7 @@ void Vulkan::Device::DestroyFrameBuffer(Vulkan::Device::DeviceState const & Stat
     }
 }
 
-void Vulkan::Device::CreateBuffer(Vulkan::Device::DeviceState & State, uint64 SizeInBytes, VkBufferUsageFlags UsageFlags, VkMemoryPropertyFlags MemoryFlags, VkBuffer & OutputBuffer, VkDeviceMemory & OutputDeviceMemory)
+void Vulkan::Device::CreateBuffer(Vulkan::Device::DeviceState const & State, uint64 SizeInBytes, VkBufferUsageFlags UsageFlags, VkMemoryPropertyFlags MemoryFlags, VkBuffer & OutputBuffer, DeviceMemoryAllocator::Allocation & OutputDeviceMemory)
 {
     VkBufferCreateInfo CreateInfo = {};
     CreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -458,19 +370,13 @@ void Vulkan::Device::CreateBuffer(Vulkan::Device::DeviceState & State, uint64 Si
     VkMemoryRequirements MemoryRequirements = {};
     vkGetBufferMemoryRequirements(State.Device, NewBuffer, &MemoryRequirements);
 
-    uint32 MemoryTypeIndex = {};
-    ::GetMemoryTypeIndex(State.PhysicalDevice, MemoryRequirements.memoryTypeBits, MemoryFlags, MemoryTypeIndex);
+    DeviceMemoryAllocator::Allocation MemoryAllocation = {};
+    DeviceMemoryAllocator::AllocateMemory(State, MemoryRequirements, MemoryFlags, MemoryAllocation);
 
-    AllocationInfo BufferAllocationInfo = {};
-
-    VkDeviceMemory DeviceMemory = {};
-    VkDeviceSize DeviceMemoryOffset = {};
-    ::GetDeviceMemory(State, MemoryTypeIndex, MemoryRequirements.size, DeviceMemory, DeviceMemoryOffset);
-
-    VERIFY_VKRESULT(vkBindBufferMemory(State.Device, NewBuffer, DeviceMemory, DeviceMemoryOffset));
+    VERIFY_VKRESULT(vkBindBufferMemory(State.Device, NewBuffer, MemoryAllocation.Memory, MemoryAllocation.OffsetInBytes));
 
     OutputBuffer = NewBuffer;
-    OutputDeviceMemory = DeviceMemory;
+    OutputDeviceMemory = MemoryAllocation;
 }
 
 void Vulkan::Device::DestroyBuffer(Vulkan::Device::DeviceState const & State, VkBuffer & Buffer)
