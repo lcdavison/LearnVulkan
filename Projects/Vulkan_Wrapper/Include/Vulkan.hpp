@@ -123,8 +123,13 @@ VULKAN_WRAPPER_API void vkCmdBindDescriptorSets(VkCommandBuffer commandBuffer,
                                                 std::uint32_t firstSet, 
                                                 std::uint32_t descriptorSetCount, VkDescriptorSet const * pDescriptorSets, 
                                                 std::uint32_t dynamicOffsetCount, std::uint32_t const * pDynamicOffsets);
+VULKAN_WRAPPER_API void vkCmdBindVertexBuffers(VkCommandBuffer commandBuffer, std::uint32_t firstBinding, std::uint32_t bindingCount, VkBuffer const * pBuffers, VkDeviceSize const * pOffsets);
+VULKAN_WRAPPER_API void vkCmdBindIndexBuffer(VkCommandBuffer commandBuffer, VkBuffer buffer, VkDeviceSize offset, VkIndexType indexType);
 
 VULKAN_WRAPPER_API void vkCmdDraw(VkCommandBuffer commandBuffer, std::uint32_t vertexCount, std::uint32_t instanceCount, std::uint32_t firstVertex, std::uint32_t firstInstance);
+VULKAN_WRAPPER_API void vkCmdDrawIndexed(VkCommandBuffer commandBuffer, std::uint32_t indexCount, std::uint32_t instanceCount, std::uint32_t firstIndex, std::int32_t vertexOffset, std::uint32_t firstInstance);
 
 VULKAN_WRAPPER_API void vkCmdSetViewport(VkCommandBuffer commandBuffer, std::uint32_t firstViewport, std::uint32_t viewportCount, VkViewport * pViewports);
 VULKAN_WRAPPER_API void vkCmdSetScissor(VkCommandBuffer commandBuffer, std::uint32_t firstScissor, std::uint32_t scissorCount, VkRect2D * pScissors);
+
+VULKAN_WRAPPER_API void vkCmdCopyBuffer(VkCommandBuffer commandBuffer, VkBuffer srcBuffer, VkBuffer dstBuffer, std::uint32_t regionCount, VkBufferCopy const * pRegions);

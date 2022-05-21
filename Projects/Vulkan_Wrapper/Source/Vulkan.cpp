@@ -544,9 +544,24 @@ void vkCmdBindDescriptorSets(VkCommandBuffer commandBuffer,
     Functions::vkCmdBindDescriptorSets(commandBuffer, pipelineBindPoint, layout, firstSet, descriptorSetCount, pDescriptorSets, dynamicOffsetCount, pDynamicOffsets);
 }
 
+void vkCmdBindVertexBuffers(VkCommandBuffer commandBuffer, std::uint32_t firstBinding, std::uint32_t bindingCount, VkBuffer const * pBuffers, VkDeviceSize const * pOffsets)
+{
+    Functions::vkCmdBindVertexBuffers(commandBuffer, firstBinding, bindingCount, pBuffers, pOffsets);
+}
+
+void vkCmdBindIndexBuffer(VkCommandBuffer commandBuffer, VkBuffer buffer, VkDeviceSize offset, VkIndexType indexType)
+{
+    Functions::vkCmdBindIndexBuffer(commandBuffer, buffer, offset, indexType);
+}
+
 void vkCmdDraw(VkCommandBuffer commandBuffer, std::uint32_t vertexCount, std::uint32_t instanceCount, std::uint32_t firstVertex, std::uint32_t firstInstance)
 {
     Functions::vkCmdDraw(commandBuffer, vertexCount, instanceCount, firstVertex, firstInstance);
+}
+
+void vkCmdDrawIndexed(VkCommandBuffer commandBuffer, std::uint32_t indexCount, std::uint32_t instanceCount, std::uint32_t firstIndex, std::int32_t vertexOffset, std::uint32_t firstInstance)
+{
+    Functions::vkCmdDrawIndexed(commandBuffer, indexCount, instanceCount, firstIndex, vertexOffset, firstInstance);
 }
 
 void vkCmdSetViewport(VkCommandBuffer commandBuffer, std::uint32_t firstViewport, std::uint32_t viewportCount, VkViewport * pViewports)
@@ -557,4 +572,9 @@ void vkCmdSetViewport(VkCommandBuffer commandBuffer, std::uint32_t firstViewport
 void vkCmdSetScissor(VkCommandBuffer commandBuffer, std::uint32_t firstScissor, std::uint32_t scissorCount, VkRect2D * pScissors)
 {
     Functions::vkCmdSetScissor(commandBuffer, firstScissor, scissorCount, pScissors);
+}
+
+void vkCmdCopyBuffer(VkCommandBuffer commandBuffer, VkBuffer srcBuffer, VkBuffer dstBuffer, std::uint32_t regionCount, VkBufferCopy const * pRegions)
+{
+    Functions::vkCmdCopyBuffer(commandBuffer, srcBuffer, dstBuffer, regionCount, pRegions);
 }
