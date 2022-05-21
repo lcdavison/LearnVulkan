@@ -17,7 +17,7 @@
     #define VERIFY_VKRESULT(Function)\
         {\
             VkResult Result = Function;\
-            if (Result != VK_SUCCESS)\
+            if (Result < VK_SUCCESS)\
             {\
                 std::basic_string<Platform::Windows::TCHAR> ErrorMessage = PBR_TEXT(""); \
                 ErrorMessage += PBR_TEXT("Function ["); \
