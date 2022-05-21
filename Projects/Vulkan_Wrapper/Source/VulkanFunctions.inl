@@ -125,14 +125,19 @@ VK_DEVICE_FUNCTION(vkCmdPipelineBarrier);
 
 VK_DEVICE_FUNCTION(vkCmdBindPipeline);
 VK_DEVICE_FUNCTION(vkCmdBindDescriptorSets);
+VK_DEVICE_FUNCTION(vkCmdBindVertexBuffers);
+VK_DEVICE_FUNCTION(vkCmdBindIndexBuffer);
 
 VK_DEVICE_FUNCTION(vkCmdDraw);
+VK_DEVICE_FUNCTION(vkCmdDrawIndexed);
 
 VK_DEVICE_FUNCTION(vkCmdBeginRenderPass);
 VK_DEVICE_FUNCTION(vkCmdEndRenderPass);
 
 VK_DEVICE_FUNCTION(vkCmdSetViewport);
 VK_DEVICE_FUNCTION(vkCmdSetScissor);
+
+VK_DEVICE_FUNCTION(vkCmdCopyBuffer);
 
 #undef VK_DEVICE_FUNCTION
 
