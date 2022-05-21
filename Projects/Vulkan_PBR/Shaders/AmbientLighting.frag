@@ -65,7 +65,6 @@ void main()
     + GetDiffuseReflection(FragmentColour, FragmentNormal);
 
     vec3 OutputColour = LinearRGBToSRGB(LinearRGB);
-    //vec3 OutputColour = LinearRGBToRec709(LinearRGB);
 
     //OutputColour += FragmentBrightness;
 
