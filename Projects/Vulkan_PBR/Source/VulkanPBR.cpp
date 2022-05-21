@@ -118,6 +118,8 @@ static bool const Run()
     {
         if (::ProcessWindowMessages())
         {
+            ForwardRenderer::PreRender();
+
             ForwardRenderer::Render();
         }
         else

@@ -6,12 +6,15 @@
 #include "Graphics/Device.hpp"
 #include "Graphics/Viewport.hpp"
 #include "Graphics/ShaderLibrary.hpp"
+#include "Memory.hpp"
 
 #include <Math/Matrix.hpp>
 #include <Math/Transform.hpp>
 #include <Math/Utilities.hpp>
 
 #include "VulkanPBR.hpp"
+
+#include "AssetManager.hpp"
 
 #include <array>
 
@@ -30,8 +33,9 @@ struct FrameStateCollection
 
     std::vector<VkDescriptorSet> DescriptorSets;
 
-    std::vector<uint32> CurrentFrameAllocationBlockOffsetsInBytes;
-    std::vector<uint32> PerFrameUniformBufferOffsetsInBytes;
+    std::vector<LinearBufferAllocator::AllocatorState> LinearAllocators;
+
+    uint32 CurrentImageIndex;
 
     uint8 CurrentFrameStateIndex;
 };
@@ -61,11 +65,27 @@ static VkShaderModule FragmentShaderModule = {};
 static VkDescriptorSetLayout DescriptorSetLayout = {};
 static VkDescriptorSet ShaderDescriptorSet = {};
 
-static VkDeviceMemory FrameAllocationMemory = {};
-static VkBuffer FrameAllocationBuffer = {};
-static void * FrameAllocationBufferMappedAddress = {};
+static AssetManager::MeshAsset const * CubeMesh = {};
 
-/*    
+static DeviceMemoryAllocator::Allocation CubeStagingVertexBufferMemory = {};
+static VkBuffer CubeStagingVertexBuffer = {};
+
+static DeviceMemoryAllocator::Allocation CubeStagingNormalBufferMemory = {};
+static VkBuffer CubeStagingNormalBuffer = {};
+
+static DeviceMemoryAllocator::Allocation CubeStagingIndexBufferMemory = {};
+static VkBuffer CubeStagingIndexBuffer = {};
+
+static DeviceMemoryAllocator::Allocation CubeVertexBufferMemory = {};
+static VkBuffer CubeVertexBuffer = {};
+
+static DeviceMemoryAllocator::Allocation CubeNormalBufferMemory = {};
+static VkBuffer CubeNormalBuffer = {};
+
+static DeviceMemoryAllocator::Allocation CubeIndexBufferMemory = {};
+static VkBuffer CubeIndexBuffer = {};
+
+/*
     For reference.
     World Space is:
 
@@ -85,15 +105,16 @@ static void CreateFrameState()
 {
     FrameState.CurrentFrameStateIndex = 0u;
 
-    FrameState.CommandBuffers.resize(kFrameStateCount);
+    uint8 constexpr kCommandBufferCount = { kFrameStateCount * 2u };
+
+    FrameState.CommandBuffers.resize(kCommandBufferCount); // Pre-Render Command Buffer and Render Command Buffer
     FrameState.FrameBuffers.resize(kFrameStateCount);
     FrameState.Semaphores.resize(kFrameStateCount * 2u);    // Each frame uses 2 semaphores
     FrameState.Fences.resize(kFrameStateCount);
     FrameState.DescriptorSets.resize(kFrameStateCount);
-    FrameState.CurrentFrameAllocationBlockOffsetsInBytes.resize(kFrameStateCount);
-    FrameState.PerFrameUniformBufferOffsetsInBytes.resize(kFrameStateCount);
+    FrameState.LinearAllocators.resize(kFrameStateCount);
 
-    Vulkan::Device::CreateCommandBuffers(DeviceState, VK_COMMAND_BUFFER_LEVEL_PRIMARY, kFrameStateCount, FrameState.CommandBuffers);
+    Vulkan::Device::CreateCommandBuffers(DeviceState, VK_COMMAND_BUFFER_LEVEL_PRIMARY, kCommandBufferCount, FrameState.CommandBuffers);
 
     {
         uint8 CurrentImageViewIndex = { 0u };
@@ -114,7 +135,7 @@ static void CreateFrameState()
     {
         Vulkan::Device::CreateSemaphore(DeviceState, 0u, Semaphore);
     }
- 
+
     for (VkFence & Fence : FrameState.Fences)
     {
         Vulkan::Device::CreateFence(DeviceState, VK_FENCE_CREATE_SIGNALED_BIT, Fence);
@@ -132,16 +153,19 @@ static void CreateFrameState()
         vkAllocateDescriptorSets(DeviceState.Device, &AllocateInfo, FrameState.DescriptorSets.data());
     }
 
-    for (uint8 CurrentFrameIndex = { 0 };
-         CurrentFrameIndex < kFrameStateCount;
-         CurrentFrameIndex++)
+    for (LinearBufferAllocator::AllocatorState & AllocatorState : FrameState.LinearAllocators)
     {
-        FrameState.CurrentFrameAllocationBlockOffsetsInBytes [CurrentFrameIndex] = CurrentFrameIndex * kPerFrameAllocationBlockSizeInBytes;
+        LinearBufferAllocator::CreateAllocator(DeviceState, 1024u, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, AllocatorState);
     }
 }
 
 static void DestroyFrameState()
 {
+    for (LinearBufferAllocator::AllocatorState & AllocatorState : FrameState.LinearAllocators)
+    {
+        LinearBufferAllocator::DestroyAllocator(AllocatorState, DeviceState);
+    }
+
     for (VkFence & Fence : FrameState.Fences)
     {
         Vulkan::Device::DestroyFence(DeviceState, Fence);
@@ -251,8 +275,24 @@ static bool const CreateGraphicsPipeline()
     }
 
     {
+        std::array<VkVertexInputBindingDescription, 2u> VertexInputBindings =
+        {
+            VkVertexInputBindingDescription{ 0u, sizeof(Math::Vector3), VK_VERTEX_INPUT_RATE_VERTEX },
+            VkVertexInputBindingDescription{ 1u, sizeof(Math::Vector3), VK_VERTEX_INPUT_RATE_VERTEX },
+        };
+
+        std::array<VkVertexInputAttributeDescription, 2u> VertexAttributes =
+        {
+            VkVertexInputAttributeDescription{ 0u, 0u, VK_FORMAT_R32G32B32_SFLOAT, 0u },
+            VkVertexInputAttributeDescription{ 1u, 1u, VK_FORMAT_R32G32B32_SFLOAT, 0u },
+        };
+
         VkPipelineVertexInputStateCreateInfo VertexInputState = {};
         VertexInputState.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+        VertexInputState.vertexBindingDescriptionCount = static_cast<uint32>(VertexInputBindings.size());
+        VertexInputState.pVertexBindingDescriptions = VertexInputBindings.data();
+        VertexInputState.vertexAttributeDescriptionCount = static_cast<uint32>(VertexAttributes.size());
+        VertexInputState.pVertexAttributeDescriptions = VertexAttributes.data();
 
         VkPipelineInputAssemblyStateCreateInfo InputAssemblerState = {};
         InputAssemblerState.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
@@ -261,7 +301,7 @@ static bool const CreateGraphicsPipeline()
 
         VkPipelineRasterizationStateCreateInfo RasterizationState = {};
         RasterizationState.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
-        RasterizationState.cullMode = VK_CULL_MODE_NONE;
+        RasterizationState.cullMode = VK_CULL_MODE_BACK_BIT;
         RasterizationState.polygonMode = VK_POLYGON_MODE_FILL;
         RasterizationState.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
         RasterizationState.lineWidth = 1.0f;
@@ -323,50 +363,51 @@ static bool const CreateGraphicsPipeline()
     return true;
 }
 
-static bool const CreatePerFrameUniformBuffer()
+static bool const CreateFrameUniformBuffer(LinearBufferAllocator::Allocation & OutputAllocation)
 {
-    /* TODO: Check but I think the offset will need to be aligned */
+    LinearBufferAllocator::Allocation IntermediateAllocation = {};
+    bool bResult = LinearBufferAllocator::Allocate(FrameState.LinearAllocators [FrameState.CurrentFrameStateIndex], sizeof(PerFrameUniformBufferData), IntermediateAllocation);
 
-    PerFrameUniformBufferData PerFrameData = {};
-    float const AspectRatio = static_cast<float>(ViewportState.ImageExtents.width) / static_cast<float>(ViewportState.ImageExtents.height);
-    PerFrameData.PerspectiveMatrix = Math::PerspectiveMatrix(Math::ConvertDegreesToRadians(90.0f), AspectRatio, 0.0001f, 1000.0f);
+    if (bResult)
+    {
+        PerFrameUniformBufferData PerFrameData = {};
 
-    PerFrameData.Brightness = -0.25f;
+        float const AspectRatio = static_cast<float>(ViewportState.ImageExtents.width) / static_cast<float>(ViewportState.ImageExtents.height);
+        PerFrameData.PerspectiveMatrix = Math::PerspectiveMatrix(Math::ConvertDegreesToRadians(90.0f), AspectRatio, 0.0001f, 1000.0f);
 
-    uint32 CurrentAllocationOffset = FrameState.CurrentFrameAllocationBlockOffsetsInBytes [FrameState.CurrentFrameStateIndex];
+        PerFrameData.Brightness = -0.25f;
 
-    std::byte * DestinationAddress = reinterpret_cast<std::byte *>(FrameAllocationBufferMappedAddress) + CurrentAllocationOffset;
-    ::memcpy_s(DestinationAddress, kFrameAllocationMemorySizeInBytes - CurrentAllocationOffset, &PerFrameData, sizeof(PerFrameData));
+        ::memcpy_s(IntermediateAllocation.MappedAddress, IntermediateAllocation.SizeInBytes, &PerFrameData, sizeof(PerFrameData));
 
-    FrameState.PerFrameUniformBufferOffsetsInBytes [FrameState.CurrentFrameStateIndex] = CurrentAllocationOffset;
-    FrameState.CurrentFrameAllocationBlockOffsetsInBytes [FrameState.CurrentFrameStateIndex] += sizeof(PerFrameData);
+        OutputAllocation = IntermediateAllocation;
+    }
 
-    return true;
+    return bResult;
 }
 
-static bool const UpdateDescriptors()
+static void UpdateUniformBufferDescriptors(LinearBufferAllocator::Allocation const & UniformBufferAllocation)
 {
-    VkDescriptorBufferInfo PerFrameUniformBufferInfo = {};
-    PerFrameUniformBufferInfo.buffer = FrameAllocationBuffer;
-    PerFrameUniformBufferInfo.offset = FrameState.PerFrameUniformBufferOffsetsInBytes [FrameState.CurrentFrameStateIndex];
-    PerFrameUniformBufferInfo.range = sizeof(PerFrameUniformBufferData);
+    VkDescriptorBufferInfo UniformBufferInfo = {};
+    UniformBufferInfo.buffer = UniformBufferAllocation.Buffer;
+    UniformBufferInfo.offset = UniformBufferAllocation.OffsetInBytes;
+    UniformBufferInfo.range = UniformBufferAllocation.SizeInBytes;
 
-    VkWriteDescriptorSet DescriptorWrites = {};
-    DescriptorWrites.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    DescriptorWrites.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    DescriptorWrites.descriptorCount = 1u;
-    DescriptorWrites.dstSet = FrameState.DescriptorSets [FrameState.CurrentFrameStateIndex];
-    DescriptorWrites.dstBinding = 0u;
-    DescriptorWrites.pBufferInfo = &PerFrameUniformBufferInfo;
+    VkWriteDescriptorSet WriteDescriptors = {};
+    WriteDescriptors.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    WriteDescriptors.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    WriteDescriptors.descriptorCount = 1u;
+    WriteDescriptors.dstSet = FrameState.DescriptorSets [FrameState.CurrentFrameStateIndex];
+    WriteDescriptors.dstBinding = 0u;
+    WriteDescriptors.pBufferInfo = &UniformBufferInfo;
 
-    vkUpdateDescriptorSets(DeviceState.Device, 1u, &DescriptorWrites, 0u, nullptr);
-
-    return true;
+    vkUpdateDescriptorSets(DeviceState.Device, 1u, &WriteDescriptors, 0u, nullptr);
 }
 
-static void ResetFrameAllocationBlock()
+static void ResetCurrentFrameState()
 {
-    FrameState.CurrentFrameAllocationBlockOffsetsInBytes [FrameState.CurrentFrameStateIndex] = FrameState.CurrentFrameStateIndex * kPerFrameAllocationBlockSizeInBytes;
+    LinearBufferAllocator::Reset(FrameState.LinearAllocators [FrameState.CurrentFrameStateIndex]);
+
+    vkResetFences(DeviceState.Device, 1u, &FrameState.Fences [FrameState.CurrentFrameStateIndex]);
 }
 
 static void ResizeViewport()
@@ -398,8 +439,10 @@ static void ResizeViewport()
 bool const ForwardRenderer::Initialise(VkApplicationInfo const & ApplicationInfo)
 {
     /* These are loaded and compiled async, doing them here should mean they will be ready by the time we create the pipeline state */
-    ShaderLibrary::LoadShader("Triangle.vert", VertexShaderHandle);
-    ShaderLibrary::LoadShader("Triangle.frag", FragmentShaderHandle);
+    ShaderLibrary::LoadShader("AmbientLighting.vert", VertexShaderHandle);
+    ShaderLibrary::LoadShader("AmbientLighting.frag", FragmentShaderHandle);
+
+    AssetManager::GetMeshData("Cube", CubeMesh);
 
     bool bResult = false;
 
@@ -415,10 +458,9 @@ bool const ForwardRenderer::Initialise(VkApplicationInfo const & ApplicationInfo
 
         ::CreateFrameState();
 
-        /* Create Frame Allocation Block */
-        Vulkan::Device::CreateBuffer(DeviceState, kFrameAllocationMemorySizeInBytes, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, FrameAllocationBuffer, FrameAllocationMemory);
-
-        VERIFY_VKRESULT(vkMapMemory(DeviceState.Device, FrameAllocationMemory, 0u, kFrameAllocationMemorySizeInBytes, 0u, &FrameAllocationBufferMappedAddress));
+        Vulkan::Device::CreateBuffer(DeviceState, CubeMesh->Vertices.size() * sizeof(Math::Vector3), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, CubeVertexBuffer, CubeVertexBufferMemory);
+        Vulkan::Device::CreateBuffer(DeviceState, CubeMesh->Normals.size() * sizeof(Math::Vector3), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, CubeNormalBuffer, CubeNormalBufferMemory);
+        Vulkan::Device::CreateBuffer(DeviceState, CubeMesh->Indices.size() * sizeof(uint32), VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, CubeIndexBuffer, CubeIndexBufferMemory);
     }
 
     return bResult;
@@ -428,11 +470,18 @@ bool const ForwardRenderer::Shutdown()
 {
     vkDeviceWaitIdle(DeviceState.Device);
 
-    vkUnmapMemory(DeviceState.Device, FrameAllocationMemory);
-
-    Vulkan::Device::DestroyBuffer(DeviceState, FrameAllocationBuffer);
-
     ::DestroyFrameState();
+
+    /* Destroy these here at the moment */
+    Vulkan::Device::DestroyBuffer(DeviceState, CubeStagingVertexBuffer);
+    Vulkan::Device::DestroyBuffer(DeviceState, CubeStagingNormalBuffer);
+    Vulkan::Device::DestroyBuffer(DeviceState, CubeStagingIndexBuffer);
+
+    Vulkan::Device::DestroyBuffer(DeviceState, CubeVertexBuffer);
+    Vulkan::Device::DestroyBuffer(DeviceState, CubeNormalBuffer);
+    Vulkan::Device::DestroyBuffer(DeviceState, CubeIndexBuffer);
+
+    DeviceMemoryAllocator::FreeAllDeviceMemory(DeviceState);
 
     if (TrianglePipelineState)
     {
@@ -469,27 +518,134 @@ bool const ForwardRenderer::Shutdown()
     return true;
 }
 
-void ForwardRenderer::Render()
+void ForwardRenderer::PreRender()
 {
     vkWaitForFences(DeviceState.Device, 1u, &FrameState.Fences [FrameState.CurrentFrameStateIndex], VK_TRUE, std::numeric_limits<uint64>::max());
 
-    uint32 CurrentImageIndex = {};
-    VkResult ImageAcquireResult = vkAcquireNextImageKHR(DeviceState.Device, ViewportState.SwapChain, 0ull, FrameState.Semaphores [FrameState.CurrentFrameStateIndex], VK_NULL_HANDLE, &CurrentImageIndex);
+    VkResult ImageAcquireResult = vkAcquireNextImageKHR(DeviceState.Device, ViewportState.SwapChain, 0ull, FrameState.Semaphores [FrameState.CurrentFrameStateIndex], VK_NULL_HANDLE, &FrameState.CurrentImageIndex);
 
     if (ImageAcquireResult == VK_SUBOPTIMAL_KHR ||
         ImageAcquireResult == VK_ERROR_OUT_OF_DATE_KHR)
     {
         ::ResizeViewport();
 
-        VERIFY_VKRESULT(vkAcquireNextImageKHR(DeviceState.Device, ViewportState.SwapChain, 0ull, FrameState.Semaphores [FrameState.CurrentFrameStateIndex], VK_NULL_HANDLE, &CurrentImageIndex));
+        VERIFY_VKRESULT(vkAcquireNextImageKHR(DeviceState.Device, ViewportState.SwapChain, 0ull, FrameState.Semaphores [FrameState.CurrentFrameStateIndex], VK_NULL_HANDLE, &FrameState.CurrentImageIndex));
     }
 
-    ::ResetFrameAllocationBlock();
+    ::ResetCurrentFrameState();
 
-    ::CreatePerFrameUniformBuffer();
-    ::UpdateDescriptors();
+    /* TODO: Run through the deferred deletion list for the current frame state and clean up old resources */
 
-    vkResetFences(DeviceState.Device, 1u, &FrameState.Fences [FrameState.CurrentFrameStateIndex]);
+    /* TODO: This will be used to initialise any uninitialised "render items" in the scene */
+
+    static bool bMeshDataUploaded = false;
+    if (!bMeshDataUploaded)
+    {
+        VkDeviceSize const VertexBufferSizeInBytes = CubeMesh->Vertices.size() * sizeof(decltype(CubeMesh->Vertices [0u]));
+        VkDeviceSize const NormalBufferSizeInBytes = CubeMesh->Normals.size() * sizeof(decltype(CubeMesh->Normals [0u]));
+        VkDeviceSize const IndexBufferSizeInBytes = CubeMesh->Indices.size() * sizeof(uint32);
+
+        Vulkan::Device::CreateBuffer(DeviceState, VertexBufferSizeInBytes, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, CubeStagingVertexBuffer, CubeStagingVertexBufferMemory);
+        Vulkan::Device::CreateBuffer(DeviceState, NormalBufferSizeInBytes, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, CubeStagingNormalBuffer, CubeStagingNormalBufferMemory);
+        Vulkan::Device::CreateBuffer(DeviceState, IndexBufferSizeInBytes, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, CubeStagingIndexBuffer, CubeStagingIndexBufferMemory);
+
+        ::memcpy_s(CubeStagingVertexBufferMemory.MappedAddress, CubeStagingVertexBufferMemory.SizeInBytes, CubeMesh->Vertices.data(), VertexBufferSizeInBytes);
+        ::memcpy_s(CubeStagingNormalBufferMemory.MappedAddress, CubeStagingNormalBufferMemory.SizeInBytes, CubeMesh->Normals.data(), NormalBufferSizeInBytes);
+        ::memcpy_s(CubeStagingIndexBufferMemory.MappedAddress, CubeStagingIndexBufferMemory.SizeInBytes, CubeMesh->Indices.data(), IndexBufferSizeInBytes);
+
+        VkCommandBufferBeginInfo BeginInfo = {};
+        BeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        BeginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+        VkCommandBuffer & CurrentCommandBuffer = FrameState.CommandBuffers [kFrameStateCount + FrameState.CurrentFrameStateIndex];
+        vkBeginCommandBuffer(CurrentCommandBuffer, &BeginInfo);
+
+        std::array<VkBufferMemoryBarrier, 6u> BufferBarriers = {};
+        BufferBarriers [0u].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+        BufferBarriers [0u].buffer = CubeStagingVertexBuffer;
+        BufferBarriers [0u].offset = 0u;
+        BufferBarriers [0u].size = VK_WHOLE_SIZE;
+        BufferBarriers [0u].srcAccessMask = VK_ACCESS_HOST_WRITE_BIT;
+        BufferBarriers [0u].dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+
+        BufferBarriers [1u].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+        BufferBarriers [1u].buffer = CubeStagingNormalBuffer;
+        BufferBarriers [1u].offset = 0u;
+        BufferBarriers [1u].size = VK_WHOLE_SIZE;
+        BufferBarriers [1u].srcAccessMask = VK_ACCESS_HOST_WRITE_BIT;
+        BufferBarriers [1u].dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+
+        BufferBarriers [2u].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+        BufferBarriers [2u].buffer = CubeStagingIndexBuffer;
+        BufferBarriers [2u].offset = 0u;
+        BufferBarriers [2u].size = VK_WHOLE_SIZE;
+        BufferBarriers [2u].srcAccessMask = VK_ACCESS_HOST_WRITE_BIT;
+        BufferBarriers [2u].dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+
+        BufferBarriers [3u].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+        BufferBarriers [3u].buffer = CubeVertexBuffer;
+        BufferBarriers [3u].offset = 0u;
+        BufferBarriers [3u].size = VK_WHOLE_SIZE;
+        BufferBarriers [3u].srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        BufferBarriers [3u].dstAccessMask = VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT;
+
+        BufferBarriers [4u].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+        BufferBarriers [4u].buffer = CubeNormalBuffer;
+        BufferBarriers [4u].offset = 0u;
+        BufferBarriers [4u].size = VK_WHOLE_SIZE;
+        BufferBarriers [4u].srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        BufferBarriers [4u].dstAccessMask = VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT;
+
+        BufferBarriers [5u].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+        BufferBarriers [5u].buffer = CubeIndexBuffer;
+        BufferBarriers [5u].offset = 0u;
+        BufferBarriers [5u].size = VK_WHOLE_SIZE;
+        BufferBarriers [5u].srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        BufferBarriers [5u].dstAccessMask = VK_ACCESS_INDEX_READ_BIT;
+
+        vkCmdPipelineBarrier(CurrentCommandBuffer,
+                             VK_PIPELINE_STAGE_HOST_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                             0u,
+                             0u, nullptr,
+                             3u, &BufferBarriers [0u],
+                             0u, nullptr);
+
+        std::array<VkBufferCopy, 3u> CopyRegions =
+        {
+            VkBufferCopy{ 0u, 0u, VertexBufferSizeInBytes },
+            VkBufferCopy{ 0u, 0u, NormalBufferSizeInBytes },
+            VkBufferCopy{ 0u, 0u, IndexBufferSizeInBytes },
+        };
+
+        vkCmdCopyBuffer(CurrentCommandBuffer, CubeStagingVertexBuffer, CubeVertexBuffer, 1u, &CopyRegions [0u]);
+        vkCmdCopyBuffer(CurrentCommandBuffer, CubeStagingNormalBuffer, CubeNormalBuffer, 1u, &CopyRegions [1u]);
+        vkCmdCopyBuffer(CurrentCommandBuffer, CubeStagingIndexBuffer, CubeIndexBuffer, 1u, &CopyRegions [2u]);
+
+        vkCmdPipelineBarrier(CurrentCommandBuffer,
+                             VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_VERTEX_INPUT_BIT,
+                             0u,
+                             0u, nullptr,
+                             3u, &BufferBarriers [3u],
+                             0u, nullptr);
+
+        vkEndCommandBuffer(CurrentCommandBuffer);
+
+        VkSubmitInfo SubmitInfo = {};
+        SubmitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        SubmitInfo.commandBufferCount = 1u;
+        SubmitInfo.pCommandBuffers = &CurrentCommandBuffer;
+
+        VERIFY_VKRESULT(vkQueueSubmit(DeviceState.GraphicsQueue, 1u, &SubmitInfo, VK_NULL_HANDLE));
+
+        bMeshDataUploaded = true;
+    }
+}
+
+void ForwardRenderer::Render()
+{
+    LinearBufferAllocator::Allocation UniformBufferAllocation = {};
+    ::CreateFrameUniformBuffer(UniformBufferAllocation);
+    ::UpdateUniformBufferDescriptors(UniformBufferAllocation);
 
     VkCommandBuffer & CurrentCommandBuffer = FrameState.CommandBuffers [FrameState.CurrentFrameStateIndex];
 
@@ -526,7 +682,21 @@ void ForwardRenderer::Render()
 
     vkCmdBindDescriptorSets(CurrentCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, TrianglePipelineLayout, 0u, 1u, &FrameState.DescriptorSets [FrameState.CurrentFrameStateIndex], 0u, nullptr);
 
-    vkCmdDraw(CurrentCommandBuffer, 3u, 1u, 0u, 0u);
+    vkCmdBindIndexBuffer(CurrentCommandBuffer, CubeIndexBuffer, 0u, VK_INDEX_TYPE_UINT32);
+
+    {
+        std::array<VkBuffer, 2u> VertexBuffers =
+        {
+            CubeVertexBuffer,
+            CubeNormalBuffer,
+        };
+
+        std::array BufferOffsets = std::array<VkDeviceSize, VertexBuffers.size()>();
+
+        vkCmdBindVertexBuffers(CurrentCommandBuffer, 0u, static_cast<uint32>(VertexBuffers.size()), VertexBuffers.data(), BufferOffsets.data());
+    }
+
+    vkCmdDrawIndexed(CurrentCommandBuffer, 36u, 1u, 0u, 0l, 0u);
 
     vkCmdEndRenderPass(CurrentCommandBuffer);
 
@@ -555,7 +725,7 @@ void ForwardRenderer::Render()
         PresentInfo.pSwapchains = &ViewportState.SwapChain;
         PresentInfo.waitSemaphoreCount = 1u;
         PresentInfo.pWaitSemaphores = &FrameState.Semaphores [kFrameStateCount + FrameState.CurrentFrameStateIndex];
-        PresentInfo.pImageIndices = &CurrentImageIndex;
+        PresentInfo.pImageIndices = &FrameState.CurrentImageIndex;
 
         vkQueuePresentKHR(DeviceState.GraphicsQueue, &PresentInfo);
     }

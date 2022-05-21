@@ -8,5 +8,7 @@ namespace ForwardRenderer
 
     extern bool const Shutdown();
 
+    extern void PreRender();
+
     extern void Render();
 }
