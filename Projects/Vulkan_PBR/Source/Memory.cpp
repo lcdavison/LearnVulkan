@@ -176,8 +176,6 @@ bool const DeviceMemoryAllocator::FreeMemory(DeviceMemoryAllocator::Allocation &
 
     DeviceMemoryPool & SelectedMemoryPool = MemoryPools [MemoryPoolIndex];
 
-    uint32 const CurrentFreeBlockCount = static_cast<uint32>(SelectedMemoryPool.BlockFreeListOffsetsInBytes [PoolBlockIndex].size());
-
     /* Get indices of lower and upper bound chunks */
     uint32 GreatestLowerOffsetIndex = {};
     uint32 SmallestHigherOffsetIndex = {};
@@ -189,8 +187,8 @@ bool const DeviceMemoryAllocator::FreeMemory(DeviceMemoryAllocator::Allocation &
     bool bFoundHigherOffset = false;
 
     for (uint32 CurrentOffsetIndex = { 0u };
-            CurrentOffsetIndex < SelectedMemoryPool.BlockFreeListOffsetsInBytes [PoolBlockIndex].size();
-            CurrentOffsetIndex++)
+         CurrentOffsetIndex < SelectedMemoryPool.BlockFreeListOffsetsInBytes [PoolBlockIndex].size();
+         CurrentOffsetIndex++)
     {
         uint64 CurrentOffsetInBytes = SelectedMemoryPool.BlockFreeListOffsetsInBytes [PoolBlockIndex][CurrentOffsetIndex];
 
@@ -216,11 +214,11 @@ bool const DeviceMemoryAllocator::FreeMemory(DeviceMemoryAllocator::Allocation &
     *  2 - 1 offset to right, merge right
     *  3 - Offsets left and right, merge from left to right
     */
-    bool const bCanMergeLeftBlock = 
+    bool const bCanMergeLeftBlock =
         bFoundLowerOffset &&
         GreatestLowerOffset + SelectedMemoryPool.BlockFreeListSizesInBytes [PoolBlockIndex][GreatestLowerOffsetIndex] == Allocation.OffsetInBytes;
 
-    bool const bCanMergeRightBlock = 
+    bool const bCanMergeRightBlock =
         bFoundHigherOffset &&
         Allocation.OffsetInBytes + Allocation.SizeInBytes == SelectedMemoryPool.BlockFreeListOffsetsInBytes [PoolBlockIndex][SmallestHigherOffsetIndex];
 
