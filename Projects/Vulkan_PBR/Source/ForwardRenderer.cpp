@@ -41,10 +41,7 @@ struct FrameStateCollection
 };
 
 static std::string const kDefaultShaderEntryPointName = "main";
-static uint32 const kFrameAllocationMemorySizeInBytes = { 1024u };
 static uint8 const kFrameStateCount = { 2u };
-
-static uint32 constexpr kPerFrameAllocationBlockSizeInBytes = { (kFrameAllocationMemorySizeInBytes + kFrameStateCount - 1u) / kFrameStateCount };
 
 static Vulkan::Instance::InstanceState InstanceState = {};
 static Vulkan::Device::DeviceState DeviceState = {};
