@@ -227,7 +227,7 @@ bool const DeviceMemoryAllocator::FreeMemory(DeviceMemoryAllocator::Allocation &
         SelectedMemoryPool.BlockFreeListSizesInBytes [PoolBlockIndex][GreatestLowerOffsetIndex] += Allocation.SizeInBytes + SelectedMemoryPool.BlockFreeListSizesInBytes [PoolBlockIndex][SmallestHigherOffsetIndex];
 
         SelectedMemoryPool.BlockFreeListSizesInBytes [PoolBlockIndex].erase(SelectedMemoryPool.BlockFreeListSizesInBytes [PoolBlockIndex].cbegin() + SmallestHigherOffsetIndex);
-        SelectedMemoryPool.BlockFreeListOffsetsInBytes [PoolBlockIndex].erase(SelectedMemoryPool.BlockFreeListSizesInBytes [PoolBlockIndex].cbegin() + SmallestHigherOffsetIndex);
+        SelectedMemoryPool.BlockFreeListOffsetsInBytes [PoolBlockIndex].erase(SelectedMemoryPool.BlockFreeListOffsetsInBytes [PoolBlockIndex].cbegin() + SmallestHigherOffsetIndex);
     }
     else if (bCanMergeLeftBlock)
     {
