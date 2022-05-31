@@ -15,6 +15,7 @@ list(
     "Include/Graphics/Device.hpp"
     "Include/Graphics/Viewport.hpp"
     "Include/Graphics/ShaderLibrary.hpp"
+    "Include/Primitives/StaticMesh.hpp"
     "Include/ShaderCompiler/ShaderCompiler.hpp"
     "Include/Platform/Windows.hpp"
     "Include/Common.hpp"
@@ -22,6 +23,8 @@ list(
     "Include/ForwardRenderer.hpp"
     "Include/AssetManager.hpp"
     "Include/Memory.hpp"
+    "Include/Allocation.hpp"
+    "Include/GPUResourceManager.hpp"
 )
 
 list(
@@ -32,12 +35,15 @@ list(
     "Source/Graphics/Device.cpp"
     "Source/Graphics/Viewport.cpp"
     "Source/Graphics/ShaderLibrary.cpp"
+    "Source/Primitives/StaticMesh.cpp"
     "Source/ShaderCompiler/ShaderCompiler.cpp"
     "Source/Platform/Windows.cpp"
     "Source/Logging.cpp"
     "Source/ForwardRenderer.cpp"
     "Source/AssetManager.cpp"
     "Source/Memory.cpp"
+    "Source/Allocation.cpp"
+    "Source/GPUResourceManager.cpp"
 )
 
 add_executable(VulkanPBR WIN32)
