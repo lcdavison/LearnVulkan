@@ -1,5 +1,7 @@
 #include "VulkanModule.hpp"
 
+#include "GPUResourceManager.hpp"
+
 #include <vector>
 
 /* TODO: Separate resource management, still use this for Create\Destroy Buffer */
@@ -17,8 +19,6 @@ namespace Vulkan::Device
 {
     struct DeviceState
     {
-        VkPhysicalDeviceMemoryProperties MemoryProperties;
-
         VkPhysicalDevice PhysicalDevice;
         VkDevice Device;
 
@@ -50,7 +50,7 @@ namespace Vulkan::Device
 
     extern void DestroyFrameBuffer(DeviceState const & State, VkFramebuffer & FrameBuffer);
 
-    extern void CreateBuffer(DeviceState const & State, uint64 SizeInBytes, VkBufferUsageFlags UsageFlags, VkMemoryPropertyFlags MemoryFlags, VkBuffer & OutputBuffer, DeviceMemoryAllocator::Allocation & OutputDeviceMemory);
+    extern void CreateBuffer(DeviceState const & State, uint64 SizeInBytes, VkBufferUsageFlags UsageFlags, VkMemoryPropertyFlags MemoryFlags, GPUResourceManager::BufferHandle & OutputBuffer);
 
-    extern void DestroyBuffer(DeviceState const & State, VkBuffer & Buffer);
+    extern void DestroyBuffer(DeviceState const & State, GPUResourceManager::BufferHandle const BufferHandle, VkFence const FenceToWaitFor);
 }

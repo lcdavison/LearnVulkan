@@ -243,8 +243,6 @@ bool const Vulkan::Device::CreateDevice(Vulkan::Instance::InstanceState const & 
 
                 ::CreateDescriptorPool(IntermediateState);
 
-                vkGetPhysicalDeviceMemoryProperties(IntermediateState.PhysicalDevice, &IntermediateState.MemoryProperties);
-
                 OutputState = IntermediateState;
                 bResult = true;
             }
@@ -356,7 +354,7 @@ void Vulkan::Device::DestroyFrameBuffer(Vulkan::Device::DeviceState const & Stat
     }
 }
 
-void Vulkan::Device::CreateBuffer(Vulkan::Device::DeviceState const & State, uint64 SizeInBytes, VkBufferUsageFlags UsageFlags, VkMemoryPropertyFlags MemoryFlags, VkBuffer & OutputBuffer, DeviceMemoryAllocator::Allocation & OutputDeviceMemory)
+void Vulkan::Device::CreateBuffer(Vulkan::Device::DeviceState const & State, uint64 SizeInBytes, VkBufferUsageFlags UsageFlags, VkMemoryPropertyFlags MemoryFlags, GPUResourceManager::BufferHandle & OutputBuffer)
 {
     VkBufferCreateInfo CreateInfo = {};
     CreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -364,26 +362,30 @@ void Vulkan::Device::CreateBuffer(Vulkan::Device::DeviceState const & State, uin
     CreateInfo.usage = UsageFlags;
     CreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-    VkBuffer NewBuffer = {};
-    VERIFY_VKRESULT(vkCreateBuffer(State.Device, &CreateInfo, nullptr, &NewBuffer));
+    GPUResource::Buffer NewBuffer = {};
+    VERIFY_VKRESULT(vkCreateBuffer(State.Device, &CreateInfo, nullptr, &NewBuffer.VkResource));
 
     VkMemoryRequirements MemoryRequirements = {};
-    vkGetBufferMemoryRequirements(State.Device, NewBuffer, &MemoryRequirements);
+    vkGetBufferMemoryRequirements(State.Device, NewBuffer.VkResource, &MemoryRequirements);
 
-    DeviceMemoryAllocator::Allocation MemoryAllocation = {};
-    DeviceMemoryAllocator::AllocateMemory(State, MemoryRequirements, MemoryFlags, MemoryAllocation);
+    DeviceMemoryAllocator::AllocateMemory(State, MemoryRequirements, MemoryFlags, NewBuffer.MemoryAllocation);
 
-    VERIFY_VKRESULT(vkBindBufferMemory(State.Device, NewBuffer, MemoryAllocation.Memory, MemoryAllocation.OffsetInBytes));
+    VERIFY_VKRESULT(vkBindBufferMemory(State.Device, NewBuffer.VkResource, NewBuffer.MemoryAllocation.Memory, NewBuffer.MemoryAllocation.OffsetInBytes));
 
-    OutputBuffer = NewBuffer;
-    OutputDeviceMemory = MemoryAllocation;
+    GPUResourceManager::BufferHandle NewBufferHandle = {};
+    GPUResourceManager::RegisterResource(NewBuffer, NewBufferHandle);
+
+    OutputBuffer = NewBufferHandle;
 }
 
-void Vulkan::Device::DestroyBuffer(Vulkan::Device::DeviceState const & State, VkBuffer & Buffer)
+void Vulkan::Device::DestroyBuffer(Vulkan::Device::DeviceState const & State, GPUResourceManager::BufferHandle const BufferHandle, VkFence const FenceToWaitFor)
 {
-    if (Buffer != VK_NULL_HANDLE)
+    if (FenceToWaitFor)
     {
-        vkDestroyBuffer(State.Device, Buffer, nullptr);
-        Buffer = VK_NULL_HANDLE;
+        GPUResourceManager::QueueResourceDeletion(FenceToWaitFor, BufferHandle);
+    }
+    else
+    {
+        GPUResourceManager::DestroyResource(BufferHandle, State);
     }
 }
