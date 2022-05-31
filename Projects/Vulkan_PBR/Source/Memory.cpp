@@ -10,6 +10,9 @@ static uint8 const kMaximumMemoryPoolBlockCount = { 16u };
 /* Free List Allocations */
 struct DeviceMemoryPool
 {
+    /* TODO: Instead of using vectors for each block, we could use a hash table indexed by size and chained with offsets */
+    /* Just take the first offset from the chain */
+    /* Coalescing the memory back in will be a bit more involved though */
     std::array<std::vector<uint64>, kMaximumMemoryPoolBlockCount> BlockFreeListOffsetsInBytes;
     std::array<std::vector<uint64>, kMaximumMemoryPoolBlockCount> BlockFreeListSizesInBytes;
 
@@ -20,7 +23,7 @@ struct DeviceMemoryPool
     uint8 NextUnallocatedMemoryBlockIndex = { 0u };
 };
 
-static uint64 const kDefaultBlockSizeInBytes = { 8192u };
+static uint64 const kDefaultBlockSizeInBytes = { 1u << 10u << 10u }; // 1Mb
 
 static std::array<DeviceMemoryPool, VK_MAX_MEMORY_TYPES> MemoryPools;
 
@@ -61,9 +64,9 @@ static bool const GetDeviceMemoryBlockIndex(DeviceMemoryPool const & SelectedMem
         std::vector<uint64> const & CurrentFreeList = SelectedMemoryPool.BlockFreeListSizesInBytes [CurrentBlockIndex];
 
         /* Use a First-Fit method here, this should suffice currently */
-        for (uint16 CurrentChunkIndex = { 0u };
-             CurrentChunkIndex < CurrentFreeList.size();
-             CurrentChunkIndex++)
+        for (int16 CurrentChunkIndex = { static_cast<int16>(CurrentFreeList.size() - 1l) };
+             CurrentChunkIndex >= 0l;
+             CurrentChunkIndex--)
         {
             if (MemoryRequirements.size <= CurrentFreeList [CurrentChunkIndex])
             {
@@ -105,6 +108,8 @@ static void CreateMemoryBlockForPool(DeviceMemoryPool & MemoryPool, Vulkan::Devi
 bool const DeviceMemoryAllocator::AllocateMemory(Vulkan::Device::DeviceState const & DeviceState, VkMemoryRequirements const & MemoryRequirements, VkMemoryPropertyFlags const MemoryFlags, Allocation & OutputAllocation)
 {
     bool bResult = true;
+
+    /* TODO: Have a fallback for allocations bigger than default block size */
 
     uint32 MemoryTypeIndex = {};
     ::GetDeviceMemoryTypeIndex(DeviceState, MemoryRequirements.memoryTypeBits, MemoryFlags, MemoryTypeIndex);
@@ -260,61 +265,4 @@ void DeviceMemoryAllocator::FreeAllDeviceMemory(Vulkan::Device::DeviceState cons
             }
         }
     }
-}
-
-bool const LinearBufferAllocator::CreateAllocator(Vulkan::Device::DeviceState const & DeviceState, uint64 const BufferSizeInBytes, VkBufferUsageFlags const UsageFlags, VkMemoryPropertyFlags const MemoryFlags, LinearBufferAllocator::AllocatorState & OutputState)
-{
-    bool bResult = false;
-
-    LinearBufferAllocator::AllocatorState IntermediateState = {};
-
-    Vulkan::Device::CreateBuffer(DeviceState, BufferSizeInBytes, UsageFlags, MemoryFlags, IntermediateState.Buffer, IntermediateState.DeviceMemory);
-
-    IntermediateState.CapacityInBytes = BufferSizeInBytes;
-    IntermediateState.CurrentOffsetInBytes = 0u;
-
-    OutputState = IntermediateState;
-
-    return bResult;
-}
-
-bool const LinearBufferAllocator::DestroyAllocator(LinearBufferAllocator::AllocatorState & State, Vulkan::Device::DeviceState & DeviceState)
-{
-    Vulkan::Device::DestroyBuffer(DeviceState, State.Buffer);
-
-    DeviceMemoryAllocator::FreeMemory(State.DeviceMemory);
-
-    return true;
-}
-
-bool const LinearBufferAllocator::Allocate(LinearBufferAllocator::AllocatorState & State, uint64 const BufferSizeInBytes, LinearBufferAllocator::Allocation & OutputAllocation)
-{
-    bool bResult = false;
-
-    if (BufferSizeInBytes < State.CurrentSizeInBytes)
-    {
-        LinearBufferAllocator::Allocation NewAllocation = {};
-
-        NewAllocation.Buffer = State.Buffer;
-
-        NewAllocation.MappedAddress = reinterpret_cast<void *>(reinterpret_cast<std::uintptr_t>(State.DeviceMemory.MappedAddress) + State.CurrentOffsetInBytes);
-
-        NewAllocation.OffsetInBytes = State.CurrentOffsetInBytes;
-        State.CurrentOffsetInBytes += BufferSizeInBytes;
-
-        NewAllocation.SizeInBytes = BufferSizeInBytes;
-        State.CurrentSizeInBytes -= BufferSizeInBytes;
-
-        OutputAllocation = NewAllocation;
-
-        bResult = true;
-    }
-
-    return bResult;
-}
-
-void LinearBufferAllocator::Reset(LinearBufferAllocator::AllocatorState & State)
-{
-    State.CurrentOffsetInBytes = 0u;
-    State.CurrentSizeInBytes = State.CapacityInBytes;
 }
