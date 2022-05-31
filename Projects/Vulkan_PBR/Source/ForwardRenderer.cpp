@@ -265,27 +265,20 @@ static bool const CreateGraphicsPipeline()
     {
         std::array<VkVertexInputBindingDescription, 2u> VertexInputBindings =
         {
-            VkVertexInputBindingDescription{ 0u, sizeof(Math::Vector3), VK_VERTEX_INPUT_RATE_VERTEX },
-            VkVertexInputBindingDescription{ 1u, sizeof(Math::Vector3), VK_VERTEX_INPUT_RATE_VERTEX },
+            Vulkan::VertexInputBinding(0u, sizeof(Math::Vector3)),
+            Vulkan::VertexInputBinding(1u, sizeof(Math::Vector3)),
         };
 
         std::array<VkVertexInputAttributeDescription, 2u> VertexAttributes =
         {
-            VkVertexInputAttributeDescription{ 0u, 0u, VK_FORMAT_R32G32B32_SFLOAT, 0u },
-            VkVertexInputAttributeDescription{ 1u, 1u, VK_FORMAT_R32G32B32_SFLOAT, 0u },
+            Vulkan::VertexInputAttribute(0u, 0u, 0u),
+            Vulkan::VertexInputAttribute(1u, 1u, 0u),
         };
 
-        VkPipelineVertexInputStateCreateInfo VertexInputState = {};
-        VertexInputState.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-        VertexInputState.vertexBindingDescriptionCount = static_cast<uint32>(VertexInputBindings.size());
-        VertexInputState.pVertexBindingDescriptions = VertexInputBindings.data();
-        VertexInputState.vertexAttributeDescriptionCount = static_cast<uint32>(VertexAttributes.size());
-        VertexInputState.pVertexAttributeDescriptions = VertexAttributes.data();
+        VkPipelineVertexInputStateCreateInfo VertexInputState = Vulkan::VertexInputState(static_cast<uint32>(VertexInputBindings.size()), VertexInputBindings.data(),
+                                                                                         static_cast<uint32>(VertexAttributes.size()), VertexAttributes.data());
 
-        VkPipelineInputAssemblyStateCreateInfo InputAssemblerState = {};
-        InputAssemblerState.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-        InputAssemblerState.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-        InputAssemblerState.primitiveRestartEnable = VK_FALSE;
+        VkPipelineInputAssemblyStateCreateInfo InputAssemblerState = Vulkan::InputAssemblyState();
 
         VkPipelineRasterizationStateCreateInfo RasterizationState = {};
         RasterizationState.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
