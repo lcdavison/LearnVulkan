@@ -121,6 +121,8 @@ static bool const Run()
             ForwardRenderer::PreRender();
 
             ForwardRenderer::Render();
+
+            ForwardRenderer::PostRender();
         }
         else
         {

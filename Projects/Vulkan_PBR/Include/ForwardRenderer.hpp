@@ -11,4 +11,6 @@ namespace ForwardRenderer
     extern void PreRender();
 
     extern void Render();
+
+    extern void PostRender();
 }

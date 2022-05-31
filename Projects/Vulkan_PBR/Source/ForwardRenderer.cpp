@@ -6,7 +6,11 @@
 #include "Graphics/Device.hpp"
 #include "Graphics/Viewport.hpp"
 #include "Graphics/ShaderLibrary.hpp"
+
+#include "Primitives/StaticMesh.hpp"
+
 #include "Memory.hpp"
+#include "Allocation.hpp"
 
 #include <Math/Matrix.hpp>
 #include <Math/Transform.hpp>
@@ -15,6 +19,7 @@
 #include "VulkanPBR.hpp"
 
 #include "AssetManager.hpp"
+#include "GPUResourceManager.hpp"
 
 #include <array>
 
@@ -60,27 +65,13 @@ static VkShaderModule VertexShaderModule = {};
 static VkShaderModule FragmentShaderModule = {};
 
 static VkDescriptorSetLayout DescriptorSetLayout = {};
-static VkDescriptorSet ShaderDescriptorSet = {};
 
 static AssetManager::MeshAsset const * CubeMesh = {};
-
-static DeviceMemoryAllocator::Allocation CubeStagingVertexBufferMemory = {};
-static VkBuffer CubeStagingVertexBuffer = {};
-
-static DeviceMemoryAllocator::Allocation CubeStagingNormalBufferMemory = {};
-static VkBuffer CubeStagingNormalBuffer = {};
-
-static DeviceMemoryAllocator::Allocation CubeStagingIndexBufferMemory = {};
-static VkBuffer CubeStagingIndexBuffer = {};
+static Primitives::StaticMesh::StaticMeshData CubeStaticMesh = {};
 
 static DeviceMemoryAllocator::Allocation CubeVertexBufferMemory = {};
-static VkBuffer CubeVertexBuffer = {};
-
 static DeviceMemoryAllocator::Allocation CubeNormalBufferMemory = {};
-static VkBuffer CubeNormalBuffer = {};
-
 static DeviceMemoryAllocator::Allocation CubeIndexBufferMemory = {};
-static VkBuffer CubeIndexBuffer = {};
 
 /*
     For reference.
@@ -384,8 +375,11 @@ static bool const CreateFrameUniformBuffer(LinearBufferAllocator::Allocation & O
 
 static void UpdateUniformBufferDescriptors(LinearBufferAllocator::Allocation const & UniformBufferAllocation)
 {
+    GPUResource::Buffer UniformBuffer = {};
+    GPUResourceManager::GetResource(UniformBufferAllocation.Buffer, UniformBuffer);
+
     VkDescriptorBufferInfo UniformBufferInfo = {};
-    UniformBufferInfo.buffer = UniformBufferAllocation.Buffer;
+    UniformBufferInfo.buffer = UniformBuffer.VkResource;
     UniformBufferInfo.offset = UniformBufferAllocation.OffsetInBytes;
     UniformBufferInfo.range = UniformBufferAllocation.SizeInBytes;
 
@@ -439,8 +433,6 @@ bool const ForwardRenderer::Initialise(VkApplicationInfo const & ApplicationInfo
     ShaderLibrary::LoadShader("AmbientLighting.vert", VertexShaderHandle);
     ShaderLibrary::LoadShader("AmbientLighting.frag", FragmentShaderHandle);
 
-    AssetManager::GetMeshData("Cube", CubeMesh);
-
     bool bResult = false;
 
     if (Vulkan::Instance::CreateInstance(ApplicationInfo, InstanceState) &&
@@ -454,10 +446,6 @@ bool const ForwardRenderer::Initialise(VkApplicationInfo const & ApplicationInfo
         bResult = ::CreateGraphicsPipeline();
 
         ::CreateFrameState();
-
-        Vulkan::Device::CreateBuffer(DeviceState, CubeMesh->Vertices.size() * sizeof(Math::Vector3), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, CubeVertexBuffer, CubeVertexBufferMemory);
-        Vulkan::Device::CreateBuffer(DeviceState, CubeMesh->Normals.size() * sizeof(Math::Vector3), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, CubeNormalBuffer, CubeNormalBufferMemory);
-        Vulkan::Device::CreateBuffer(DeviceState, CubeMesh->Indices.size() * sizeof(uint32), VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, CubeIndexBuffer, CubeIndexBufferMemory);
     }
 
     return bResult;
@@ -468,15 +456,6 @@ bool const ForwardRenderer::Shutdown()
     vkDeviceWaitIdle(DeviceState.Device);
 
     ::DestroyFrameState();
-
-    /* Destroy these here at the moment */
-    Vulkan::Device::DestroyBuffer(DeviceState, CubeStagingVertexBuffer);
-    Vulkan::Device::DestroyBuffer(DeviceState, CubeStagingNormalBuffer);
-    Vulkan::Device::DestroyBuffer(DeviceState, CubeStagingIndexBuffer);
-
-    Vulkan::Device::DestroyBuffer(DeviceState, CubeVertexBuffer);
-    Vulkan::Device::DestroyBuffer(DeviceState, CubeNormalBuffer);
-    Vulkan::Device::DestroyBuffer(DeviceState, CubeIndexBuffer);
 
     DeviceMemoryAllocator::FreeAllDeviceMemory(DeviceState);
 
@@ -517,8 +496,6 @@ bool const ForwardRenderer::Shutdown()
 
 void ForwardRenderer::PreRender()
 {
-    vkWaitForFences(DeviceState.Device, 1u, &FrameState.Fences [FrameState.CurrentFrameStateIndex], VK_TRUE, std::numeric_limits<uint64>::max());
-
     VkResult ImageAcquireResult = vkAcquireNextImageKHR(DeviceState.Device, ViewportState.SwapChain, 0ull, FrameState.Semaphores [FrameState.CurrentFrameStateIndex], VK_NULL_HANDLE, &FrameState.CurrentImageIndex);
 
     if (ImageAcquireResult == VK_SUBOPTIMAL_KHR ||
@@ -538,18 +515,6 @@ void ForwardRenderer::PreRender()
     static bool bMeshDataUploaded = false;
     if (!bMeshDataUploaded)
     {
-        VkDeviceSize const VertexBufferSizeInBytes = CubeMesh->Vertices.size() * sizeof(decltype(CubeMesh->Vertices [0u]));
-        VkDeviceSize const NormalBufferSizeInBytes = CubeMesh->Normals.size() * sizeof(decltype(CubeMesh->Normals [0u]));
-        VkDeviceSize const IndexBufferSizeInBytes = CubeMesh->Indices.size() * sizeof(uint32);
-
-        Vulkan::Device::CreateBuffer(DeviceState, VertexBufferSizeInBytes, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, CubeStagingVertexBuffer, CubeStagingVertexBufferMemory);
-        Vulkan::Device::CreateBuffer(DeviceState, NormalBufferSizeInBytes, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, CubeStagingNormalBuffer, CubeStagingNormalBufferMemory);
-        Vulkan::Device::CreateBuffer(DeviceState, IndexBufferSizeInBytes, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, CubeStagingIndexBuffer, CubeStagingIndexBufferMemory);
-
-        ::memcpy_s(CubeStagingVertexBufferMemory.MappedAddress, CubeStagingVertexBufferMemory.SizeInBytes, CubeMesh->Vertices.data(), VertexBufferSizeInBytes);
-        ::memcpy_s(CubeStagingNormalBufferMemory.MappedAddress, CubeStagingNormalBufferMemory.SizeInBytes, CubeMesh->Normals.data(), NormalBufferSizeInBytes);
-        ::memcpy_s(CubeStagingIndexBufferMemory.MappedAddress, CubeStagingIndexBufferMemory.SizeInBytes, CubeMesh->Indices.data(), IndexBufferSizeInBytes);
-
         VkCommandBufferBeginInfo BeginInfo = {};
         BeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
         BeginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
@@ -557,73 +522,9 @@ void ForwardRenderer::PreRender()
         VkCommandBuffer & CurrentCommandBuffer = FrameState.CommandBuffers [kFrameStateCount + FrameState.CurrentFrameStateIndex];
         vkBeginCommandBuffer(CurrentCommandBuffer, &BeginInfo);
 
-        std::array<VkBufferMemoryBarrier, 6u> BufferBarriers = {};
-        BufferBarriers [0u].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-        BufferBarriers [0u].buffer = CubeStagingVertexBuffer;
-        BufferBarriers [0u].offset = 0u;
-        BufferBarriers [0u].size = VK_WHOLE_SIZE;
-        BufferBarriers [0u].srcAccessMask = VK_ACCESS_HOST_WRITE_BIT;
-        BufferBarriers [0u].dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-
-        BufferBarriers [1u].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-        BufferBarriers [1u].buffer = CubeStagingNormalBuffer;
-        BufferBarriers [1u].offset = 0u;
-        BufferBarriers [1u].size = VK_WHOLE_SIZE;
-        BufferBarriers [1u].srcAccessMask = VK_ACCESS_HOST_WRITE_BIT;
-        BufferBarriers [1u].dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-
-        BufferBarriers [2u].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-        BufferBarriers [2u].buffer = CubeStagingIndexBuffer;
-        BufferBarriers [2u].offset = 0u;
-        BufferBarriers [2u].size = VK_WHOLE_SIZE;
-        BufferBarriers [2u].srcAccessMask = VK_ACCESS_HOST_WRITE_BIT;
-        BufferBarriers [2u].dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-
-        BufferBarriers [3u].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-        BufferBarriers [3u].buffer = CubeVertexBuffer;
-        BufferBarriers [3u].offset = 0u;
-        BufferBarriers [3u].size = VK_WHOLE_SIZE;
-        BufferBarriers [3u].srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-        BufferBarriers [3u].dstAccessMask = VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT;
-
-        BufferBarriers [4u].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-        BufferBarriers [4u].buffer = CubeNormalBuffer;
-        BufferBarriers [4u].offset = 0u;
-        BufferBarriers [4u].size = VK_WHOLE_SIZE;
-        BufferBarriers [4u].srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-        BufferBarriers [4u].dstAccessMask = VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT;
-
-        BufferBarriers [5u].sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-        BufferBarriers [5u].buffer = CubeIndexBuffer;
-        BufferBarriers [5u].offset = 0u;
-        BufferBarriers [5u].size = VK_WHOLE_SIZE;
-        BufferBarriers [5u].srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-        BufferBarriers [5u].dstAccessMask = VK_ACCESS_INDEX_READ_BIT;
-
-        vkCmdPipelineBarrier(CurrentCommandBuffer,
-                             VK_PIPELINE_STAGE_HOST_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
-                             0u,
-                             0u, nullptr,
-                             3u, &BufferBarriers [0u],
-                             0u, nullptr);
-
-        std::array<VkBufferCopy, 3u> CopyRegions =
-        {
-            VkBufferCopy{ 0u, 0u, VertexBufferSizeInBytes },
-            VkBufferCopy{ 0u, 0u, NormalBufferSizeInBytes },
-            VkBufferCopy{ 0u, 0u, IndexBufferSizeInBytes },
-        };
-
-        vkCmdCopyBuffer(CurrentCommandBuffer, CubeStagingVertexBuffer, CubeVertexBuffer, 1u, &CopyRegions [0u]);
-        vkCmdCopyBuffer(CurrentCommandBuffer, CubeStagingNormalBuffer, CubeNormalBuffer, 1u, &CopyRegions [1u]);
-        vkCmdCopyBuffer(CurrentCommandBuffer, CubeStagingIndexBuffer, CubeIndexBuffer, 1u, &CopyRegions [2u]);
-
-        vkCmdPipelineBarrier(CurrentCommandBuffer,
-                             VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_VERTEX_INPUT_BIT,
-                             0u,
-                             0u, nullptr,
-                             3u, &BufferBarriers [3u],
-                             0u, nullptr);
+        uint32 StaticMeshID = {};
+        Primitives::StaticMesh::CreateGPUResources(CurrentCommandBuffer, DeviceState, 0u, FrameState.Fences [FrameState.CurrentFrameStateIndex], StaticMeshID);
+        Primitives::StaticMesh::GetStaticMeshResources(StaticMeshID, CubeStaticMesh);
 
         vkEndCommandBuffer(CurrentCommandBuffer);
 
@@ -679,13 +580,21 @@ void ForwardRenderer::Render()
 
     vkCmdBindDescriptorSets(CurrentCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, TrianglePipelineLayout, 0u, 1u, &FrameState.DescriptorSets [FrameState.CurrentFrameStateIndex], 0u, nullptr);
 
-    vkCmdBindIndexBuffer(CurrentCommandBuffer, CubeIndexBuffer, 0u, VK_INDEX_TYPE_UINT32);
+    GPUResource::Buffer VertexBuffer = {};
+    GPUResource::Buffer NormalBuffer = {};
+    GPUResource::Buffer IndexBuffer = {};
+
+    GPUResourceManager::GetResource(CubeStaticMesh.VertexBuffer, VertexBuffer);
+    GPUResourceManager::GetResource(CubeStaticMesh.NormalBuffer, NormalBuffer);
+    GPUResourceManager::GetResource(CubeStaticMesh.IndexBuffer, IndexBuffer);
+
+    vkCmdBindIndexBuffer(CurrentCommandBuffer, IndexBuffer.VkResource, 0u, VK_INDEX_TYPE_UINT32);
 
     {
         std::array<VkBuffer, 2u> VertexBuffers =
         {
-            CubeVertexBuffer,
-            CubeNormalBuffer,
+            VertexBuffer.VkResource,
+            NormalBuffer.VkResource,
         };
 
         std::array BufferOffsets = std::array<VkDeviceSize, VertexBuffers.size()>();
@@ -726,6 +635,15 @@ void ForwardRenderer::Render()
 
         vkQueuePresentKHR(DeviceState.GraphicsQueue, &PresentInfo);
     }
+}
 
+void ForwardRenderer::PostRender()
+{
     FrameState.CurrentFrameStateIndex = (++FrameState.CurrentFrameStateIndex) % kFrameStateCount;
+
+    vkWaitForFences(DeviceState.Device, 1u, &FrameState.Fences [FrameState.CurrentFrameStateIndex], VK_TRUE, std::numeric_limits<uint64>::max());
+
+    /* Before resetting the fence, we should attempt to clean up some resources */
+
+    GPUResourceManager::DestroyUnusedResources(DeviceState);
 }
