@@ -58,6 +58,8 @@ VK_INSTANCE_FUNCTION_FROM_EXTENSION(vkDestroySurfaceKHR, VK_KHR_SURFACE_EXTENSIO
 
 VK_DEVICE_FUNCTION(vkGetDeviceQueue);
 VK_DEVICE_FUNCTION(vkGetBufferMemoryRequirements);
+VK_DEVICE_FUNCTION(vkGetFenceStatus);
+VK_DEVICE_FUNCTION(vkGetEventStatus);
 
 VK_DEVICE_FUNCTION(vkDeviceWaitIdle);
 
@@ -72,6 +74,7 @@ VK_DEVICE_FUNCTION(vkFreeMemory);
 VK_DEVICE_FUNCTION(vkCreateCommandPool);
 VK_DEVICE_FUNCTION(vkCreateSemaphore);
 VK_DEVICE_FUNCTION(vkCreateFence);
+VK_DEVICE_FUNCTION(vkCreateEvent);
 VK_DEVICE_FUNCTION(vkCreateFramebuffer);
 VK_DEVICE_FUNCTION(vkCreateRenderPass);
 VK_DEVICE_FUNCTION(vkCreateShaderModule);
@@ -88,6 +91,7 @@ VK_DEVICE_FUNCTION(vkDestroyDevice);
 VK_DEVICE_FUNCTION(vkDestroyCommandPool);
 VK_DEVICE_FUNCTION(vkDestroySemaphore);
 VK_DEVICE_FUNCTION(vkDestroyFence);
+VK_DEVICE_FUNCTION(vkDestroyEvent);
 VK_DEVICE_FUNCTION(vkDestroyRenderPass);
 VK_DEVICE_FUNCTION(vkDestroyFramebuffer);
 VK_DEVICE_FUNCTION(vkDestroyShaderModule);
@@ -136,6 +140,7 @@ VK_DEVICE_FUNCTION(vkCmdEndRenderPass);
 
 VK_DEVICE_FUNCTION(vkCmdSetViewport);
 VK_DEVICE_FUNCTION(vkCmdSetScissor);
+VK_DEVICE_FUNCTION(vkCmdSetEvent);
 
 VK_DEVICE_FUNCTION(vkCmdCopyBuffer);
 

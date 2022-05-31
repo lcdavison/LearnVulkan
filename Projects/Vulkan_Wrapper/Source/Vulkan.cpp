@@ -212,6 +212,16 @@ void vkGetBufferMemoryRequirements(VkDevice device, VkBuffer buffer, VkMemoryReq
     Functions::vkGetBufferMemoryRequirements(device, buffer, pMemoryRequirements);
 }
 
+VkResult vkGetFenceStatus(VkDevice device, VkFence fence)
+{
+    return Functions::vkGetFenceStatus(device, fence);
+}
+
+VkResult vkGetEventStatus(VkDevice device, VkEvent event)
+{
+    return Functions::vkGetEventStatus(device, event);
+}
+
 VkResult vkGetSwapchainImagesKHR(VkDevice device, VkSwapchainKHR swapchain, std::uint32_t * pSwapchainImageCount, VkImage * pSwapchainImages)
 {
     return Functions::vkGetSwapchainImagesKHR(device, swapchain, pSwapchainImageCount, pSwapchainImages);
@@ -241,6 +251,11 @@ VkResult vkCreateSemaphore(VkDevice device, VkSemaphoreCreateInfo const * pCreat
 VkResult vkCreateFence(VkDevice device, VkFenceCreateInfo const * pCreateInfo, VkAllocationCallbacks const * pAllocator, VkFence * pFence)
 {
     return Functions::vkCreateFence(device, pCreateInfo, pAllocator, pFence);
+}
+
+VkResult vkCreateEvent(VkDevice device, VkEventCreateInfo const * pCreateInfo, VkAllocationCallbacks const * pAllocator, VkEvent * pEvent)
+{
+    return Functions::vkCreateEvent(device, pCreateInfo, pAllocator, pEvent);
 }
 
 VkResult vkCreateRenderPass(VkDevice device, VkRenderPassCreateInfo const * pCreateInfo, VkAllocationCallbacks const * pAllocator, VkRenderPass * pRenderPass)
@@ -327,6 +342,11 @@ void vkDestroySemaphore(VkDevice device, VkSemaphore semaphore, VkAllocationCall
 void vkDestroyFence(VkDevice device, VkFence fence, VkAllocationCallbacks const * pAllocator)
 {
     Functions::vkDestroyFence(device, fence, pAllocator);
+}
+
+void vkDestroyEvent(VkDevice device, VkEvent event, VkAllocationCallbacks const * pAllocator)
+{
+    Functions::vkDestroyEvent(device, event, pAllocator);
 }
 
 void vkDestroyRenderPass(VkDevice device, VkRenderPass renderPass, VkAllocationCallbacks const * pAllocator)
@@ -572,6 +592,11 @@ void vkCmdSetViewport(VkCommandBuffer commandBuffer, std::uint32_t firstViewport
 void vkCmdSetScissor(VkCommandBuffer commandBuffer, std::uint32_t firstScissor, std::uint32_t scissorCount, VkRect2D * pScissors)
 {
     Functions::vkCmdSetScissor(commandBuffer, firstScissor, scissorCount, pScissors);
+}
+
+void vkCmdSetEvent(VkCommandBuffer commandBuffer, VkEvent event, VkPipelineStageFlags stageMask)
+{
+    Functions::vkCmdSetEvent(commandBuffer, event, stageMask);
 }
 
 void vkCmdCopyBuffer(VkCommandBuffer commandBuffer, VkBuffer srcBuffer, VkBuffer dstBuffer, std::uint32_t regionCount, VkBufferCopy const * pRegions)

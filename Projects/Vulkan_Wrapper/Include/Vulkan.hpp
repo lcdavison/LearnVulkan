@@ -9,6 +9,41 @@
     #define VULKAN_WRAPPER_API __declspec(dllimport)
 #endif
 
+namespace Vulkan
+{
+    inline VkBufferMemoryBarrier BufferMemoryBarrier(VkBuffer Buffer, VkAccessFlags SourceAccessFlags, VkAccessFlags DestinationAccessFlags, VkDeviceSize const SizeInBytes = VK_WHOLE_SIZE, VkDeviceSize const OffsetInBytes = 0u)
+    {
+        return VkBufferMemoryBarrier { VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER, nullptr, SourceAccessFlags, DestinationAccessFlags, 0u, 0u, Buffer, OffsetInBytes, SizeInBytes };
+    }
+
+    inline constexpr VkVertexInputBindingDescription VertexInputBinding(std::uint32_t const BindingSlotIndex, std::uint32_t const StrideInBytes, VkVertexInputRate InputRate = VK_VERTEX_INPUT_RATE_VERTEX)
+    {
+        return VkVertexInputBindingDescription { BindingSlotIndex, StrideInBytes, InputRate };
+    }
+
+    inline constexpr VkVertexInputAttributeDescription VertexInputAttribute(std::uint32_t const Location, std::uint32_t const BindingSlotIndex, std::uint32_t const OffsetInBytes, VkFormat const Format = VK_FORMAT_R32G32B32_SFLOAT)
+    {
+        return VkVertexInputAttributeDescription { Location, BindingSlotIndex, Format, OffsetInBytes };
+    }
+
+    inline constexpr VkPipelineVertexInputStateCreateInfo VertexInputState(std::uint32_t const VertexBindingCount, VkVertexInputBindingDescription * const VertexBindings, 
+                                                                           std::uint32_t const VertexAttributeCount, VkVertexInputAttributeDescription * const VertexAttributes, 
+                                                                           VkPipelineVertexInputStateCreateFlags const Flags = 0u)
+    {
+        return VkPipelineVertexInputStateCreateInfo { VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO, nullptr, Flags, VertexBindingCount, VertexBindings, VertexAttributeCount, VertexAttributes };
+    }
+
+    inline constexpr VkPipelineInputAssemblyStateCreateInfo InputAssemblyState(VkPrimitiveTopology const PrimitiveTopology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VkBool32 const PrimitiveRestartEnabled = VK_FALSE, VkPipelineInputAssemblyStateCreateFlags const Flags = 0u)
+    {
+        return VkPipelineInputAssemblyStateCreateInfo { VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO, nullptr, Flags, PrimitiveTopology, PrimitiveRestartEnabled };
+    }
+
+    inline constexpr VkPipelineRasterizationStateCreateInfo RasterizationState(/*VkCullModeFlags const CullMode, VkPolygonMode PolygonMode = VK_POLYGON_MODE_FILL,*/ VkPipelineRasterizationStateCreateFlags const Flags = 0u)
+    {
+        return VkPipelineRasterizationStateCreateInfo { VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO, nullptr, Flags };
+    }
+}
+
 VULKAN_WRAPPER_API bool const InitialiseVulkanWrapper();
 VULKAN_WRAPPER_API bool const ShutdownVulkanWrapper();
 
@@ -34,6 +69,8 @@ VULKAN_WRAPPER_API VkResult vkGetPhysicalDeviceSurfaceFormatsKHR(VkPhysicalDevic
 VULKAN_WRAPPER_API VkResult vkGetPhysicalDeviceSurfaceCapabilitiesKHR(VkPhysicalDevice physicalDevice, VkSurfaceKHR surface, VkSurfaceCapabilitiesKHR * pSurfaceCapabilities);
 VULKAN_WRAPPER_API void vkGetDeviceQueue(VkDevice device, std::uint32_t queueFamilyIndex, std::uint32_t queueIndex, VkQueue * pQueue);
 VULKAN_WRAPPER_API void vkGetBufferMemoryRequirements(VkDevice device, VkBuffer buffer, VkMemoryRequirements * pMemoryRequirements);
+VULKAN_WRAPPER_API VkResult vkGetFenceStatus(VkDevice device, VkFence fence);
+VULKAN_WRAPPER_API VkResult vkGetEventStatus(VkDevice device, VkEvent event);
 VULKAN_WRAPPER_API VkResult vkGetSwapchainImagesKHR(VkDevice device, VkSwapchainKHR swapchain, std::uint32_t * pSwapchainImageCount, VkImage * pSwapchainImages);
 
 VULKAN_WRAPPER_API VkResult vkCreateInstance(VkInstanceCreateInfo const * pCreateInfo, VkAllocationCallbacks const * pAllocator, VkInstance * pInstance);
@@ -41,6 +78,7 @@ VULKAN_WRAPPER_API VkResult vkCreateDevice(VkPhysicalDevice physicalDevice, VkDe
 VULKAN_WRAPPER_API VkResult vkCreateCommandPool(VkDevice device, VkCommandPoolCreateInfo const * pCreateInfo, VkAllocationCallbacks const * pAllocator, VkCommandPool * pCommandPool);
 VULKAN_WRAPPER_API VkResult vkCreateSemaphore(VkDevice device, VkSemaphoreCreateInfo const * pCreateInfo, VkAllocationCallbacks const * pAllocator, VkSemaphore * pSemaphore);
 VULKAN_WRAPPER_API VkResult vkCreateFence(VkDevice device, VkFenceCreateInfo const * pCreateInfo, VkAllocationCallbacks const * pAllocator, VkFence * pFence);
+VULKAN_WRAPPER_API VkResult vkCreateEvent(VkDevice device, VkEventCreateInfo const * pCreateInfo, VkAllocationCallbacks const * pAllocator, VkEvent * pEvent);
 VULKAN_WRAPPER_API VkResult vkCreateRenderPass(VkDevice device, VkRenderPassCreateInfo const * pCreateInfo, VkAllocationCallbacks const * pAllocator, VkRenderPass * pRenderPass);
 VULKAN_WRAPPER_API VkResult vkCreateFramebuffer(VkDevice device, VkFramebufferCreateInfo const * pCreateInfo, VkAllocationCallbacks const * pAllocator, VkFramebuffer * pFramebuffer);
 VULKAN_WRAPPER_API VkResult vkCreateImageView(VkDevice device, VkImageViewCreateInfo const * pCreateInfo, VkAllocationCallbacks const * pAllocator, VkImageView * pImageView);
@@ -58,6 +96,7 @@ VULKAN_WRAPPER_API void vkDestroyDevice(VkDevice device, VkAllocationCallbacks c
 VULKAN_WRAPPER_API void vkDestroyCommandPool(VkDevice device, VkCommandPool commandPool, VkAllocationCallbacks const * pAllocator);
 VULKAN_WRAPPER_API void vkDestroySemaphore(VkDevice device, VkSemaphore semaphore, VkAllocationCallbacks const * pAllocator);
 VULKAN_WRAPPER_API void vkDestroyFence(VkDevice device, VkFence fence, VkAllocationCallbacks const * pAllocator);
+VULKAN_WRAPPER_API void vkDestroyEvent(VkDevice device, VkEvent event, VkAllocationCallbacks const * pAllocator);
 VULKAN_WRAPPER_API void vkDestroyRenderPass(VkDevice device, VkRenderPass renderPass, VkAllocationCallbacks const * pAllocator);
 VULKAN_WRAPPER_API void vkDestroyFramebuffer(VkDevice device, VkFramebuffer framebuffer, VkAllocationCallbacks const * pAllocator);
 VULKAN_WRAPPER_API void vkDestroyImageView(VkDevice device, VkImageView imageView, VkAllocationCallbacks const * pAllocator);
@@ -131,5 +170,6 @@ VULKAN_WRAPPER_API void vkCmdDrawIndexed(VkCommandBuffer commandBuffer, std::uin
 
 VULKAN_WRAPPER_API void vkCmdSetViewport(VkCommandBuffer commandBuffer, std::uint32_t firstViewport, std::uint32_t viewportCount, VkViewport * pViewports);
 VULKAN_WRAPPER_API void vkCmdSetScissor(VkCommandBuffer commandBuffer, std::uint32_t firstScissor, std::uint32_t scissorCount, VkRect2D * pScissors);
+VULKAN_WRAPPER_API void vkCmdSetEvent(VkCommandBuffer commandBuffer, VkEvent event, VkPipelineStageFlags stageMask);
 
 VULKAN_WRAPPER_API void vkCmdCopyBuffer(VkCommandBuffer commandBuffer, VkBuffer srcBuffer, VkBuffer dstBuffer, std::uint32_t regionCount, VkBufferCopy const * pRegions);
