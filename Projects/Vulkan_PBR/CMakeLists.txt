@@ -25,6 +25,8 @@ list(
     "Include/Memory.hpp"
     "Include/Allocation.hpp"
     "Include/GPUResourceManager.hpp"
+    "Include/Scene.hpp"
+    "Include/String.hpp"
 )
 
 list(
@@ -44,6 +46,7 @@ list(
     "Source/Memory.cpp"
     "Source/Allocation.cpp"
     "Source/GPUResourceManager.cpp"
+    "Source/Scene.cpp"
 )
 
 add_executable(VulkanPBR WIN32)
