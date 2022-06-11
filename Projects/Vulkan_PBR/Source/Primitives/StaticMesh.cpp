@@ -2,28 +2,26 @@
 
 #include "Graphics/Device.hpp"
 
-#include "AssetManager.hpp"
 #include "GPUResourceManager.hpp"
 
 #include <array>
 
 Primitives::StaticMesh::StaticMeshCollection Primitives::StaticMesh::StaticMeshes = {};
 
-bool const Primitives::StaticMesh::CreateGPUResources(VkCommandBuffer const CommandBuffer, Vulkan::Device::DeviceState const & DeviceState, uint32 const /*AssetID*/, VkFence const FrameFence, uint32 & OutputStaticMeshID)
+bool const Primitives::StaticMesh::CreateGPUResources(VkCommandBuffer const CommandBuffer, Vulkan::Device::DeviceState const & DeviceState, AssetManager::AssetHandle<AssetManager::MeshAsset> const AssetHandle, uint32 const ActorID, VkFence const CleanupFence)
 {
     bool bResult = true;
 
-    /* TODO: Map asset id to existing resource ID if we have already created the gpu resources */
-
     AssetManager::MeshAsset const * MeshData = {};
-    /* Hard coded at the moment, will make general when asset manager loading is async */
-    bResult = AssetManager::GetMeshData("Cube", MeshData);
+    bResult = AssetManager::GetMeshData(AssetHandle, MeshData);
 
     if (MeshData)
     {
         uint64 const VertexBufferSizeInBytes = { MeshData->Vertices.size() * sizeof(decltype(MeshData->Vertices [0u])) };
         uint64 const NormalBufferSizeInBytes = { MeshData->Normals.size() * sizeof(decltype(MeshData->Normals [0u])) };
         uint64 const IndexBufferSizeInBytes = { MeshData->Indices.size() * sizeof(decltype(MeshData->Indices [0u])) };
+
+        Logging::Log(Logging::LogTypes::Info, String::Format(PBR_TEXT("Creating GPU resources for Actor [ID = %d]. Sizes: [VB = %llu Bytes | NB = %llu Bytes | IB = %llu Bytes"), ActorID, VertexBufferSizeInBytes, NormalBufferSizeInBytes, IndexBufferSizeInBytes));
 
         GPUResourceManager::BufferHandle VertexStagingBufferHandle = {};
         Vulkan::Device::CreateBuffer(DeviceState, VertexBufferSizeInBytes, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, VertexStagingBufferHandle);
@@ -99,11 +97,14 @@ bool const Primitives::StaticMesh::CreateGPUResources(VkCommandBuffer const Comm
                              3u, &BufferBarriers [3u],
                              0u, nullptr);
 
-        GPUResourceManager::QueueResourceDeletion(FrameFence, VertexStagingBufferHandle);
-        GPUResourceManager::QueueResourceDeletion(FrameFence, NormalStagingBufferHandle);
-        GPUResourceManager::QueueResourceDeletion(FrameFence, IndexStagingBufferHandle);
+        Vulkan::Device::DestroyBuffer(DeviceState, VertexStagingBufferHandle, CleanupFence);
+        Vulkan::Device::DestroyBuffer(DeviceState, NormalStagingBufferHandle, CleanupFence);
+        Vulkan::Device::DestroyBuffer(DeviceState, IndexStagingBufferHandle, CleanupFence);
 
-        OutputStaticMeshID = static_cast<uint32>(Primitives::StaticMesh::StaticMeshes.VertexBuffers.size());
+        /* TODO: Safety check on number of static meshes */
+
+        Primitives::StaticMesh::StaticMeshes.ActorIDs.push_back(ActorID);
+        Primitives::StaticMesh::StaticMeshes.ActorIDToStaticMeshIndex [ActorID] = static_cast<uint32>(Primitives::StaticMesh::StaticMeshes.ActorIDs.size());
 
         Primitives::StaticMesh::StaticMeshes.VertexBuffers.push_back(VertexBufferHandle);
         Primitives::StaticMesh::StaticMeshes.NormalBuffers.push_back(NormalBufferHandle);
@@ -113,17 +114,29 @@ bool const Primitives::StaticMesh::CreateGPUResources(VkCommandBuffer const Comm
     return bResult;
 }
 
-bool const Primitives::StaticMesh::GetStaticMeshResources(uint32 const StaticMeshID, Primitives::StaticMesh::StaticMeshData & OutputStaticMeshData)
+bool const Primitives::StaticMesh::GetStaticMeshResources(uint32 const ActorID, Primitives::StaticMesh::StaticMeshData & OutputStaticMeshData)
 {
     bool bResult = false;
 
-    if (StaticMeshID < Primitives::StaticMesh::StaticMeshes.VertexBuffers.size())
+    if (ActorID == 0u)
+    {
+        Logging::Log(Logging::LogTypes::Error, PBR_TEXT("Cannot get static mesh resources for NULL actor."));
+        return false;
+    }
+
+    uint32 const StaticMeshID = Primitives::StaticMesh::StaticMeshes.ActorIDToStaticMeshIndex [ActorID] - 1u;
+
+    if (StaticMeshID >= 0u && StaticMeshID < Primitives::StaticMesh::StaticMeshes.ActorIDs.size())
     {
         OutputStaticMeshData.VertexBuffer = Primitives::StaticMesh::StaticMeshes.VertexBuffers [StaticMeshID];
         OutputStaticMeshData.NormalBuffer = Primitives::StaticMesh::StaticMeshes.NormalBuffers [StaticMeshID];
         OutputStaticMeshData.IndexBuffer = Primitives::StaticMesh::StaticMeshes.IndexBuffers [StaticMeshID];
 
         bResult = true;
+    }
+    else
+    {
+        Logging::Log(Logging::LogTypes::Error, String::Format(PBR_TEXT("Failed to get Static Mesh for Actor [ID = %d]"), ActorID));
     }
 
     return bResult;

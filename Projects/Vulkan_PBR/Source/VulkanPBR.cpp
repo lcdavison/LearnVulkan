@@ -4,9 +4,14 @@
 #include "Graphics/ShaderLibrary.hpp"
 #include "ForwardRenderer.hpp"
 
+#include "AssetManager.hpp"
+#include "Scene.hpp"
+
 #include <Windows.h>
 
-extern Application::ApplicationState Application::State = Application::ApplicationState();
+extern Application::ApplicationState Application::State = {};
+
+static Scene::SceneData PBRScene = {};
 
 static LRESULT CALLBACK WindowProcedure(HWND Window, UINT Message, WPARAM WParam, LPARAM LParam)
 {
@@ -78,6 +83,13 @@ static bool const Initialise()
         ApplicationInfo.apiVersion = VK_MAKE_API_VERSION(0, 1, 3, 0);
 
         bResult = ShaderLibrary::Initialise();
+        AssetManager::Initialise();
+
+        AssetManager::AssetHandle<AssetManager::MeshAsset> CubeHandle = {};
+        AssetManager::LoadMeshAsset("Cube", CubeHandle);
+
+        Scene::ActorData CubeActorData = { "Cube", CubeHandle };
+        Scene::CreateActor(PBRScene, CubeActorData);
 
         bResult = ForwardRenderer::Initialise(ApplicationInfo);
     }
@@ -87,6 +99,8 @@ static bool const Initialise()
 
 static bool const Destroy()
 {
+    AssetManager::Destroy();
+
     ShaderLibrary::Destroy();
 
     bool bResult = ForwardRenderer::Shutdown() && VulkanModule::Stop();
@@ -125,11 +139,13 @@ static bool const Run()
     {
         if (::ProcessWindowMessages())
         {
-            ForwardRenderer::PreRender();
+            ForwardRenderer::PreRender(PBRScene);
 
-            ForwardRenderer::Render();
+            ForwardRenderer::Render(PBRScene);
 
             ForwardRenderer::PostRender();
+
+            PBRScene.NewActorIndices.clear();
         }
         else
         {

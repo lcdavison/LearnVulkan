@@ -20,6 +20,7 @@
 
 #include "AssetManager.hpp"
 #include "GPUResourceManager.hpp"
+#include "Scene.hpp"
 
 #include <array>
 
@@ -68,10 +69,6 @@ static VkDescriptorSetLayout DescriptorSetLayout = {};
 
 static AssetManager::MeshAsset const * CubeMesh = {};
 static Primitives::StaticMesh::StaticMeshData CubeStaticMesh = {};
-
-static DeviceMemoryAllocator::Allocation CubeVertexBufferMemory = {};
-static DeviceMemoryAllocator::Allocation CubeNormalBufferMemory = {};
-static DeviceMemoryAllocator::Allocation CubeIndexBufferMemory = {};
 
 /*
     For reference.
@@ -354,7 +351,7 @@ static bool const CreateFrameUniformBuffer(LinearBufferAllocator::Allocation & O
         PerFrameUniformBufferData PerFrameData = {};
 
         float const AspectRatio = static_cast<float>(ViewportState.ImageExtents.width) / static_cast<float>(ViewportState.ImageExtents.height);
-        PerFrameData.PerspectiveMatrix = Math::PerspectiveMatrix(Math::ConvertDegreesToRadians(90.0f), AspectRatio, 0.0001f, 1000.0f);
+        PerFrameData.PerspectiveMatrix = Math::PerspectiveMatrix(Math::ConvertDegreesToRadians(90.0f), AspectRatio, 0.001f, 1000.0f);
 
         PerFrameData.Brightness = -0.25f;
 
@@ -487,7 +484,7 @@ bool const ForwardRenderer::Shutdown()
     return true;
 }
 
-void ForwardRenderer::PreRender()
+void ForwardRenderer::PreRender(Scene::SceneData const & Scene)
 {
     VkResult ImageAcquireResult = vkAcquireNextImageKHR(DeviceState.Device, ViewportState.SwapChain, 0ull, FrameState.Semaphores [FrameState.CurrentFrameStateIndex], VK_NULL_HANDLE, &FrameState.CurrentImageIndex);
 
@@ -501,68 +498,53 @@ void ForwardRenderer::PreRender()
 
     ::ResetCurrentFrameState();
 
-    /* TODO: Run through the deferred deletion list for the current frame state and clean up old resources */
-
-    /* TODO: This will be used to initialise any uninitialised "render items" in the scene */
-
-    static bool bMeshDataUploaded = false;
-    if (!bMeshDataUploaded)
+    if (Scene.NewActorIndices.size() > 0u)
     {
-        VkCommandBufferBeginInfo BeginInfo = {};
-        BeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-        BeginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-
+        VkCommandBufferBeginInfo BeginInfo = Vulkan::CommandBufferBegin();
         VkCommandBuffer & CurrentCommandBuffer = FrameState.CommandBuffers [kFrameStateCount + FrameState.CurrentFrameStateIndex];
+
         vkBeginCommandBuffer(CurrentCommandBuffer, &BeginInfo);
 
-        uint32 StaticMeshID = {};
-        Primitives::StaticMesh::CreateGPUResources(CurrentCommandBuffer, DeviceState, 0u, FrameState.Fences [FrameState.CurrentFrameStateIndex], StaticMeshID);
-        Primitives::StaticMesh::GetStaticMeshResources(StaticMeshID, CubeStaticMesh);
+        for (uint32 NewActorIndex : Scene.NewActorIndices)
+        {
+            Primitives::StaticMesh::CreateGPUResources(CurrentCommandBuffer, DeviceState, Scene.ActorMeshHandles [NewActorIndex - 1u], NewActorIndex, FrameState.Fences [FrameState.CurrentFrameStateIndex]);
+            Primitives::StaticMesh::GetStaticMeshResources(NewActorIndex, CubeStaticMesh);
+        }
 
         vkEndCommandBuffer(CurrentCommandBuffer);
 
-        VkSubmitInfo SubmitInfo = {};
-        SubmitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-        SubmitInfo.commandBufferCount = 1u;
-        SubmitInfo.pCommandBuffers = &CurrentCommandBuffer;
-
+        VkSubmitInfo const SubmitInfo = Vulkan::SubmitInfo(1u, &CurrentCommandBuffer);
         VERIFY_VKRESULT(vkQueueSubmit(DeviceState.GraphicsQueue, 1u, &SubmitInfo, VK_NULL_HANDLE));
-
-        bMeshDataUploaded = true;
     }
-}
 
-void ForwardRenderer::Render()
-{
     LinearBufferAllocator::Allocation UniformBufferAllocation = {};
     ::CreateFrameUniformBuffer(UniformBufferAllocation);
     ::UpdateUniformBufferDescriptors(UniformBufferAllocation);
+}
 
+void ForwardRenderer::Render(Scene::SceneData const & /*Scene*/)
+{
     VkCommandBuffer & CurrentCommandBuffer = FrameState.CommandBuffers [FrameState.CurrentFrameStateIndex];
 
     VERIFY_VKRESULT(vkResetCommandBuffer(CurrentCommandBuffer, 0u));
 
     {
-        VkCommandBufferBeginInfo BeginInfo = {};
-        BeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-        BeginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-
+        VkCommandBufferBeginInfo BeginInfo = Vulkan::CommandBufferBegin();
         VERIFY_VKRESULT(vkBeginCommandBuffer(CurrentCommandBuffer, &BeginInfo));
     }
 
     {
-        VkClearValue ClearValue = {};
-        ClearValue.color = VkClearColorValue { 0.0f, 0.4f, 0.7f, 1.0f };
+        std::array<VkClearValue, 2u> AttachmentClearValues =
+        {
+            VkClearValue { 0.0f, 0.4f, 0.7f, 1.0f },
+            VkClearValue { 1.0f, 0u },
+        };
 
-        VkRenderPassBeginInfo BeginInfo = {};
-        BeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-        BeginInfo.renderPass = MainRenderPass;
-        BeginInfo.framebuffer = FrameState.FrameBuffers [FrameState.CurrentFrameStateIndex];
-        BeginInfo.renderArea.extent = ViewportState.ImageExtents;
-        BeginInfo.renderArea.offset = VkOffset2D { 0u, 0u };
-        BeginInfo.clearValueCount = 1u;
-        BeginInfo.pClearValues = &ClearValue;
+        GPUResource::FrameBuffer CurrentFrameBuffer = {};
+        GPUResourceManager::GetResource(FrameState.FrameBuffers [FrameState.CurrentFrameStateIndex], CurrentFrameBuffer);
 
+        VkRenderPassBeginInfo BeginInfo = Vulkan::RenderPassBegin(MainRenderPass, CurrentFrameBuffer.VkResource, VkRect2D { VkOffset2D { 0u, 0u }, ViewportState.ImageExtents }, static_cast<uint32>(AttachmentClearValues.size()), AttachmentClearValues.data());
+        
         vkCmdBeginRenderPass(CurrentCommandBuffer, &BeginInfo, VK_SUBPASS_CONTENTS_INLINE);
     }
 
@@ -604,15 +586,10 @@ void ForwardRenderer::Render()
     {
         VkPipelineStageFlags const PipelineWaitStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 
-        VkSubmitInfo SubmitInfo = {};
-        SubmitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-        SubmitInfo.commandBufferCount = 1u;
-        SubmitInfo.pCommandBuffers = &CurrentCommandBuffer;
-        SubmitInfo.waitSemaphoreCount = 1u;
-        SubmitInfo.pWaitSemaphores = &FrameState.Semaphores [FrameState.CurrentFrameStateIndex];
-        SubmitInfo.signalSemaphoreCount = 1u;
-        SubmitInfo.pSignalSemaphores = &FrameState.Semaphores [kFrameStateCount + FrameState.CurrentFrameStateIndex];
-        SubmitInfo.pWaitDstStageMask = &PipelineWaitStage;
+        VkSubmitInfo SubmitInfo = Vulkan::SubmitInfo(1u, &CurrentCommandBuffer,
+                                                     1u, &FrameState.Semaphores [kFrameStateCount + FrameState.CurrentFrameStateIndex], // Signal
+                                                     1u, &FrameState.Semaphores [FrameState.CurrentFrameStateIndex], // Wait
+                                                     &PipelineWaitStage);
 
         VERIFY_VKRESULT(vkQueueSubmit(DeviceState.GraphicsQueue, 1u, &SubmitInfo, FrameState.Fences [FrameState.CurrentFrameStateIndex]));
     }
@@ -635,8 +612,6 @@ void ForwardRenderer::PostRender()
     FrameState.CurrentFrameStateIndex = (++FrameState.CurrentFrameStateIndex) % kFrameStateCount;
 
     vkWaitForFences(DeviceState.Device, 1u, &FrameState.Fences [FrameState.CurrentFrameStateIndex], VK_TRUE, std::numeric_limits<uint64>::max());
-
-    /* Before resetting the fence, we should attempt to clean up some resources */
 
     GPUResourceManager::DestroyUnusedResources(DeviceState);
 }
