@@ -58,6 +58,7 @@ VK_INSTANCE_FUNCTION_FROM_EXTENSION(vkDestroySurfaceKHR, VK_KHR_SURFACE_EXTENSIO
 
 VK_DEVICE_FUNCTION(vkGetDeviceQueue);
 VK_DEVICE_FUNCTION(vkGetBufferMemoryRequirements);
+VK_DEVICE_FUNCTION(vkGetImageMemoryRequirements);
 VK_DEVICE_FUNCTION(vkGetFenceStatus);
 VK_DEVICE_FUNCTION(vkGetEventStatus);
 
@@ -105,6 +106,7 @@ VK_DEVICE_FUNCTION(vkDestroyBufferView);
 VK_DEVICE_FUNCTION(vkDestroyImageView);
 
 VK_DEVICE_FUNCTION(vkBindBufferMemory);
+VK_DEVICE_FUNCTION(vkBindImageMemory);
 
 VK_DEVICE_FUNCTION(vkMapMemory);
 VK_DEVICE_FUNCTION(vkUnmapMemory);

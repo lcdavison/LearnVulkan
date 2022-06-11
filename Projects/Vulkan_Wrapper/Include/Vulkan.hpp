@@ -11,6 +11,24 @@
 
 namespace Vulkan
 {
+    inline constexpr VkCommandBufferBeginInfo CommandBufferBegin(VkCommandBufferUsageFlags const UsageFlags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT, VkCommandBufferInheritanceInfo const * const InheritanceInfo = nullptr)
+    {
+        return VkCommandBufferBeginInfo { VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO, nullptr, UsageFlags, InheritanceInfo };
+    }
+
+    inline VkSubmitInfo SubmitInfo(std::uint32_t const CommandBufferCount, VkCommandBuffer const * const CommandBuffers,
+                                   std::uint32_t const SignalSemaphoreCount = 0u, VkSemaphore const * const SignalSemaphores = nullptr,
+                                   std::uint32_t const WaitSemaphoreCount = 0u, VkSemaphore const * const WaitSemaphores = nullptr,
+                                   VkPipelineStageFlags const * const WaitPipelineStageMask = nullptr)
+    {
+        return VkSubmitInfo { VK_STRUCTURE_TYPE_SUBMIT_INFO, nullptr, WaitSemaphoreCount, WaitSemaphores, WaitPipelineStageMask, CommandBufferCount, CommandBuffers, SignalSemaphoreCount, SignalSemaphores };
+    }
+
+    inline VkRenderPassBeginInfo RenderPassBegin(VkRenderPass const RenderPass, VkFramebuffer const FrameBuffer, VkRect2D const RenderArea, std::uint32_t const ClearValueCount = 0u, VkClearValue const * const ClearValues = nullptr)
+    {
+        return VkRenderPassBeginInfo { VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO, nullptr, RenderPass, FrameBuffer, RenderArea, ClearValueCount, ClearValues };
+    }
+
     inline VkBufferMemoryBarrier BufferMemoryBarrier(VkBuffer Buffer, VkAccessFlags SourceAccessFlags, VkAccessFlags DestinationAccessFlags, VkDeviceSize const SizeInBytes = VK_WHOLE_SIZE, VkDeviceSize const OffsetInBytes = 0u)
     {
         return VkBufferMemoryBarrier { VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER, nullptr, SourceAccessFlags, DestinationAccessFlags, 0u, 0u, Buffer, OffsetInBytes, SizeInBytes };
@@ -69,6 +87,7 @@ VULKAN_WRAPPER_API VkResult vkGetPhysicalDeviceSurfaceFormatsKHR(VkPhysicalDevic
 VULKAN_WRAPPER_API VkResult vkGetPhysicalDeviceSurfaceCapabilitiesKHR(VkPhysicalDevice physicalDevice, VkSurfaceKHR surface, VkSurfaceCapabilitiesKHR * pSurfaceCapabilities);
 VULKAN_WRAPPER_API void vkGetDeviceQueue(VkDevice device, std::uint32_t queueFamilyIndex, std::uint32_t queueIndex, VkQueue * pQueue);
 VULKAN_WRAPPER_API void vkGetBufferMemoryRequirements(VkDevice device, VkBuffer buffer, VkMemoryRequirements * pMemoryRequirements);
+VULKAN_WRAPPER_API void vkGetImageMemoryRequirements(VkDevice device, VkImage image, VkMemoryRequirements * pMemoryRequirements);
 VULKAN_WRAPPER_API VkResult vkGetFenceStatus(VkDevice device, VkFence fence);
 VULKAN_WRAPPER_API VkResult vkGetEventStatus(VkDevice device, VkEvent event);
 VULKAN_WRAPPER_API VkResult vkGetSwapchainImagesKHR(VkDevice device, VkSwapchainKHR swapchain, std::uint32_t * pSwapchainImageCount, VkImage * pSwapchainImages);
@@ -81,14 +100,15 @@ VULKAN_WRAPPER_API VkResult vkCreateFence(VkDevice device, VkFenceCreateInfo con
 VULKAN_WRAPPER_API VkResult vkCreateEvent(VkDevice device, VkEventCreateInfo const * pCreateInfo, VkAllocationCallbacks const * pAllocator, VkEvent * pEvent);
 VULKAN_WRAPPER_API VkResult vkCreateRenderPass(VkDevice device, VkRenderPassCreateInfo const * pCreateInfo, VkAllocationCallbacks const * pAllocator, VkRenderPass * pRenderPass);
 VULKAN_WRAPPER_API VkResult vkCreateFramebuffer(VkDevice device, VkFramebufferCreateInfo const * pCreateInfo, VkAllocationCallbacks const * pAllocator, VkFramebuffer * pFramebuffer);
-VULKAN_WRAPPER_API VkResult vkCreateImageView(VkDevice device, VkImageViewCreateInfo const * pCreateInfo, VkAllocationCallbacks const * pAllocator, VkImageView * pImageView);
 VULKAN_WRAPPER_API VkResult vkCreateShaderModule(VkDevice device, VkShaderModuleCreateInfo const * pCreateInfo, VkAllocationCallbacks const * pAllocator, VkShaderModule * pShaderModule);
 VULKAN_WRAPPER_API VkResult vkCreateDescriptorPool(VkDevice device, VkDescriptorPoolCreateInfo const * pCreateInfo, VkAllocationCallbacks const * pAllocator, VkDescriptorPool * pDescriptorPool);
 VULKAN_WRAPPER_API VkResult vkCreateDescriptorSetLayout(VkDevice device, VkDescriptorSetLayoutCreateInfo const * pCreateInfo, VkAllocationCallbacks const * pAllocator, VkDescriptorSetLayout * pSetLayout);
 VULKAN_WRAPPER_API VkResult vkCreatePipelineLayout(VkDevice device, VkPipelineLayoutCreateInfo const * pCreateInfo, VkAllocationCallbacks const * pAllocator, VkPipelineLayout * pPipelineLayout);
 VULKAN_WRAPPER_API VkResult vkCreateGraphicsPipelines(VkDevice device, VkPipelineCache pipelineCache, std::uint32_t createInfoCount, VkGraphicsPipelineCreateInfo const * pCreateInfos, VkAllocationCallbacks const * pAllocator, VkPipeline * pPipelines);
 VULKAN_WRAPPER_API VkResult vkCreateBuffer(VkDevice device, VkBufferCreateInfo const * pCreateInfo, VkAllocationCallbacks const * pAllocator, VkBuffer * pBuffer);
+VULKAN_WRAPPER_API VkResult vkCreateImage(VkDevice device, VkImageCreateInfo const * pCreateInfo, VkAllocationCallbacks const * pAllocator, VkImage * pImage);
 VULKAN_WRAPPER_API VkResult vkCreateBufferView(VkDevice device, VkBufferViewCreateInfo const * pCreateInfo, VkAllocationCallbacks const * pAllocator, VkBufferView * pView);
+VULKAN_WRAPPER_API VkResult vkCreateImageView(VkDevice device, VkImageViewCreateInfo const * pCreateInfo, VkAllocationCallbacks const * pAllocator, VkImageView * pImageView);
 VULKAN_WRAPPER_API VkResult vkCreateSwapchainKHR(VkDevice device, VkSwapchainCreateInfoKHR const * pCreateInfo, VkAllocationCallbacks const * pAllocator, VkSwapchainKHR * pSwapchain);
 
 VULKAN_WRAPPER_API void vkDestroyInstance(VkInstance instance, VkAllocationCallbacks const * pAllocator);
@@ -99,18 +119,20 @@ VULKAN_WRAPPER_API void vkDestroyFence(VkDevice device, VkFence fence, VkAllocat
 VULKAN_WRAPPER_API void vkDestroyEvent(VkDevice device, VkEvent event, VkAllocationCallbacks const * pAllocator);
 VULKAN_WRAPPER_API void vkDestroyRenderPass(VkDevice device, VkRenderPass renderPass, VkAllocationCallbacks const * pAllocator);
 VULKAN_WRAPPER_API void vkDestroyFramebuffer(VkDevice device, VkFramebuffer framebuffer, VkAllocationCallbacks const * pAllocator);
-VULKAN_WRAPPER_API void vkDestroyImageView(VkDevice device, VkImageView imageView, VkAllocationCallbacks const * pAllocator);
 VULKAN_WRAPPER_API void vkDestroyShaderModule(VkDevice device, VkShaderModule shaderModule, VkAllocationCallbacks const * pAllocator);
 VULKAN_WRAPPER_API void vkDestroyDescriptorPool(VkDevice device, VkDescriptorPool descriptorPool, VkAllocationCallbacks const * pAllocator);
 VULKAN_WRAPPER_API void vkDestroyDescriptorSetLayout(VkDevice device, VkDescriptorSetLayout descriptorSetLayout, VkAllocationCallbacks const * pAllocator);
 VULKAN_WRAPPER_API void vkDestroyPipelineLayout(VkDevice device, VkPipelineLayout pipelineLayout, VkAllocationCallbacks const * pAllocator);
 VULKAN_WRAPPER_API void vkDestroyPipeline(VkDevice device, VkPipeline pipeline, VkAllocationCallbacks const * pAllocator);
 VULKAN_WRAPPER_API void vkDestroyBuffer(VkDevice device, VkBuffer buffer, VkAllocationCallbacks const * pAllocator);
+VULKAN_WRAPPER_API void vkDestroyImage(VkDevice device, VkImage image, VkAllocationCallbacks const * pAllocator);
 VULKAN_WRAPPER_API void vkDestroyBufferView(VkDevice device, VkBufferView bufferView, VkAllocationCallbacks const * pAllocator);
+VULKAN_WRAPPER_API void vkDestroyImageView(VkDevice device, VkImageView imageView, VkAllocationCallbacks const * pAllocator);
 VULKAN_WRAPPER_API void vkDestroySurfaceKHR(VkInstance instance, VkSurfaceKHR surface, VkAllocationCallbacks const * pAllocator);
 VULKAN_WRAPPER_API void vkDestroySwapchainKHR(VkDevice device, VkSwapchainKHR swapchain, VkAllocationCallbacks const * pAllocator);
 
 VULKAN_WRAPPER_API VkResult vkBindBufferMemory(VkDevice device, VkBuffer buffer, VkDeviceMemory memory, VkDeviceSize memoryOffset);
+VULKAN_WRAPPER_API VkResult vkBindImageMemory(VkDevice device, VkImage image, VkDeviceMemory memory, VkDeviceSize memoryOffset);
 
 VULKAN_WRAPPER_API VkResult vkMapMemory(VkDevice device, VkDeviceMemory memory, VkDeviceSize offset, VkDeviceSize size, VkMemoryMapFlags flags, void ** ppData);
 VULKAN_WRAPPER_API void vkUnmapMemory(VkDevice device, VkDeviceMemory memory);

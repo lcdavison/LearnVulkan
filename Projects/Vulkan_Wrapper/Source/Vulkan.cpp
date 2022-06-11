@@ -212,6 +212,11 @@ void vkGetBufferMemoryRequirements(VkDevice device, VkBuffer buffer, VkMemoryReq
     Functions::vkGetBufferMemoryRequirements(device, buffer, pMemoryRequirements);
 }
 
+void vkGetImageMemoryRequirements(VkDevice device, VkImage image, VkMemoryRequirements * pMemoryRequirements)
+{
+    Functions::vkGetImageMemoryRequirements(device, image, pMemoryRequirements);
+}
+
 VkResult vkGetFenceStatus(VkDevice device, VkFence fence)
 {
     return Functions::vkGetFenceStatus(device, fence);
@@ -268,11 +273,6 @@ VkResult vkCreateFramebuffer(VkDevice device, VkFramebufferCreateInfo const * pC
     return Functions::vkCreateFramebuffer(device, pCreateInfo, pAllocator, pFramebuffer);
 }
 
-VkResult vkCreateImageView(VkDevice device, VkImageViewCreateInfo const * pCreateInfo, VkAllocationCallbacks const * pAllocator, VkImageView * pImageView)
-{
-    return Functions::vkCreateImageView(device, pCreateInfo, pAllocator, pImageView);
-}
-
 VkResult vkCreateShaderModule(VkDevice device, VkShaderModuleCreateInfo const * pCreateInfo, VkAllocationCallbacks const * pAllocator, VkShaderModule * pShaderModule)
 {
     return Functions::vkCreateShaderModule(device, pCreateInfo, pAllocator, pShaderModule);
@@ -303,9 +303,19 @@ VkResult vkCreateBuffer(VkDevice device, VkBufferCreateInfo const * pCreateInfo,
     return Functions::vkCreateBuffer(device, pCreateInfo, pAllocator, pBuffer);
 }
 
+VkResult vkCreateImage(VkDevice device, VkImageCreateInfo const * pCreateInfo, VkAllocationCallbacks const * pAllocator, VkImage * pImage)
+{
+    return Functions::vkCreateImage(device, pCreateInfo, pAllocator, pImage);
+}
+
 VkResult vkCreateBufferView(VkDevice device, VkBufferViewCreateInfo const * pCreateInfo, VkAllocationCallbacks const * pAllocator, VkBufferView * pView)
 {
     return Functions::vkCreateBufferView(device, pCreateInfo, pAllocator, pView);
+}
+
+VkResult vkCreateImageView(VkDevice device, VkImageViewCreateInfo const * pCreateInfo, VkAllocationCallbacks const * pAllocator, VkImageView * pImageView)
+{
+    return Functions::vkCreateImageView(device, pCreateInfo, pAllocator, pImageView);
 }
 
 VkResult vkCreateWin32SurfaceKHR(VkInstance instance, VkWin32SurfaceCreateInfoKHR const * pCreateInfo, VkAllocationCallbacks const * pAllocator, VkSurfaceKHR * pSurface)
@@ -359,11 +369,6 @@ void vkDestroyFramebuffer(VkDevice device, VkFramebuffer framebuffer, VkAllocati
     Functions::vkDestroyFramebuffer(device, framebuffer, pAllocator);
 }
 
-void vkDestroyImageView(VkDevice device, VkImageView imageView, VkAllocationCallbacks const * pAllocator)
-{
-    Functions::vkDestroyImageView(device, imageView, pAllocator);
-}
-
 void vkDestroyShaderModule(VkDevice device, VkShaderModule shaderModule, VkAllocationCallbacks const * pAllocator)
 {
     Functions::vkDestroyShaderModule(device, shaderModule, pAllocator);
@@ -394,9 +399,19 @@ void vkDestroyBuffer(VkDevice device, VkBuffer buffer, VkAllocationCallbacks con
     Functions::vkDestroyBuffer(device, buffer, pAllocator);
 }
 
+void vkDestroyImage(VkDevice device, VkImage image, VkAllocationCallbacks const * pAllocator)
+{
+    Functions::vkDestroyImage(device, image, pAllocator);
+}
+
 void vkDestroyBufferView(VkDevice device, VkBufferView bufferView, VkAllocationCallbacks const * pAllocator)
 {
     Functions::vkDestroyBufferView(device, bufferView, pAllocator);
+}
+
+void vkDestroyImageView(VkDevice device, VkImageView imageView, VkAllocationCallbacks const * pAllocator)
+{
+    Functions::vkDestroyImageView(device, imageView, pAllocator);
 }
 
 void vkDestroySurfaceKHR(VkInstance instance, VkSurfaceKHR surface, VkAllocationCallbacks const * pAllocator)
@@ -413,6 +428,11 @@ void vkDestroySwapchainKHR(VkDevice device, VkSwapchainKHR swapchain, VkAllocati
 VkResult vkBindBufferMemory(VkDevice device, VkBuffer buffer, VkDeviceMemory memory, VkDeviceSize memoryOffset)
 {
     return Functions::vkBindBufferMemory(device, buffer, memory, memoryOffset);
+}
+
+VkResult vkBindImageMemory(VkDevice device, VkImage image, VkDeviceMemory memory, VkDeviceSize memoryOffset)
+{
+    return Functions::vkBindImageMemory(device, image, memory, memoryOffset);
 }
 
 
