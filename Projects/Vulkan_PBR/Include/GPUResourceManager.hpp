@@ -25,6 +25,7 @@ namespace GPUResource
     using Buffer = Resource<VkBuffer>;
     using Image = Resource<VkImage>;
     using ImageView = Resource<VkImageView>;
+    using FrameBuffer = Resource<VkFramebuffer>;
 }
 
 /* Overengineered but compiler can do the work for me :) */
@@ -45,22 +46,24 @@ namespace GPUResourceManager
     using ResourceCollection = std::tuple<
         ResourceList<VkBuffer>,
         ResourceList<VkImage>,
+        ResourceList<VkImageView>,
         ResourceList<VkFramebuffer>>;
 
     using ResourceHandleCollection = std::tuple<
         std::queue<ResourceHandle<VkBuffer>>,
         std::queue<ResourceHandle<VkImage>>,
+        std::queue<ResourceHandle<VkImageView>>,
         std::queue<ResourceHandle<VkFramebuffer>>>;
 
     using ResourceDeletionCollection = std::tuple<
         ResourceDeletionTable<VkBuffer>,
         ResourceDeletionTable<VkImage>,
+        ResourceDeletionTable<VkImageView>,
         ResourceDeletionTable<VkFramebuffer>>;
-
-    /* TODO: Keep a list of free indices and only push if that list is empty */
 
     using BufferHandle = ResourceHandle<VkBuffer>;
     using ImageHandle = ResourceHandle<VkImage>;
+    using ImageViewHandle = ResourceHandle<VkImageView>;
     using FrameBufferHandle = ResourceHandle<VkFramebuffer>;
 
     extern ResourceCollection ResourceLists;
@@ -131,20 +134,40 @@ namespace GPUResourceManager
         GPUResource::Resource<TResourceType> Resource = {};
         GetResource(ResourceHandle, Resource);
 
-        /* Discard the statements for different resource types */
-        /* This bit doesn't benefit from the generic code, still less code to add a new resource type though */
-        if constexpr (std::is_same<TResourceType, VkBuffer>())
+        if (Resource.VkResource != VK_NULL_HANDLE)
         {
-            if (Resource.VkResource != VK_NULL_HANDLE)
+            /* Discard the statements for different resource types */
+            if constexpr (std::is_same<TResourceType, VkBuffer>())
             {
+                Logging::Log(Logging::LogTypes::Info, String::Format(PBR_TEXT("Destroying Buffer [%p]"), Resource.VkResource));
+
                 vkDestroyBuffer(DeviceState.Device, Resource.VkResource, nullptr);
                 Resource.VkResource = VK_NULL_HANDLE;
 
+                /* Not every resource will have memory, so would need some kind of validity check on the allocation */
                 DeviceMemoryAllocator::FreeMemory(Resource.MemoryAllocation);
-
-                std::queue<decltype(ResourceHandle)> & FreeHandleQueue = std::get<std::queue<decltype(ResourceHandle)>>(FreeResourceHandles);
-                FreeHandleQueue.push(ResourceHandle);
             }
+            else if constexpr (std::is_same<TResourceType, VkFramebuffer>())
+            {
+                vkDestroyFramebuffer(DeviceState.Device, Resource.VkResource, nullptr);
+                Resource.VkResource = VK_NULL_HANDLE;
+            }
+            else if constexpr (std::is_same<TResourceType, VkImage>())
+            {
+                Logging::Log(Logging::LogTypes::Info, String::Format(PBR_TEXT("Destroying Image [%p]"), Resource.VkResource));
+
+                vkDestroyImage(DeviceState.Device, Resource.VkResource, nullptr);
+                Resource.VkResource = VK_NULL_HANDLE;
+
+                DeviceMemoryAllocator::FreeMemory(Resource.MemoryAllocation);
+            }
+            else if constexpr (std::is_same<TResourceType, VkImageView>())
+            {
+
+            }
+
+            std::queue<decltype(ResourceHandle)> & FreeHandleQueue = std::get<std::queue<decltype(ResourceHandle)>>(FreeResourceHandles);
+            FreeHandleQueue.push(ResourceHandle);
         }
     }
 

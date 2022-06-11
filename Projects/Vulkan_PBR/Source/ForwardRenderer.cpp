@@ -35,7 +35,7 @@ struct FrameStateCollection
     std::vector<VkCommandBuffer> CommandBuffers;
     std::vector<VkSemaphore> Semaphores;
     std::vector<VkFence> Fences;
-    std::vector<VkFramebuffer> FrameBuffers;
+    std::vector<GPUResourceManager::FrameBufferHandle> FrameBuffers;
 
     std::vector<VkDescriptorSet> DescriptorSets;
 
@@ -103,7 +103,7 @@ static void CreateFrameState()
 
     {
         uint8 CurrentImageViewIndex = { 0u };
-        for (VkFramebuffer & FrameBuffer : FrameState.FrameBuffers)
+        for (GPUResourceManager::FrameBufferHandle & FrameBuffer : FrameState.FrameBuffers)
         {
             std::vector<VkImageView> FrameBufferAttachments =
             {
@@ -161,9 +161,9 @@ static void DestroyFrameState()
         Vulkan::Device::DestroySemaphore(DeviceState, Semaphore);
     }
 
-    for (VkFramebuffer & FrameBuffer : FrameState.FrameBuffers)
+    for (GPUResourceManager::FrameBufferHandle & FrameBuffer : FrameState.FrameBuffers)
     {
-        Vulkan::Device::DestroyFrameBuffer(DeviceState, FrameBuffer);
+        Vulkan::Device::DestroyFrameBuffer(DeviceState, FrameBuffer, VK_NULL_HANDLE);
     }
 
     Vulkan::Device::DestroyCommandBuffers(DeviceState, FrameState.CommandBuffers);
@@ -399,9 +399,9 @@ static void ResizeViewport()
 
     {
         uint8 CurrentImageIndex = { 0u };
-        for (VkFramebuffer & FrameBuffer : FrameState.FrameBuffers)
+        for (GPUResourceManager::FrameBufferHandle & FrameBuffer : FrameState.FrameBuffers)
         {
-            vkDestroyFramebuffer(DeviceState.Device, FrameBuffer, nullptr);
+            Vulkan::Device::DestroyFrameBuffer(DeviceState, FrameBuffer, VK_NULL_HANDLE);
 
             std::vector<VkImageView> FrameBufferAttachments =
             {

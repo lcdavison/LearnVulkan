@@ -275,7 +275,7 @@ void Vulkan::Device::DestroyDevice(Vulkan::Device::DeviceState & State)
     }
 }
 
-void Vulkan::Device::CreateCommandBuffers(DeviceState const & State, VkCommandBufferLevel CommandBufferLevel, uint32 const CommandBufferCount, std::vector<VkCommandBuffer> & OutputCommandBuffers)
+void Vulkan::Device::CreateCommandBuffers(Vulkan::Device::DeviceState const & State, VkCommandBufferLevel CommandBufferLevel, uint32 const CommandBufferCount, std::vector<VkCommandBuffer> & OutputCommandBuffers)
 {
     std::vector CommandBuffers = std::vector<VkCommandBuffer>(CommandBufferCount);
 
@@ -331,7 +331,25 @@ void Vulkan::Device::DestroyFence(Vulkan::Device::DeviceState const & State, VkF
     }
 }
 
-void Vulkan::Device::CreateFrameBuffer(Vulkan::Device::DeviceState const & State, uint32 Width, uint32 Height, VkRenderPass RenderPass, std::vector<VkImageView> const & Attachments, VkFramebuffer & OutputFrameBuffer)
+void Vulkan::Device::CreateEvent(Vulkan::Device::DeviceState const & State, VkEventCreateFlags Flags, VkEvent & OutputEvent)
+{
+    VkEventCreateInfo CreateInfo = {};
+    CreateInfo.sType = VK_STRUCTURE_TYPE_EVENT_CREATE_INFO;
+    CreateInfo.flags = Flags;
+
+    VERIFY_VKRESULT(vkCreateEvent(State.Device, &CreateInfo, nullptr, &OutputEvent));
+}
+
+void Vulkan::Device::DestroyEvent(Vulkan::Device::DeviceState const & State, VkEvent & Event)
+{
+    if (Event != VK_NULL_HANDLE)
+    {
+        vkDestroyEvent(State.Device, Event, nullptr);
+        Event = VK_NULL_HANDLE;
+    }
+}
+
+void Vulkan::Device::CreateFrameBuffer(Vulkan::Device::DeviceState const & State, uint32 const Width, uint32 const Height, VkRenderPass const RenderPass, std::vector<VkImageView> const & Attachments, GPUResourceManager::FrameBufferHandle & OutputFrameBufferHandle)
 {
     VkFramebufferCreateInfo CreateInfo = {};
     CreateInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
@@ -342,19 +360,28 @@ void Vulkan::Device::CreateFrameBuffer(Vulkan::Device::DeviceState const & State
     CreateInfo.attachmentCount = static_cast<uint32>(Attachments.size());
     CreateInfo.pAttachments = Attachments.data();
 
-    VERIFY_VKRESULT(vkCreateFramebuffer(State.Device, &CreateInfo, nullptr, &OutputFrameBuffer));
+    GPUResource::FrameBuffer NewFrameBuffer = {};
+    VERIFY_VKRESULT(vkCreateFramebuffer(State.Device, &CreateInfo, nullptr, &NewFrameBuffer.VkResource));
+
+    GPUResourceManager::FrameBufferHandle NewFrameBufferHandle = {};
+    GPUResourceManager::RegisterResource(NewFrameBuffer, NewFrameBufferHandle);
+
+    OutputFrameBufferHandle = NewFrameBufferHandle;
 }
 
-void Vulkan::Device::DestroyFrameBuffer(Vulkan::Device::DeviceState const & State, VkFramebuffer & FrameBuffer)
+void Vulkan::Device::DestroyFrameBuffer(Vulkan::Device::DeviceState const & State, GPUResourceManager::FrameBufferHandle const FrameBufferHandle, VkFence const FenceToWaitFor)
 {
-    if (FrameBuffer != VK_NULL_HANDLE)
+    if (FenceToWaitFor)
     {
-        vkDestroyFramebuffer(State.Device, FrameBuffer, nullptr);
-        FrameBuffer = VK_NULL_HANDLE;
+        GPUResourceManager::QueueResourceDeletion(FenceToWaitFor, FrameBufferHandle);
+    }
+    else
+    {
+        GPUResourceManager::DestroyResource(FrameBufferHandle, State);
     }
 }
 
-void Vulkan::Device::CreateBuffer(Vulkan::Device::DeviceState const & State, uint64 SizeInBytes, VkBufferUsageFlags UsageFlags, VkMemoryPropertyFlags MemoryFlags, GPUResourceManager::BufferHandle & OutputBuffer)
+void Vulkan::Device::CreateBuffer(Vulkan::Device::DeviceState const & State, uint64 SizeInBytes, VkBufferUsageFlags UsageFlags, VkMemoryPropertyFlags MemoryFlags, GPUResourceManager::BufferHandle & OutputBufferHandle)
 {
     VkBufferCreateInfo CreateInfo = {};
     CreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -375,7 +402,7 @@ void Vulkan::Device::CreateBuffer(Vulkan::Device::DeviceState const & State, uin
     GPUResourceManager::BufferHandle NewBufferHandle = {};
     GPUResourceManager::RegisterResource(NewBuffer, NewBufferHandle);
 
-    OutputBuffer = NewBufferHandle;
+    OutputBufferHandle = NewBufferHandle;
 }
 
 void Vulkan::Device::DestroyBuffer(Vulkan::Device::DeviceState const & State, GPUResourceManager::BufferHandle const BufferHandle, VkFence const FenceToWaitFor)
@@ -388,4 +415,79 @@ void Vulkan::Device::DestroyBuffer(Vulkan::Device::DeviceState const & State, GP
     {
         GPUResourceManager::DestroyResource(BufferHandle, State);
     }
+}
+
+void Vulkan::Device::CreateImage(Vulkan::Device::DeviceState const & State, Vulkan::ImageDescriptor const & Descriptor, VkMemoryPropertyFlags const MemoryFlags, GPUResourceManager::ImageHandle & OutputImageHandle)
+{
+    VkImageCreateInfo CreateInfo = {};
+    CreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    CreateInfo.imageType = Descriptor.ImageType;
+    CreateInfo.format = Descriptor.Format;
+    CreateInfo.usage = Descriptor.UsageFlags;
+    CreateInfo.extent.width = Descriptor.Width;
+    CreateInfo.extent.height = Descriptor.Height;
+    CreateInfo.extent.depth = Descriptor.Depth;
+    CreateInfo.arrayLayers = Descriptor.ArrayLayerCount;
+    CreateInfo.mipLevels = Descriptor.MipLevelCount;
+    CreateInfo.samples = static_cast<VkSampleCountFlagBits>(Descriptor.SampleCount);
+    CreateInfo.initialLayout = Descriptor.bIsCPUWritable ? VK_IMAGE_LAYOUT_PREINITIALIZED : VK_IMAGE_LAYOUT_UNDEFINED;
+    CreateInfo.tiling = Descriptor.Tiling;
+    CreateInfo.flags = Descriptor.Flags;
+    CreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+    GPUResource::Image NewImage = {};
+    VERIFY_VKRESULT(vkCreateImage(State.Device, &CreateInfo, nullptr, &NewImage.VkResource));
+
+    VkMemoryRequirements MemoryRequirements = {};
+    vkGetImageMemoryRequirements(State.Device, NewImage.VkResource, &MemoryRequirements);
+
+    DeviceMemoryAllocator::AllocateMemory(State, MemoryRequirements, MemoryFlags, NewImage.MemoryAllocation);
+
+    VERIFY_VKRESULT(vkBindImageMemory(State.Device, NewImage.VkResource, NewImage.MemoryAllocation.Memory, NewImage.MemoryAllocation.OffsetInBytes));
+
+    GPUResourceManager::ImageHandle NewImageHandle = {};
+    GPUResourceManager::RegisterResource(NewImage, NewImageHandle);
+
+    OutputImageHandle = NewImageHandle;
+}
+
+void Vulkan::Device::DestroyImage(Vulkan::Device::DeviceState const & State, GPUResourceManager::ImageHandle ImageHandle, VkFence const FenceToWaitFor)
+{
+    if (FenceToWaitFor)
+    {
+        GPUResourceManager::QueueResourceDeletion(FenceToWaitFor, ImageHandle);
+    }
+    else
+    {
+        GPUResourceManager::DestroyResource(ImageHandle, State);
+    }
+}
+
+void Vulkan::Device::CreateImageView(Vulkan::Device::DeviceState const & State, GPUResourceManager::ImageHandle ImageHandle, Vulkan::ImageViewDescriptor const & Descriptor, GPUResourceManager::ImageViewHandle & OutputImageViewHandle)
+{
+    GPUResource::Image Image = {};
+    GPUResourceManager::GetResource(ImageHandle, Image);
+
+    VkImageViewCreateInfo CreateInfo = {};
+    CreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    CreateInfo.image = Image.VkResource;
+    CreateInfo.format = Descriptor.Format;
+    CreateInfo.viewType = Descriptor.ViewType;
+    CreateInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+    CreateInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+    CreateInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+    CreateInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+    CreateInfo.subresourceRange.aspectMask = Descriptor.AspectFlags;
+    CreateInfo.subresourceRange.baseArrayLayer = Descriptor.FirstArrayLayerIndex;
+    CreateInfo.subresourceRange.layerCount = Descriptor.ArrayLayerCount;
+    CreateInfo.subresourceRange.baseMipLevel = Descriptor.FirstMipLevelIndex;
+    CreateInfo.subresourceRange.levelCount = Descriptor.MipLevelCount;
+
+    GPUResource::ImageView NewImageView = {};
+    VERIFY_VKRESULT(vkCreateImageView(State.Device, &CreateInfo, nullptr, &NewImageView.VkResource));
+
+    GPUResourceManager::ImageViewHandle ImageViewHandle = {};
+    GPUResourceManager::RegisterResource(NewImageView, ImageViewHandle);
+
+    OutputImageViewHandle = ImageViewHandle;
 }
