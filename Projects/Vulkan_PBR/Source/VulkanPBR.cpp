@@ -34,6 +34,11 @@ static bool const Initialise()
 {
     bool bResult = false;
 
+    if (!Logging::Initialise())
+    {
+        return false;
+    }
+
     HINSTANCE CurrentInstance = ::GetModuleHandle(nullptr);
 
     WNDCLASSEX WindowClass = {};
@@ -85,6 +90,8 @@ static bool const Destroy()
     ShaderLibrary::Destroy();
 
     bool bResult = ForwardRenderer::Shutdown() && VulkanModule::Stop();
+
+    Logging::Destroy();
 
     return bResult;
 }
