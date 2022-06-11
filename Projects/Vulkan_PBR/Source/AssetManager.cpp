@@ -1,19 +1,90 @@
 #include "AssetManager.hpp"
 
-#include "CommonTypes.hpp"
+#include "Common.hpp"
+
+#include "Platform/Windows.hpp"
 
 #include <OBJLoader/OBJLoader.hpp>
 
 #include <vector>
+#include <queue>
 #include <unordered_map>
 #include <filesystem>
+#include <thread>
+#include <future>
 
 struct Assets
 {
     std::unordered_map<std::string, uint32> AssetLookUpTable;
 
+    std::unordered_map<uint32, std::future<bool>> PendingMeshAssets = {};
+
     std::vector<AssetManager::MeshAsset> MeshAssets;
+
+    std::queue<uint32> FreeMeshIndices = {};
+
+    std::vector<bool> ReadyMeshFlags = {};
 };
+
+namespace AssetLoaderThread
+{
+    using AssetLoadTask = std::packaged_task<bool()>;
+
+    static std::wstring const kThreadName = L"Asset Loader Thread";
+
+    static std::thread Thread;
+
+    static std::mutex WorkQueueMutex = {};
+    static std::condition_variable WorkCondition = {};
+
+    static std::queue<AssetLoadTask> WorkQueue = {};
+
+    static std::atomic_bool bStopThread = { false };
+
+    static void Main()
+    {
+        while (!bStopThread)
+        {
+            AssetLoadTask LoadTask = {};
+
+            {
+                std::unique_lock Lock = std::unique_lock(WorkQueueMutex);
+
+                WorkCondition.wait(Lock,
+                                   []()
+                                   {
+                                       return WorkQueue.size() > 0u || bStopThread;
+                                   });
+
+                if (WorkQueue.size() > 0u)
+                {
+                    LoadTask = std::move(WorkQueue.front());
+                    WorkQueue.pop();
+                }
+            }
+
+            if (LoadTask.valid())
+            {
+                LoadTask();
+            }
+        }
+    }
+
+    static void Start()
+    {
+        Thread = std::thread(Main);
+
+        Platform::Windows::SetThreadDescription(Thread.native_handle(), kThreadName.c_str());
+    }
+
+    static void Stop()
+    {
+        bStopThread = true;
+        WorkCondition.notify_one();
+
+        Thread.join();
+    }
+}
 
 static std::filesystem::path const kAssetDirectoryPath = std::filesystem::current_path() / "Assets";
 
@@ -145,10 +216,15 @@ static bool const FindAssetFileRecursive(std::string const & AssetName, std::fil
 
 void AssetManager::Initialise()
 {
-    /* We may want to do something in here */
+    AssetLoaderThread::Start();
 }
 
-bool const AssetManager::GetMeshData(std::string const & AssetName, AssetManager::MeshAsset const *& OutputMeshData)
+void AssetManager::Destroy()
+{
+    AssetLoaderThread::Stop();
+}
+
+bool const AssetManager::LoadMeshAsset(std::string const & AssetName, AssetManager::AssetHandle<AssetManager::MeshAsset> & OutputMeshHandle)
 {
     bool bResult = false;
 
@@ -156,7 +232,7 @@ bool const AssetManager::GetMeshData(std::string const & AssetName, AssetManager
 
     if (FoundAsset != AssetTable.AssetLookUpTable.end())
     {
-        OutputMeshData = &AssetTable.MeshAssets [FoundAsset->second];
+        OutputMeshHandle.AssetIndex = FoundAsset->second;
         bResult = true;
     }
     else
@@ -166,23 +242,79 @@ bool const AssetManager::GetMeshData(std::string const & AssetName, AssetManager
 
         if (bFoundAssetFile)
         {
-            OBJLoader::OBJMeshData LoadedMeshData = {};
-            bResult = OBJLoader::LoadFile(AssetFilePath, LoadedMeshData);
+            uint32 NewMeshIndex = {};
 
-            AssetManager::MeshAsset IntermediateMeshAsset = {};
-            ::ProcessOBJMeshData(LoadedMeshData, IntermediateMeshAsset);
-
-            if (bResult)
+            if (AssetTable.FreeMeshIndices.size() > 0u)
             {
-                AssetManager::MeshAsset const & NewMesh = AssetTable.MeshAssets.emplace_back(std::move(IntermediateMeshAsset));
-                uint32 NewMeshIndex = static_cast<uint32>(AssetTable.MeshAssets.size()) - 1u;
-
-                AssetTable.AssetLookUpTable [AssetName] = NewMeshIndex;
-
-                OutputMeshData = &NewMesh;
+                NewMeshIndex = AssetTable.FreeMeshIndices.front();
+                AssetTable.FreeMeshIndices.pop();
             }
+            else
+            {
+                NewMeshIndex = static_cast<uint32>(AssetTable.MeshAssets.size());
+                AssetTable.MeshAssets.emplace_back();
+                AssetTable.ReadyMeshFlags.emplace_back();
+            }
+
+            AssetTable.ReadyMeshFlags [NewMeshIndex] = false;
+
+            AssetLoaderThread::AssetLoadTask LoadTask = AssetLoaderThread::AssetLoadTask(
+                [FilePath = std::move(AssetFilePath), NewMeshIndex]()
+                {
+                    OBJLoader::OBJMeshData LoadedMeshData = {};
+                    bool bResult = OBJLoader::LoadFile(FilePath, LoadedMeshData);
+
+                    if (bResult)
+                    {
+                        AssetManager::MeshAsset NewMesh = {};
+                        ::ProcessOBJMeshData(LoadedMeshData, NewMesh);
+
+                        AssetTable.MeshAssets [NewMeshIndex] = std::move(NewMesh);
+                    }
+
+                    return bResult;
+                }
+            );
+
+            AssetTable.PendingMeshAssets [NewMeshIndex] = LoadTask.get_future();
+
+            {
+                std::scoped_lock Lock = std::scoped_lock(AssetLoaderThread::WorkQueueMutex);
+
+                AssetLoaderThread::WorkQueue.push(std::move(LoadTask));
+            }
+
+            AssetLoaderThread::WorkCondition.notify_one();
+
+            /* Remove this from table if loading fails */
+            AssetTable.AssetLookUpTable [AssetName] = NewMeshIndex;
         }
     }
+
+    return bResult;
+}
+
+bool const AssetManager::GetMeshData(AssetManager::AssetHandle<AssetManager::MeshAsset> const MeshHandle, AssetManager::MeshAsset const *& OutputMeshData)
+{
+    bool bResult = true;
+
+    if (!AssetTable.ReadyMeshFlags [MeshHandle.AssetIndex])
+    {
+        /* TODO: Check that a future exists for the mesh first */
+
+        bResult = AssetTable.PendingMeshAssets [MeshHandle.AssetIndex].get();
+
+        AssetTable.ReadyMeshFlags [MeshHandle.AssetIndex] = bResult;
+
+        AssetTable.PendingMeshAssets.erase(MeshHandle.AssetIndex);
+
+        if (bResult)
+        {
+            OutputMeshData = &AssetTable.MeshAssets [MeshHandle.AssetIndex];
+        }
+    }
+
+    OutputMeshData = &AssetTable.MeshAssets [MeshHandle.AssetIndex];
 
     return bResult;
 }

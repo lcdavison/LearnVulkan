@@ -9,6 +9,12 @@
 
 namespace AssetManager
 {
+    template<typename TAssetType>
+    struct AssetHandle
+    {
+        uint32 AssetIndex;
+    };
+
     struct MeshAsset
     {
         std::vector<Math::Vector3> Vertices;
@@ -18,10 +24,11 @@ namespace AssetManager
 
     extern void Initialise();
 
-    /* TODO: Do this async */
-    extern bool const LoadMeshAsset(std::string const & AssetName, uint32 & OutputAssetHandle);
+    extern void Destroy();
+
+    extern bool const LoadMeshAsset(std::string const & AssetName, AssetHandle<MeshAsset> & OutputAssetHandle);
 
     extern bool const GetMeshData(uint32 const AssetHandle, AssetManager::MeshAsset const *& OutputMeshData);
 
-    extern bool const GetMeshData(std::string const & AssetName, AssetManager::MeshAsset const *& OutputMeshData);
+    extern bool const GetMeshData(AssetHandle<MeshAsset> const AssetHandle, AssetManager::MeshAsset const *& OutputMeshData);
 }
