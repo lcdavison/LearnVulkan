@@ -52,6 +52,32 @@ namespace Vulkan
     };
 }
 
+namespace Vulkan::Resource
+{
+    struct Buffer
+    {
+        DeviceMemoryAllocator::Allocation const * MemoryAllocation = {};
+        VkBuffer Resource = {};
+        VkDeviceSize SizeInBytes = {};
+    };
+
+    struct Image
+    {
+        DeviceMemoryAllocator::Allocation const * MemoryAllocation = {};
+        VkImage Resource = {};
+        uint32 Width = {};
+        uint32 Height = {};
+    };
+
+    extern bool const GetBuffer(uint32 const BufferIndex, Vulkan::Resource::Buffer & OutputBuffer);
+
+    extern bool const GetImage(uint32 const ImageHandle, Vulkan::Resource::Image & OutputImage);
+
+    extern bool const GetImageView(uint32 const ImageViewHandle, VkImageView & OutputImageView);
+
+    extern bool const GetFrameBuffer(uint32 const FrameBufferHandle, VkFramebuffer & OutputFrameBuffer);
+}
+
 namespace Vulkan::Device
 {
     struct DeviceState
@@ -87,17 +113,21 @@ namespace Vulkan::Device
 
     extern void DestroyEvent(DeviceState const & State, VkEvent & Event);
 
-    extern void CreateFrameBuffer(DeviceState const & State, uint32 const Width, uint32 const Height, VkRenderPass const RenderPass, std::vector<VkImageView> const & Attachments, GPUResourceManager::FrameBufferHandle & OutputFrameBufferHandle);
+    extern void CreateFrameBuffer(DeviceState const & State, uint32 const Width, uint32 const Height, VkRenderPass const RenderPass, std::vector<VkImageView> const & Attachments, uint32 & OutputFrameBufferHandle);
 
-    extern void DestroyFrameBuffer(DeviceState const & State, GPUResourceManager::FrameBufferHandle const FrameBufferHandle, VkFence const FenceToWaitFor);
+    extern void DestroyFrameBuffer(DeviceState const & State, uint32 const FrameBufferHandle, VkFence const FenceToWaitFor);
 
-    extern void CreateBuffer(DeviceState const & State, uint64 SizeInBytes, VkBufferUsageFlags UsageFlags, VkMemoryPropertyFlags MemoryFlags, GPUResourceManager::BufferHandle & OutputBufferHandle);
+    extern void CreateBuffer(DeviceState const & State, uint64 const SizeInBytes, VkBufferUsageFlags UsageFlags, VkMemoryPropertyFlags MemoryFlags, uint32 & OutputBufferHandle);
 
-    extern void DestroyBuffer(DeviceState const & State, GPUResourceManager::BufferHandle const BufferHandle, VkFence const FenceToWaitFor);
+    extern void DestroyBuffer(DeviceState const & State, uint32 const BufferHandle, VkFence const FenceToWaitFor);
 
-    extern void CreateImage(DeviceState const & State, Vulkan::ImageDescriptor const & Descriptor, VkMemoryPropertyFlags const MemoryFlags, GPUResourceManager::ImageHandle & OutputImageHandle);
+    extern void CreateImage(DeviceState const & State, Vulkan::ImageDescriptor const & Descriptor, VkMemoryPropertyFlags const MemoryFlags, uint32 & OutputImageHandle);
 
-    extern void DestroyImage(DeviceState const & State, GPUResourceManager::ImageHandle ImageHandle, VkFence const FenceToWaitFor);
+    extern void DestroyImage(DeviceState const & State, uint32 const ImageHandle, VkFence const FenceToWaitFor);
 
-    extern void CreateImageView(DeviceState const & State, GPUResourceManager::ImageHandle ImageHandle, Vulkan::ImageViewDescriptor const & Descriptor, GPUResourceManager::ImageViewHandle & OutputImageViewHandle);
+    extern void CreateImageView(DeviceState const & State, uint32 const ImageHandle, Vulkan::ImageViewDescriptor const & Descriptor, uint32 & OutputImageViewHandle);
+
+    extern void DestroyImageView(DeviceState const & State, uint32 const ImageViewHandle, VkFence const FenceToWaitFor);
+
+    extern void DestroyUnusedResources(DeviceState const & State);
 }
