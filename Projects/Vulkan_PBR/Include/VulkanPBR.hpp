@@ -15,7 +15,8 @@ namespace Application
         uint32 CurrentWindowWidth;
         uint32 CurrentWindowHeight;
 
-        bool bRunning;
+        bool bMinimised = {};
+        bool bRunning = {};
     };
 
     static Platform::Windows::TCHAR const * kWindowClassName = PBR_TEXT("Vulkan-PBR");

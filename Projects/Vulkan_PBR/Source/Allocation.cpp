@@ -1,6 +1,7 @@
 #include "Allocation.hpp"
 
 #include "Graphics/Device.hpp"
+#include "Graphics/Memory.hpp"
 
 bool const LinearBufferAllocator::CreateAllocator(Vulkan::Device::DeviceState const & DeviceState, uint64 const BufferSizeInBytes, VkBufferUsageFlags const UsageFlags, VkMemoryPropertyFlags const MemoryFlags, LinearBufferAllocator::AllocatorState & OutputState)
 {
@@ -8,7 +9,7 @@ bool const LinearBufferAllocator::CreateAllocator(Vulkan::Device::DeviceState co
 
     LinearBufferAllocator::AllocatorState IntermediateState = {};
 
-    GPUResourceManager::BufferHandle BufferHandle = {};
+    uint32 BufferHandle = {};
     Vulkan::Device::CreateBuffer(DeviceState, BufferSizeInBytes, UsageFlags, MemoryFlags, BufferHandle);
 
     IntermediateState.Buffer = BufferHandle;
@@ -37,10 +38,10 @@ bool const LinearBufferAllocator::Allocate(LinearBufferAllocator::AllocatorState
 
         NewAllocation.Buffer = State.Buffer;
 
-        GPUResource::Buffer Buffer = {};
-        GPUResourceManager::GetResource(State.Buffer, Buffer);
+        Vulkan::Resource::Buffer Buffer = {};
+        Vulkan::Resource::GetBuffer(State.Buffer, Buffer);
 
-        NewAllocation.MappedAddress = reinterpret_cast<void *>(reinterpret_cast<std::uintptr_t>(Buffer.MemoryAllocation.MappedAddress) + State.CurrentOffsetInBytes);
+        NewAllocation.MappedAddress = reinterpret_cast<void *>(reinterpret_cast<std::uintptr_t>(Buffer.MemoryAllocation->MappedAddress) + State.CurrentOffsetInBytes);
 
         NewAllocation.OffsetInBytes = State.CurrentOffsetInBytes;
         State.CurrentOffsetInBytes += BufferSizeInBytes;

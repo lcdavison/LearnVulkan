@@ -1,7 +1,11 @@
 #pragma once
 
 #include "Graphics/VulkanModule.hpp"
-#include "GPUResourceManager.hpp"
+
+namespace Vulkan::Device
+{
+    struct DeviceState;
+}
 
 /* Creates a buffer for suballocation */
 /* These are ideal for allocating small buffers for single use in a frame */
@@ -13,7 +17,7 @@ namespace LinearBufferAllocator
         uint64 OffsetInBytes;
         uint64 SizeInBytes;
 
-        GPUResourceManager::BufferHandle Buffer;
+        uint32 Buffer;
     };
 
     struct AllocatorState
@@ -22,7 +26,7 @@ namespace LinearBufferAllocator
         uint64 CurrentSizeInBytes;
         uint64 CapacityInBytes;
 
-        GPUResourceManager::BufferHandle Buffer;
+        uint32 Buffer;
     };
 
     extern bool const CreateAllocator(Vulkan::Device::DeviceState const & DeviceState, uint64 const BufferSizeInBytes, VkBufferUsageFlags const UsageFlags, VkMemoryPropertyFlags const MemoryFlags, AllocatorState & OutputState);
