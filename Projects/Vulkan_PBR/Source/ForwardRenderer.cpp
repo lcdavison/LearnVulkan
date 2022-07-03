@@ -7,9 +7,9 @@
 #include "Graphics/Viewport.hpp"
 #include "Graphics/ShaderLibrary.hpp"
 
-#include "Primitives/StaticMesh.hpp"
+#include "Components/StaticMeshComponent.hpp"
 
-#include "Memory.hpp"
+#include "Graphics/Memory.hpp"
 #include "Allocation.hpp"
 
 #include <Math/Matrix.hpp>
@@ -19,23 +19,30 @@
 #include "VulkanPBR.hpp"
 
 #include "AssetManager.hpp"
-#include "GPUResourceManager.hpp"
 #include "Scene.hpp"
 
 #include <array>
 
+#include "Camera.hpp"
+
 struct PerFrameUniformBufferData
 {
-    Math::Matrix4x4 PerspectiveMatrix;
-    float Brightness;
+    Math::Matrix4x4 WorldToViewMatrix;
+    Math::Matrix4x4 ViewToClipMatrix;
 };
 
+struct PerDrawUniformBufferData
+{
+    Math::Matrix4x4 ModelToWorldMatrix;
+};
+
+/* TODO: Separate out the frame state */
 struct FrameStateCollection
 {
     std::vector<VkCommandBuffer> CommandBuffers;
     std::vector<VkSemaphore> Semaphores;
     std::vector<VkFence> Fences;
-    std::vector<GPUResourceManager::FrameBufferHandle> FrameBuffers;
+    std::vector<uint32> FrameBuffers;
 
     std::vector<VkDescriptorSet> DescriptorSets;
 
@@ -66,9 +73,6 @@ static VkShaderModule VertexShaderModule = {};
 static VkShaderModule FragmentShaderModule = {};
 
 static VkDescriptorSetLayout DescriptorSetLayout = {};
-
-static AssetManager::MeshAsset const * CubeMesh = {};
-static Primitives::StaticMesh::StaticMeshData CubeStaticMesh = {};
 
 /*
     For reference.
@@ -103,11 +107,15 @@ static void CreateFrameState()
 
     {
         uint8 CurrentImageViewIndex = { 0u };
-        for (GPUResourceManager::FrameBufferHandle & FrameBuffer : FrameState.FrameBuffers)
+        for (uint32 & FrameBuffer : FrameState.FrameBuffers)
         {
+            VkImageView DepthStencilImageView = {};
+            Vulkan::Resource::GetImageView(ViewportState.DepthStencilImageView, DepthStencilImageView);
+
             std::vector<VkImageView> FrameBufferAttachments =
             {
                 ViewportState.SwapChainImageViews [CurrentImageViewIndex],
+                DepthStencilImageView,
             };
 
             Vulkan::Device::CreateFrameBuffer(DeviceState, ViewportState.ImageExtents.width, ViewportState.ImageExtents.height, MainRenderPass, FrameBufferAttachments, FrameBuffer);
@@ -161,7 +169,7 @@ static void DestroyFrameState()
         Vulkan::Device::DestroySemaphore(DeviceState, Semaphore);
     }
 
-    for (GPUResourceManager::FrameBufferHandle & FrameBuffer : FrameState.FrameBuffers)
+    for (uint32 & FrameBuffer : FrameState.FrameBuffers)
     {
         Vulkan::Device::DestroyFrameBuffer(DeviceState, FrameBuffer, VK_NULL_HANDLE);
     }
@@ -173,30 +181,29 @@ static bool const CreateMainRenderPass()
 {
     bool bResult = true;
 
-    VkAttachmentDescription ColourAttachment = {};
-    ColourAttachment.format = ViewportState.SurfaceFormat.format;
-    ColourAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    ColourAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-    ColourAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
-    ColourAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-    ColourAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-    ColourAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-    ColourAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    std::array<VkAttachmentDescription, 2u> Attachments =
+    {
+        VkAttachmentDescription { 0u, VK_FORMAT_B8G8R8A8_UNORM, VK_SAMPLE_COUNT_1_BIT, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE, VK_ATTACHMENT_LOAD_OP_DONT_CARE, VK_ATTACHMENT_STORE_OP_DONT_CARE, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR },
+        VkAttachmentDescription { 0u, VK_FORMAT_D24_UNORM_S8_UINT, VK_SAMPLE_COUNT_1_BIT, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE, VK_ATTACHMENT_LOAD_OP_DONT_CARE, VK_ATTACHMENT_STORE_OP_DONT_CARE, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL },
+    };
 
-    VkAttachmentReference ColourReference = {};
-    ColourReference.attachment = 0u;
-    ColourReference.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    std::array<VkAttachmentReference, 2u> AttachmentReferences =
+    {
+        VkAttachmentReference { 0u, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL },
+        VkAttachmentReference { 1u, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL },
+    };
 
     VkSubpassDescription Subpass = {};
     Subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
     Subpass.colorAttachmentCount = 1u;
-    Subpass.pColorAttachments = &ColourReference;
+    Subpass.pColorAttachments = &AttachmentReferences [0u];
+    Subpass.pDepthStencilAttachment = &AttachmentReferences [1u];
 
     {
         VkRenderPassCreateInfo CreateInfo = {};
         CreateInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-        CreateInfo.attachmentCount = 1u;
-        CreateInfo.pAttachments = &ColourAttachment;
+        CreateInfo.attachmentCount = static_cast<uint32>(Attachments.size());
+        CreateInfo.pAttachments = Attachments.data();
         CreateInfo.subpassCount = 1u;
         CreateInfo.pSubpasses = &Subpass;
 
@@ -226,6 +233,12 @@ static bool const CreateDescriptorSetLayout()
 
 static bool const CreateGraphicsPipeline()
 {
+    /* TODO: Do following from the shader libary */
+    /* Loading required shaders */
+    /* Setup pipeline shader slot bindings */
+    /* Setup pipeline state */
+    /* Create pipeline state */
+
     {
         VkPipelineLayoutCreateInfo CreateInfo = {};
         CreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
@@ -243,21 +256,11 @@ static bool const CreateGraphicsPipeline()
         return false;
     }
 
-    std::array<VkPipelineShaderStageCreateInfo, 2u> ShaderStages = {};
-
+    std::array<VkPipelineShaderStageCreateInfo, 2u> const ShaderStages =
     {
-        VkPipelineShaderStageCreateInfo & VertexStage = ShaderStages [0u];
-        VertexStage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-        VertexStage.stage = VK_SHADER_STAGE_VERTEX_BIT;
-        VertexStage.module = VertexShaderModule;
-        VertexStage.pName = kDefaultShaderEntryPointName.c_str();
-
-        VkPipelineShaderStageCreateInfo & FragmentStage = ShaderStages [1u];
-        FragmentStage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-        FragmentStage.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-        FragmentStage.module = FragmentShaderModule;
-        FragmentStage.pName = kDefaultShaderEntryPointName.c_str();
-    }
+        Vulkan::PipelineShaderStage(VK_SHADER_STAGE_VERTEX_BIT, VertexShaderModule, kDefaultShaderEntryPointName.c_str()),
+        Vulkan::PipelineShaderStage(VK_SHADER_STAGE_FRAGMENT_BIT, FragmentShaderModule, kDefaultShaderEntryPointName.c_str()),
+    };
 
     {
         std::array<VkVertexInputBindingDescription, 2u> VertexInputBindings =
@@ -272,35 +275,19 @@ static bool const CreateGraphicsPipeline()
             Vulkan::VertexInputAttribute(1u, 1u, 0u),
         };
 
-        VkPipelineVertexInputStateCreateInfo VertexInputState = Vulkan::VertexInputState(static_cast<uint32>(VertexInputBindings.size()), VertexInputBindings.data(),
-                                                                                         static_cast<uint32>(VertexAttributes.size()), VertexAttributes.data());
+        VkPipelineVertexInputStateCreateInfo const VertexInputState = Vulkan::VertexInputState(static_cast<uint32>(VertexInputBindings.size()), VertexInputBindings.data(),
+                                                                                               static_cast<uint32>(VertexAttributes.size()), VertexAttributes.data());
 
-        VkPipelineInputAssemblyStateCreateInfo InputAssemblerState = Vulkan::InputAssemblyState();
+        VkPipelineInputAssemblyStateCreateInfo const InputAssemblerState = Vulkan::InputAssemblyState();
 
-        VkPipelineRasterizationStateCreateInfo RasterizationState = {};
-        RasterizationState.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
-        RasterizationState.cullMode = VK_CULL_MODE_BACK_BIT;
-        RasterizationState.polygonMode = VK_POLYGON_MODE_FILL;
-        RasterizationState.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
-        RasterizationState.lineWidth = 1.0f;
-        RasterizationState.depthClampEnable = VK_FALSE;
-        RasterizationState.depthBiasEnable = VK_FALSE;
+        VkPipelineRasterizationStateCreateInfo const RasterizationState = Vulkan::RasterizationState(VK_CULL_MODE_BACK_BIT);
 
-        VkPipelineColorBlendAttachmentState ColourAttachmentState = {};
-        ColourAttachmentState.blendEnable = VK_FALSE;
-        ColourAttachmentState.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+        VkPipelineColorBlendAttachmentState const ColourAttachmentState = Vulkan::ColourAttachmentBlendState();
+        VkPipelineColorBlendStateCreateInfo const ColourBlendState = Vulkan::ColourBlendState(1u, &ColourAttachmentState);
 
-        VkPipelineColorBlendStateCreateInfo ColourBlendState = {};
-        ColourBlendState.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-        ColourBlendState.attachmentCount = 1u;
-        ColourBlendState.pAttachments = &ColourAttachmentState;
-        ColourBlendState.logicOpEnable = VK_FALSE;
 
-        VkPipelineMultisampleStateCreateInfo MultiSampleState = {};
-        MultiSampleState.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-        MultiSampleState.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
-        MultiSampleState.alphaToCoverageEnable = VK_FALSE;
-        MultiSampleState.sampleShadingEnable = VK_FALSE;
+        VkPipelineDepthStencilStateCreateInfo const DepthStencilState = Vulkan::DepthStencilState(VK_TRUE, VK_TRUE, VK_COMPARE_OP_LESS);
+        VkPipelineMultisampleStateCreateInfo const MultiSampleState = Vulkan::MultiSampleState();
 
         VkPipelineViewportStateCreateInfo PipelineViewportState = {};
         PipelineViewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
@@ -318,22 +305,10 @@ static bool const CreateGraphicsPipeline()
         DynamicState.dynamicStateCount = static_cast<uint32>(DynamicStates.size());
         DynamicState.pDynamicStates = DynamicStates.data();
 
-        VkGraphicsPipelineCreateInfo CreateInfo = {};
-        CreateInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-        CreateInfo.basePipelineHandle = VK_NULL_HANDLE;
-        CreateInfo.basePipelineIndex = -1l;
-        CreateInfo.renderPass = MainRenderPass;
-        CreateInfo.subpass = 0u;
-        CreateInfo.stageCount = static_cast<uint32>(ShaderStages.size());
-        CreateInfo.pStages = ShaderStages.data();
-        CreateInfo.layout = TrianglePipelineLayout;
-        CreateInfo.pVertexInputState = &VertexInputState;
-        CreateInfo.pInputAssemblyState = &InputAssemblerState;
-        CreateInfo.pRasterizationState = &RasterizationState;
-        CreateInfo.pColorBlendState = &ColourBlendState;
-        CreateInfo.pMultisampleState = &MultiSampleState;
-        CreateInfo.pViewportState = &PipelineViewportState;
-        CreateInfo.pDynamicState = &DynamicState;
+        VkGraphicsPipelineCreateInfo const CreateInfo = Vulkan::GraphicsPipelineState(TrianglePipelineLayout, MainRenderPass, 0u,
+                                                                                      static_cast<uint32>(ShaderStages.size()), ShaderStages.data(),
+                                                                                      &VertexInputState, &InputAssemblerState, &PipelineViewportState,
+                                                                                      &RasterizationState, &ColourBlendState, &DepthStencilState, &DynamicState, &MultiSampleState);
 
         VERIFY_VKRESULT(vkCreateGraphicsPipelines(DeviceState.Device, VK_NULL_HANDLE, 1u, &CreateInfo, nullptr, &TrianglePipelineState));
     }
@@ -341,19 +316,24 @@ static bool const CreateGraphicsPipeline()
     return true;
 }
 
-static bool const CreateFrameUniformBuffer(LinearBufferAllocator::Allocation & OutputAllocation)
+static bool const CreateFrameUniformBuffer(LinearBufferAllocator::Allocation & OutputAllocation, Camera::CameraState const & Camera)
 {
     LinearBufferAllocator::Allocation IntermediateAllocation = {};
     bool bResult = LinearBufferAllocator::Allocate(FrameState.LinearAllocators [FrameState.CurrentFrameStateIndex], sizeof(PerFrameUniformBufferData), IntermediateAllocation);
 
     if (bResult)
     {
-        PerFrameUniformBufferData PerFrameData = {};
-
         float const AspectRatio = static_cast<float>(ViewportState.ImageExtents.width) / static_cast<float>(ViewportState.ImageExtents.height);
-        PerFrameData.PerspectiveMatrix = Math::PerspectiveMatrix(Math::ConvertDegreesToRadians(90.0f), AspectRatio, 0.001f, 1000.0f);
 
-        PerFrameData.Brightness = -0.25f;
+        PerFrameUniformBufferData PerFrameData =
+        {
+            Math::Matrix4x4::Identity(),
+            Math::PerspectiveMatrix(Math::ConvertDegreesToRadians(90.0f), AspectRatio, 0.1f, 1000.0f),
+        };
+
+        Camera::GetViewMatrix(Camera, PerFrameData.WorldToViewMatrix);
+
+        PerFrameData.WorldToViewMatrix = Math::Matrix4x4::Inverse(PerFrameData.WorldToViewMatrix);
 
         ::memcpy_s(IntermediateAllocation.MappedAddress, IntermediateAllocation.SizeInBytes, &PerFrameData, sizeof(PerFrameData));
 
@@ -365,21 +345,15 @@ static bool const CreateFrameUniformBuffer(LinearBufferAllocator::Allocation & O
 
 static void UpdateUniformBufferDescriptors(LinearBufferAllocator::Allocation const & UniformBufferAllocation)
 {
-    GPUResource::Buffer UniformBuffer = {};
-    GPUResourceManager::GetResource(UniformBufferAllocation.Buffer, UniformBuffer);
+    Vulkan::Resource::Buffer UniformBuffer = {};
+    Vulkan::Resource::GetBuffer(UniformBufferAllocation.Buffer, UniformBuffer);
 
-    VkDescriptorBufferInfo UniformBufferInfo = {};
-    UniformBufferInfo.buffer = UniformBuffer.VkResource;
-    UniformBufferInfo.offset = UniformBufferAllocation.OffsetInBytes;
-    UniformBufferInfo.range = UniformBufferAllocation.SizeInBytes;
+    std::array<VkDescriptorBufferInfo, 2u> UniformBufferDescs =
+    {
+        Vulkan::DescriptorBufferInfo(UniformBuffer.Resource, UniformBufferAllocation.OffsetInBytes, UniformBufferAllocation.SizeInBytes),
+    };
 
-    VkWriteDescriptorSet WriteDescriptors = {};
-    WriteDescriptors.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    WriteDescriptors.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    WriteDescriptors.descriptorCount = 1u;
-    WriteDescriptors.dstSet = FrameState.DescriptorSets [FrameState.CurrentFrameStateIndex];
-    WriteDescriptors.dstBinding = 0u;
-    WriteDescriptors.pBufferInfo = &UniformBufferInfo;
+    VkWriteDescriptorSet const WriteDescriptors = Vulkan::WriteDescriptorSet(FrameState.DescriptorSets [FrameState.CurrentFrameStateIndex], VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 0u, 1u, UniformBufferDescs.data(), nullptr);
 
     vkUpdateDescriptorSets(DeviceState.Device, 1u, &WriteDescriptors, 0u, nullptr);
 }
@@ -395,17 +369,20 @@ static void ResizeViewport()
 {
     VERIFY_VKRESULT(vkDeviceWaitIdle(DeviceState.Device));
 
-    Vulkan::Viewport::ResizeViewport(InstanceState, DeviceState, ViewportState);
-
+    if (Vulkan::Viewport::ResizeViewport(InstanceState, DeviceState, ViewportState))
     {
         uint8 CurrentImageIndex = { 0u };
-        for (GPUResourceManager::FrameBufferHandle & FrameBuffer : FrameState.FrameBuffers)
+        for (uint32 & FrameBuffer : FrameState.FrameBuffers)
         {
             Vulkan::Device::DestroyFrameBuffer(DeviceState, FrameBuffer, VK_NULL_HANDLE);
+
+            VkImageView DepthStencilImageView = {};
+            Vulkan::Resource::GetImageView(ViewportState.DepthStencilImageView, DepthStencilImageView);
 
             std::vector<VkImageView> FrameBufferAttachments =
             {
                 ViewportState.SwapChainImageViews [CurrentImageIndex],
+                DepthStencilImageView,
             };
 
             Vulkan::Device::CreateFrameBuffer(DeviceState, Application::State.CurrentWindowWidth, Application::State.CurrentWindowHeight, MainRenderPass, FrameBufferAttachments, FrameBuffer);
@@ -417,6 +394,56 @@ static void ResizeViewport()
     FrameState.CurrentFrameStateIndex = 0u;
 }
 
+static bool const PreRender(Scene::SceneData const & Scene)
+{
+    VkResult ImageAcquireResult = vkAcquireNextImageKHR(DeviceState.Device, ViewportState.SwapChain, 0ull, FrameState.Semaphores [FrameState.CurrentFrameStateIndex], VK_NULL_HANDLE, &FrameState.CurrentImageIndex);
+
+    if (ImageAcquireResult == VK_SUBOPTIMAL_KHR ||
+        ImageAcquireResult == VK_ERROR_OUT_OF_DATE_KHR)
+    {
+        ::ResizeViewport();
+        return false;
+    }
+
+    ::ResetCurrentFrameState();
+
+    if (Scene.NewActorHandles.size() > 0u)
+    {
+        VkCommandBufferBeginInfo BeginInfo = Vulkan::CommandBufferBegin();
+        VkCommandBuffer & CurrentCommandBuffer = FrameState.CommandBuffers [kFrameStateCount + FrameState.CurrentFrameStateIndex];
+
+        vkBeginCommandBuffer(CurrentCommandBuffer, &BeginInfo);
+
+        for (uint32 const ActorHandle : Scene.NewActorHandles)
+        {
+            if (Scene::DoesActorHaveComponent(Scene, ActorHandle, Scene::ComponentMasks::StaticMesh))
+            {
+                Components::StaticMesh::TransferToGPU(ActorHandle, CurrentCommandBuffer, DeviceState, FrameState.Fences [FrameState.CurrentFrameStateIndex]);
+            }
+        }
+
+        vkEndCommandBuffer(CurrentCommandBuffer);
+
+        VkSubmitInfo const SubmitInfo = Vulkan::SubmitInfo(1u, &CurrentCommandBuffer);
+        VERIFY_VKRESULT(vkQueueSubmit(DeviceState.GraphicsQueue, 1u, &SubmitInfo, VK_NULL_HANDLE));
+    }
+
+    LinearBufferAllocator::Allocation UniformBufferAllocation = {};
+    ::CreateFrameUniformBuffer(UniformBufferAllocation, Scene.MainCamera);
+    ::UpdateUniformBufferDescriptors(UniformBufferAllocation);
+
+    return true;
+}
+
+static void PostRender()
+{
+    FrameState.CurrentFrameStateIndex = (++FrameState.CurrentFrameStateIndex) % kFrameStateCount;
+
+    vkWaitForFences(DeviceState.Device, 1u, &FrameState.Fences [FrameState.CurrentFrameStateIndex], VK_TRUE, std::numeric_limits<uint64>::max());
+
+    Vulkan::Device::DestroyUnusedResources(DeviceState);
+}
+
 bool const ForwardRenderer::Initialise(VkApplicationInfo const & ApplicationInfo)
 {
     /* These are loaded and compiled async, doing them here should mean they will be ready by the time we create the pipeline state */
@@ -425,9 +452,9 @@ bool const ForwardRenderer::Initialise(VkApplicationInfo const & ApplicationInfo
 
     bool bResult = false;
 
-    if (Vulkan::Instance::CreateInstance(ApplicationInfo, InstanceState) &&
-        Vulkan::Device::CreateDevice(InstanceState, DeviceState) &&
-        Vulkan::Viewport::CreateViewport(InstanceState, DeviceState, ViewportState))
+    if (Vulkan::Instance::CreateInstance(ApplicationInfo, InstanceState) 
+        && Vulkan::Device::CreateDevice(InstanceState, DeviceState) 
+        && Vulkan::Viewport::CreateViewport(InstanceState, DeviceState, ViewportState))
     {
         bResult = ::CreateMainRenderPass();
 
@@ -435,7 +462,14 @@ bool const ForwardRenderer::Initialise(VkApplicationInfo const & ApplicationInfo
 
         bResult = ::CreateGraphicsPipeline();
 
-        ::CreateFrameState();
+        if (bResult)
+        {
+            ::CreateFrameState();
+        }
+        else
+        {
+            Logging::Log(Logging::LogTypes::Error, PBR_TEXT("Failed to create graphics pipeline state. Exiting."));
+        }
     }
 
     return bResult;
@@ -484,46 +518,24 @@ bool const ForwardRenderer::Shutdown()
     return true;
 }
 
-void ForwardRenderer::PreRender(Scene::SceneData const & Scene)
+void ForwardRenderer::CreateNewActorResources(Scene::SceneData const & Scene)
 {
-    VkResult ImageAcquireResult = vkAcquireNextImageKHR(DeviceState.Device, ViewportState.SwapChain, 0ull, FrameState.Semaphores [FrameState.CurrentFrameStateIndex], VK_NULL_HANDLE, &FrameState.CurrentImageIndex);
-
-    if (ImageAcquireResult == VK_SUBOPTIMAL_KHR ||
-        ImageAcquireResult == VK_ERROR_OUT_OF_DATE_KHR)
+    for (uint32 const ActorHandle : Scene.NewActorHandles)
     {
-        ::ResizeViewport();
-
-        VERIFY_VKRESULT(vkAcquireNextImageKHR(DeviceState.Device, ViewportState.SwapChain, 0ull, FrameState.Semaphores [FrameState.CurrentFrameStateIndex], VK_NULL_HANDLE, &FrameState.CurrentImageIndex));
-    }
-
-    ::ResetCurrentFrameState();
-
-    if (Scene.NewActorIndices.size() > 0u)
-    {
-        VkCommandBufferBeginInfo BeginInfo = Vulkan::CommandBufferBegin();
-        VkCommandBuffer & CurrentCommandBuffer = FrameState.CommandBuffers [kFrameStateCount + FrameState.CurrentFrameStateIndex];
-
-        vkBeginCommandBuffer(CurrentCommandBuffer, &BeginInfo);
-
-        for (uint32 NewActorIndex : Scene.NewActorIndices)
+        if (Scene::DoesActorHaveComponent(Scene, ActorHandle, Scene::ComponentMasks::StaticMesh))
         {
-            Primitives::StaticMesh::CreateGPUResources(CurrentCommandBuffer, DeviceState, Scene.ActorMeshHandles [NewActorIndex - 1u], NewActorIndex, FrameState.Fences [FrameState.CurrentFrameStateIndex]);
-            Primitives::StaticMesh::GetStaticMeshResources(NewActorIndex, CubeStaticMesh);
+            Components::StaticMesh::CreateGPUResources(ActorHandle, DeviceState);
         }
-
-        vkEndCommandBuffer(CurrentCommandBuffer);
-
-        VkSubmitInfo const SubmitInfo = Vulkan::SubmitInfo(1u, &CurrentCommandBuffer);
-        VERIFY_VKRESULT(vkQueueSubmit(DeviceState.GraphicsQueue, 1u, &SubmitInfo, VK_NULL_HANDLE));
     }
-
-    LinearBufferAllocator::Allocation UniformBufferAllocation = {};
-    ::CreateFrameUniformBuffer(UniformBufferAllocation);
-    ::UpdateUniformBufferDescriptors(UniformBufferAllocation);
 }
 
-void ForwardRenderer::Render(Scene::SceneData const & /*Scene*/)
+void ForwardRenderer::Render(Scene::SceneData const & Scene)
 {
+    if (!::PreRender(Scene))
+    {
+        return;
+    }
+
     VkCommandBuffer & CurrentCommandBuffer = FrameState.CommandBuffers [FrameState.CurrentFrameStateIndex];
 
     VERIFY_VKRESULT(vkResetCommandBuffer(CurrentCommandBuffer, 0u));
@@ -540,11 +552,11 @@ void ForwardRenderer::Render(Scene::SceneData const & /*Scene*/)
             VkClearValue { 1.0f, 0u },
         };
 
-        GPUResource::FrameBuffer CurrentFrameBuffer = {};
-        GPUResourceManager::GetResource(FrameState.FrameBuffers [FrameState.CurrentFrameStateIndex], CurrentFrameBuffer);
+        VkFramebuffer CurrentFrameBuffer = {};
+        Vulkan::Resource::GetFrameBuffer(FrameState.FrameBuffers [FrameState.CurrentFrameStateIndex], CurrentFrameBuffer);
 
-        VkRenderPassBeginInfo BeginInfo = Vulkan::RenderPassBegin(MainRenderPass, CurrentFrameBuffer.VkResource, VkRect2D { VkOffset2D { 0u, 0u }, ViewportState.ImageExtents }, static_cast<uint32>(AttachmentClearValues.size()), AttachmentClearValues.data());
-        
+        VkRenderPassBeginInfo BeginInfo = Vulkan::RenderPassBegin(MainRenderPass, CurrentFrameBuffer, VkRect2D { VkOffset2D { 0u, 0u }, ViewportState.ImageExtents }, static_cast<uint32>(AttachmentClearValues.size()), AttachmentClearValues.data());
+
         vkCmdBeginRenderPass(CurrentCommandBuffer, &BeginInfo, VK_SUBPASS_CONTENTS_INLINE);
     }
 
@@ -555,29 +567,43 @@ void ForwardRenderer::Render(Scene::SceneData const & /*Scene*/)
 
     vkCmdBindDescriptorSets(CurrentCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, TrianglePipelineLayout, 0u, 1u, &FrameState.DescriptorSets [FrameState.CurrentFrameStateIndex], 0u, nullptr);
 
-    GPUResource::Buffer VertexBuffer = {};
-    GPUResource::Buffer NormalBuffer = {};
-    GPUResource::Buffer IndexBuffer = {};
-
-    GPUResourceManager::GetResource(CubeStaticMesh.VertexBuffer, VertexBuffer);
-    GPUResourceManager::GetResource(CubeStaticMesh.NormalBuffer, NormalBuffer);
-    GPUResourceManager::GetResource(CubeStaticMesh.IndexBuffer, IndexBuffer);
-
-    vkCmdBindIndexBuffer(CurrentCommandBuffer, IndexBuffer.VkResource, 0u, VK_INDEX_TYPE_UINT32);
-
+    for (uint32 CurrentActorHandle = { 1u };
+         CurrentActorHandle <= Scene.ActorCount;
+         CurrentActorHandle++)
     {
-        std::array<VkBuffer, 2u> VertexBuffers =
+        if (Scene::DoesActorHaveComponent(Scene, CurrentActorHandle, Scene::ComponentMasks::StaticMesh))
         {
-            VertexBuffer.VkResource,
-            NormalBuffer.VkResource,
-        };
+            Components::StaticMesh::StaticMeshData CurrentMeshData = {};
+            bool const bHasResources = Components::StaticMesh::GetStaticMeshResources(CurrentActorHandle, CurrentMeshData);
 
-        std::array BufferOffsets = std::array<VkDeviceSize, VertexBuffers.size()>();
+            if (bHasResources)
+            {
+                Vulkan::Resource::Buffer VertexBuffer = {};
+                Vulkan::Resource::Buffer NormalBuffer = {};
+                Vulkan::Resource::Buffer IndexBuffer = {};
 
-        vkCmdBindVertexBuffers(CurrentCommandBuffer, 0u, static_cast<uint32>(VertexBuffers.size()), VertexBuffers.data(), BufferOffsets.data());
+                Vulkan::Resource::GetBuffer(CurrentMeshData.VertexBuffer, VertexBuffer);
+                Vulkan::Resource::GetBuffer(CurrentMeshData.NormalBuffer, NormalBuffer);
+                Vulkan::Resource::GetBuffer(CurrentMeshData.IndexBuffer, IndexBuffer);
+
+                vkCmdBindIndexBuffer(CurrentCommandBuffer, IndexBuffer.Resource, 0u, VK_INDEX_TYPE_UINT32);
+
+                {
+                    std::array<VkBuffer, 2u> const VertexBuffers =
+                    {
+                        VertexBuffer.Resource,
+                        NormalBuffer.Resource,
+                    };
+
+                    std::array const BufferOffsets = std::array<VkDeviceSize, VertexBuffers.size()>();
+
+                    vkCmdBindVertexBuffers(CurrentCommandBuffer, 0u, static_cast<uint32>(VertexBuffers.size()), VertexBuffers.data(), BufferOffsets.data());
+                }
+
+                vkCmdDrawIndexed(CurrentCommandBuffer, CurrentMeshData.IndexCount, 1u, 0u, 0u, 0u);
+            }
+        }
     }
-
-    vkCmdDrawIndexed(CurrentCommandBuffer, 36u, 1u, 0u, 0l, 0u);
 
     vkCmdEndRenderPass(CurrentCommandBuffer);
 
@@ -586,10 +612,10 @@ void ForwardRenderer::Render(Scene::SceneData const & /*Scene*/)
     {
         VkPipelineStageFlags const PipelineWaitStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 
-        VkSubmitInfo SubmitInfo = Vulkan::SubmitInfo(1u, &CurrentCommandBuffer,
-                                                     1u, &FrameState.Semaphores [kFrameStateCount + FrameState.CurrentFrameStateIndex], // Signal
-                                                     1u, &FrameState.Semaphores [FrameState.CurrentFrameStateIndex], // Wait
-                                                     &PipelineWaitStage);
+        VkSubmitInfo const SubmitInfo = Vulkan::SubmitInfo(1u, &CurrentCommandBuffer,
+                                                           1u, &FrameState.Semaphores [kFrameStateCount + FrameState.CurrentFrameStateIndex], // Signal
+                                                           1u, &FrameState.Semaphores [FrameState.CurrentFrameStateIndex], // Wait
+                                                           &PipelineWaitStage);
 
         VERIFY_VKRESULT(vkQueueSubmit(DeviceState.GraphicsQueue, 1u, &SubmitInfo, FrameState.Fences [FrameState.CurrentFrameStateIndex]));
     }
@@ -605,13 +631,6 @@ void ForwardRenderer::Render(Scene::SceneData const & /*Scene*/)
 
         vkQueuePresentKHR(DeviceState.GraphicsQueue, &PresentInfo);
     }
-}
 
-void ForwardRenderer::PostRender()
-{
-    FrameState.CurrentFrameStateIndex = (++FrameState.CurrentFrameStateIndex) % kFrameStateCount;
-
-    vkWaitForFences(DeviceState.Device, 1u, &FrameState.Fences [FrameState.CurrentFrameStateIndex], VK_TRUE, std::numeric_limits<uint64>::max());
-
-    GPUResourceManager::DestroyUnusedResources(DeviceState);
+    ::PostRender();
 }

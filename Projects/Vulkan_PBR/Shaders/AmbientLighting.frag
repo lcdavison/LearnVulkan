@@ -2,7 +2,7 @@
 
 layout (location = 0) in vec3 FragmentColour;
 layout (location = 1) in vec3 FragmentNormal;
-layout (location = 2) in float FragmentBrightness;
+layout (location = 2) in vec3 FragmentWorldPosition;
 
 layout (location = 0) out vec4 OutputFragmentColour;
 
@@ -39,34 +39,57 @@ vec3 LinearRGBToSRGB(vec3 LinearRGB)
 /* Using Z-Up */
 vec3 GetHemisphereAmbientColour(vec3 Normal)
 {
-    const vec3 SkyColour = vec3(0.0f, 0.3f, 0.7f);
-    const vec3 GroundColour = vec3(0.3f, 0.7f, 0.0f);
+    const vec3 SkyColour = vec3(0.6f, 0.4f, 0.0f);
+    const vec3 GroundColour = vec3(0.0f, 0.3f, 0.7f);
 
     float NormalizedZ = (0.5f * Normal.z) + 0.5f;
 
     return (1.0f - NormalizedZ) * GroundColour + NormalizedZ * SkyColour;
 }
 
+const vec3 kLightRadiance = vec3(10.0f, 10.0f, 10.0f);
+const vec3 kLightPosition = vec3(-100.0f, 100.0f, 10.0f);
+
 vec3 GetDiffuseReflection(vec3 DiffuseAlbedo, vec3 Normal)
 {
     const float kPI = 3.1415f;
 
     vec3 BRDF = DiffuseAlbedo / kPI;
-    vec3 IncomingRadiance = vec3(1.0f, 0.0f, 0.0f);
-    vec3 LightDirection = normalize(vec3(-0.5f, 0.0f, -0.5f));
+    //vec3 LightDirection = normalize(vec3(-0.5f, 0.0f, -0.5f));
 
-    return IncomingRadiance * BRDF * dot(Normal, -LightDirection);
+    vec3 SurfaceToLight = kLightPosition - FragmentWorldPosition;
+    vec3 LightDirection = normalize(SurfaceToLight);
+    vec3 IncomingRadiance = 1000.0f * (kLightRadiance / dot(SurfaceToLight, SurfaceToLight));
+
+    return IncomingRadiance * BRDF * max(dot(Normal, LightDirection), 0.0f);
+}
+
+vec3 GetSpecularReflection(vec3 Normal)
+{
+    const float kGlossiness = 50.0f;
+
+    vec3 SurfaceToLight = kLightPosition - FragmentWorldPosition;
+    vec3 LightDirection = normalize(SurfaceToLight);
+    vec3 IncomingRadiance = 1000.0f * (kLightRadiance / dot(SurfaceToLight, SurfaceToLight));
+
+    /* Weirdly reflect intrinsic needs incoming direction to be flipped */
+    vec3 ReflectionDirection = normalize(reflect(-LightDirection, Normal));
+
+    /* This needs to use the camera position */
+    vec3 SurfaceToCamera = normalize(-FragmentWorldPosition);
+    float BRDF = max(pow(dot(SurfaceToCamera, ReflectionDirection), kGlossiness), 0.0f);
+
+    return IncomingRadiance * BRDF * max(dot(Normal, LightDirection), 0.0f);
 }
 
 void main()
 {
     vec3 LinearRGB = FragmentColour.rgb;
-    LinearRGB = 0.25f * GetHemisphereAmbientColour(FragmentNormal)
-    + GetDiffuseReflection(FragmentColour, FragmentNormal);
+    LinearRGB = 0.05f * GetHemisphereAmbientColour(FragmentNormal)
+              + GetDiffuseReflection(FragmentColour, FragmentNormal)
+              + GetSpecularReflection(FragmentNormal);
 
     vec3 OutputColour = LinearRGBToSRGB(LinearRGB);
-
-    //OutputColour += FragmentBrightness;
 
     OutputFragmentColour = vec4(OutputColour, 1.0f);
 }

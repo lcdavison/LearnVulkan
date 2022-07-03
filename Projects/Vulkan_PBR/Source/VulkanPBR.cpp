@@ -6,8 +6,13 @@
 
 #include "AssetManager.hpp"
 #include "Scene.hpp"
+#include "Components/StaticMeshComponent.hpp"
 
 #include <Windows.h>
+#include <Windowsx.h>
+#include <thread>
+
+#include "InputManager.hpp"
 
 extern Application::ApplicationState Application::State = {};
 
@@ -17,10 +22,39 @@ static LRESULT CALLBACK WindowProcedure(HWND Window, UINT Message, WPARAM WParam
 {
     switch (Message)
     {
+        case WM_MOUSEMOVE:
+        {
+            Input::State.CurrentMouseX = GET_X_LPARAM(LParam);
+            Input::State.CurrentMouseY = GET_Y_LPARAM(LParam);
+        }
+        break;
+        case WM_KEYDOWN:
+        {
+            PBR_ASSERT(WParam < 256);
+
+            Input::State.CurrentKeyboardState [WParam] = Input::KeyStates::Down;
+        }
+        break;
+        case WM_KEYUP:
+        {
+            PBR_ASSERT(WParam < 256);
+
+            Input::State.CurrentKeyboardState [WParam] = Input::KeyStates::Up;
+        }
+        break;
         case WM_SIZE:
         {
-            Application::State.CurrentWindowWidth = LOWORD(LParam);
-            Application::State.CurrentWindowHeight = HIWORD(LParam);
+            if (WParam == SIZE_MINIMIZED)
+            {
+                Application::State.bMinimised = true;
+            }
+            else
+            {
+                Application::State.bMinimised = false;
+
+                Application::State.CurrentWindowWidth = LOWORD(LParam);
+                Application::State.CurrentWindowHeight = HIWORD(LParam);
+            }
         }
         break;
         case WM_DESTROY:
@@ -88,8 +122,33 @@ static bool const Initialise()
         AssetManager::AssetHandle<AssetManager::MeshAsset> CubeHandle = {};
         AssetManager::LoadMeshAsset("Cube", CubeHandle);
 
-        Scene::ActorData CubeActorData = { "Cube", CubeHandle };
-        Scene::CreateActor(PBRScene, CubeActorData);
+        AssetManager::AssetHandle<AssetManager::MeshAsset> BoatHandle = {};
+        bool bFoundBoat = AssetManager::LoadMeshAsset("Boat", BoatHandle);
+
+        if (!bFoundBoat)
+        {
+            Logging::Log(Logging::LogTypes::Error, PBR_TEXT("Failed to load boat model."));
+        }
+        else
+        {
+            Scene::ActorData BoatActorData = { "Boat" };
+
+            uint32 BoatActorHandle = {};
+            Scene::CreateActor(PBRScene, BoatActorData, BoatActorHandle);
+
+            Components::StaticMesh::CreateComponent(BoatActorHandle, BoatHandle);
+
+            /* Temporary */
+            PBRScene.ComponentMasks [BoatActorHandle - 1u] |= static_cast<uint32>(Scene::ComponentMasks::StaticMesh);
+        }
+
+        Scene::ActorData CubeActorData = { "Cube" };
+
+        uint32 CubeActorHandle = {};
+        Scene::CreateActor(PBRScene, CubeActorData, CubeActorHandle);
+        Components::StaticMesh::CreateComponent(CubeActorHandle, CubeHandle);
+
+        //PBRScene.ComponentMasks [CubeActorHandle - 1u] |= static_cast<uint32>(Scene::ComponentMasks::StaticMesh);
 
         bResult = ForwardRenderer::Initialise(ApplicationInfo);
     }
@@ -137,15 +196,35 @@ static bool const Run()
 
     for (;;)
     {
+        Input::UpdateInputState();
+
         if (::ProcessWindowMessages())
         {
-            ForwardRenderer::PreRender(PBRScene);
+            if (!Application::State.bMinimised)
+            {
+                /* Could do some actor culling and stuff here */
 
-            ForwardRenderer::Render(PBRScene);
+                Camera::UpdateOrientation(PBRScene.MainCamera, 
+                                          -1.0f * (Input::State.CurrentMouseY - Input::State.PreviousMouseY) * Input::State.MouseSensitivity * 0.016666667f, 
+                                          -1.0f * (Input::State.CurrentMouseX - Input::State.PreviousMouseX) * Input::State.MouseSensitivity * 0.016666667f);
 
-            ForwardRenderer::PostRender();
+                /* Branchless WASD */
+                constexpr float kMovementSpeed = 8.0f * 0.016666667f;
+                float const ForwardSpeed = { kMovementSpeed * (Input::IsKeyDown(0x53) * -1.0f + Input::IsKeyDown(0x57)) };
+                float const StrafeSpeed = { kMovementSpeed * (Input::IsKeyDown(0x41) * -1.0f + Input::IsKeyDown(0x44)) };
 
-            PBRScene.NewActorIndices.clear();
+                Camera::UpdatePosition(PBRScene.MainCamera, ForwardSpeed, StrafeSpeed);
+
+                ForwardRenderer::CreateNewActorResources(PBRScene);
+
+                ForwardRenderer::Render(PBRScene);
+
+                PBRScene.NewActorHandles.clear();
+            }
+            else
+            {
+                std::this_thread::sleep_for(std::chrono::duration<uint32, std::milli>(1u));
+            }
         }
         else
         {

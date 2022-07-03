@@ -11,17 +11,114 @@
 
 namespace Vulkan
 {
+    inline VkDescriptorBufferInfo const DescriptorBufferInfo(VkBuffer const Buffer, VkDeviceSize const OffsetInBytes, VkDeviceSize const RangeInBytes)
+    {
+        return VkDescriptorBufferInfo { Buffer, OffsetInBytes, RangeInBytes };
+    }
+
+    inline VkWriteDescriptorSet WriteDescriptorSet(VkDescriptorSet const DescriptorSet, VkDescriptorType const DescriptorType, 
+                                                   std::uint32_t const BindingIndex, std::uint32_t const DescriptorCount, 
+                                                   VkDescriptorBufferInfo const * const BufferDescriptors, VkDescriptorImageInfo const * const ImageDescriptors, 
+                                                   std::uint32_t const ArrayElementIndex = 0u, VkBufferView const * const TexelBufferViews = nullptr)
+    {
+        return VkWriteDescriptorSet { VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, DescriptorSet, BindingIndex, ArrayElementIndex, DescriptorCount, DescriptorType, ImageDescriptors, BufferDescriptors, TexelBufferViews };
+    }
+
+    inline constexpr VkComponentMapping ComponentMapping(VkComponentSwizzle const Red = VK_COMPONENT_SWIZZLE_IDENTITY, VkComponentSwizzle const Green = VK_COMPONENT_SWIZZLE_IDENTITY, 
+                                                         VkComponentSwizzle const Blue = VK_COMPONENT_SWIZZLE_IDENTITY, VkComponentSwizzle const Alpha = VK_COMPONENT_SWIZZLE_IDENTITY)
+    {
+        return VkComponentMapping { Red, Green, Blue, Alpha };
+    }
+
+    inline constexpr VkImageSubresourceRange ImageSubResourceRange(VkImageAspectFlags const AspectFlags,
+                                                                   std::uint32_t const MipMapLevelCount, std::uint32_t const ArrayLayerCount, 
+                                                                   std::uint32_t const BaseMipMapLevelIndex = 0u, std::uint32_t const BaseArrayLayerIndex = 0u)
+    {
+        return VkImageSubresourceRange { AspectFlags, BaseMipMapLevelIndex, MipMapLevelCount, BaseArrayLayerIndex, ArrayLayerCount };
+    }
+
+    inline constexpr VkBufferCreateInfo Buffer(VkDeviceSize const SizeInBytes, VkBufferUsageFlags const UsageFlags, VkSharingMode const SharingMode = VK_SHARING_MODE_EXCLUSIVE, std::uint32_t const QueueFamilyIndexCount = 0u, std::uint32_t const * const QueueFamilyIndices = nullptr, VkBufferCreateFlags const Flags = 0u)
+    {
+        return VkBufferCreateInfo { VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO, nullptr, Flags, SizeInBytes, UsageFlags, SharingMode, QueueFamilyIndexCount, QueueFamilyIndices };
+    }
+
+    inline constexpr VkImageCreateInfo Image(VkImageType const Type, VkFormat const Format,
+                                             VkImageUsageFlags const UsageFlags, VkExtent3D const & Extent,
+                                             VkImageLayout const InitialImageLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                                             std::uint32_t const MipLevelCount = 1u, std::uint32_t const ArrayLayerCount = 1u,
+                                             VkSampleCountFlags const SampleCount = VK_SAMPLE_COUNT_1_BIT, VkImageTiling const Tiling = VK_IMAGE_TILING_OPTIMAL,
+                                             VkSharingMode SharingMode = VK_SHARING_MODE_EXCLUSIVE,
+                                             std::uint32_t const QueueFamilyIndexCount = 0u, std::uint32_t const * const QueueFamilyIndices = nullptr,
+                                             VkImageCreateFlags const Flags = 0u)
+    {
+        return VkImageCreateInfo { VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO, nullptr, Flags, Type, Format, Extent, MipLevelCount, ArrayLayerCount, static_cast<VkSampleCountFlagBits>(SampleCount), Tiling, UsageFlags, SharingMode, QueueFamilyIndexCount, QueueFamilyIndices, InitialImageLayout };
+    }
+
+    inline constexpr VkImageViewCreateInfo ImageView(VkImage const Image, VkImageViewType const ViewType, VkFormat const Format, VkComponentMapping const & ComponentMapping, VkImageSubresourceRange const & SubResourceRange, VkImageViewCreateFlags const Flags = 0u)
+    {
+        return VkImageViewCreateInfo { VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO, nullptr, Flags, Image, ViewType, Format, ComponentMapping, SubResourceRange };
+    }
+
+    inline VkFramebufferCreateInfo FrameBuffer(VkExtent3D const & Extents, VkRenderPass const RenderPass, std::uint32_t const AttachmentCount, VkImageView const * const Attachments, VkFramebufferCreateFlags const Flags = 0u)
+    {
+        return VkFramebufferCreateInfo { VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO, nullptr, Flags, RenderPass, AttachmentCount, Attachments, Extents.width, Extents.height, Extents.depth };
+    }
+
+    inline constexpr VkDescriptorSetLayoutBinding DescriptorSetBinding(VkDescriptorType const DescriptorType, std::uint32_t const DescriptorCount, std::uint32_t const BindingIndex, VkShaderStageFlags const ShaderStageFlags, VkSampler const * const ImmutableSamplers = nullptr)
+    {
+        return VkDescriptorSetLayoutBinding { BindingIndex, DescriptorType, DescriptorCount, ShaderStageFlags, ImmutableSamplers };
+    }
+
+    inline VkDescriptorSetLayoutCreateInfo const DescriptorSetLayout(std::uint32_t const BindingCount, VkDescriptorSetLayoutBinding const * const Bindings, VkDescriptorSetLayoutCreateFlags const Flags = 0u)
+    {
+        return VkDescriptorSetLayoutCreateInfo { VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO, nullptr, Flags, BindingCount, Bindings };
+    }
+
+    inline VkPipelineLayoutCreateInfo const PipelineLayout(std::uint32_t const DescriptorSetLayoutCount, VkDescriptorSetLayout const * const DescriptorSetLayouts, std::uint32_t const PushConstantCount = 0u, VkPushConstantRange const * const PushConstants = nullptr, VkPipelineLayoutCreateFlags const Flags = 0u)
+    {
+        return VkPipelineLayoutCreateInfo { VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO, nullptr, Flags, DescriptorSetLayoutCount, DescriptorSetLayouts, PushConstantCount, PushConstants };
+    }
+
     inline constexpr VkCommandBufferBeginInfo CommandBufferBegin(VkCommandBufferUsageFlags const UsageFlags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT, VkCommandBufferInheritanceInfo const * const InheritanceInfo = nullptr)
     {
         return VkCommandBufferBeginInfo { VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO, nullptr, UsageFlags, InheritanceInfo };
     }
 
-    inline VkSubmitInfo SubmitInfo(std::uint32_t const CommandBufferCount, VkCommandBuffer const * const CommandBuffers,
-                                   std::uint32_t const SignalSemaphoreCount = 0u, VkSemaphore const * const SignalSemaphores = nullptr,
-                                   std::uint32_t const WaitSemaphoreCount = 0u, VkSemaphore const * const WaitSemaphores = nullptr,
-                                   VkPipelineStageFlags const * const WaitPipelineStageMask = nullptr)
+    inline VkSubmitInfo const SubmitInfo(std::uint32_t const CommandBufferCount, VkCommandBuffer const * const CommandBuffers,
+                                         std::uint32_t const SignalSemaphoreCount = 0u, VkSemaphore const * const SignalSemaphores = nullptr,
+                                         std::uint32_t const WaitSemaphoreCount = 0u, VkSemaphore const * const WaitSemaphores = nullptr,
+                                         VkPipelineStageFlags const * const WaitPipelineStageMask = nullptr)
     {
         return VkSubmitInfo { VK_STRUCTURE_TYPE_SUBMIT_INFO, nullptr, WaitSemaphoreCount, WaitSemaphores, WaitPipelineStageMask, CommandBufferCount, CommandBuffers, SignalSemaphoreCount, SignalSemaphores };
+    }
+
+    inline VkRenderPassCreateInfo RenderPass(std::uint32_t const AttachmentCount, VkAttachmentDescription const * const Attachments,
+                                             std::uint32_t const SubpassCount, VkSubpassDescription const * const Subpasses,
+                                             std::uint32_t const DependencyCount = 0u, VkSubpassDependency const * const Dependencies = nullptr,
+                                             VkRenderPassCreateFlags const Flags = 0u)
+    {
+        return VkRenderPassCreateInfo { VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO, nullptr, Flags, AttachmentCount, Attachments, SubpassCount, Subpasses, DependencyCount, Dependencies };
+    }
+
+    inline constexpr VkAttachmentDescription Attachment(VkFormat const Format,
+                                                        VkImageLayout const InitialLayout, VkImageLayout const FinalLayout,
+                                                        VkAttachmentLoadOp const LoadOp, VkAttachmentStoreOp const StoreOp,
+                                                        VkSampleCountFlags const SampleCount = VK_SAMPLE_COUNT_1_BIT,
+                                                        VkAttachmentLoadOp const StencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE, VkAttachmentStoreOp const StencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+                                                        VkAttachmentDescriptionFlags const Flags = 0u)
+    {
+        return VkAttachmentDescription { Flags, Format, static_cast<VkSampleCountFlagBits>(SampleCount), LoadOp, StoreOp, StencilLoadOp, StencilStoreOp, InitialLayout, FinalLayout };
+    }
+
+    inline VkSubpassDescription const Subpass(VkPipelineBindPoint const PipelineBindPoint,
+                                              std::uint32_t const ColourAttachmentCount, VkAttachmentReference const * const ColourAttachments,
+                                              VkAttachmentReference const * const DepthStencilAttachment = nullptr,
+                                              VkAttachmentReference const * const ResolveAttachments = nullptr,
+                                              std::uint32_t const InputAttachmentCount = 0u, VkAttachmentReference const * const InputAttachments = nullptr,
+                                              std::uint32_t const PreserveAttachmentCount = 0u, std::uint32_t const * const PreserveAttachments = nullptr,
+                                              VkSubpassDescriptionFlags const Flags = 0u)
+    {
+        return VkSubpassDescription { Flags, PipelineBindPoint, InputAttachmentCount, InputAttachments, ColourAttachmentCount, ColourAttachments, ResolveAttachments, DepthStencilAttachment, PreserveAttachmentCount, PreserveAttachments };
     }
 
     inline VkRenderPassBeginInfo RenderPassBegin(VkRenderPass const RenderPass, VkFramebuffer const FrameBuffer, VkRect2D const RenderArea, std::uint32_t const ClearValueCount = 0u, VkClearValue const * const ClearValues = nullptr)
@@ -44,21 +141,84 @@ namespace Vulkan
         return VkVertexInputAttributeDescription { Location, BindingSlotIndex, Format, OffsetInBytes };
     }
 
-    inline constexpr VkPipelineVertexInputStateCreateInfo VertexInputState(std::uint32_t const VertexBindingCount, VkVertexInputBindingDescription * const VertexBindings, 
-                                                                           std::uint32_t const VertexAttributeCount, VkVertexInputAttributeDescription * const VertexAttributes, 
-                                                                           VkPipelineVertexInputStateCreateFlags const Flags = 0u)
+    inline VkPipelineShaderStageCreateInfo const PipelineShaderStage(VkShaderStageFlags const ShaderStage, VkShaderModule const ShaderModule, char const * EntryPointName, VkSpecializationInfo const * const SpecializationInfo = nullptr, VkPipelineShaderStageCreateFlags const Flags = 0u)
+    {
+        return VkPipelineShaderStageCreateInfo { VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, nullptr, Flags, static_cast<VkShaderStageFlagBits>(ShaderStage), ShaderModule, EntryPointName, SpecializationInfo };
+    }
+
+    inline constexpr VkPipelineVertexInputStateCreateInfo const VertexInputState(std::uint32_t const VertexBindingCount, VkVertexInputBindingDescription * const VertexBindings,
+                                                                                 std::uint32_t const VertexAttributeCount, VkVertexInputAttributeDescription * const VertexAttributes,
+                                                                                 VkPipelineVertexInputStateCreateFlags const Flags = 0u)
     {
         return VkPipelineVertexInputStateCreateInfo { VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO, nullptr, Flags, VertexBindingCount, VertexBindings, VertexAttributeCount, VertexAttributes };
     }
 
-    inline constexpr VkPipelineInputAssemblyStateCreateInfo InputAssemblyState(VkPrimitiveTopology const PrimitiveTopology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VkBool32 const PrimitiveRestartEnabled = VK_FALSE, VkPipelineInputAssemblyStateCreateFlags const Flags = 0u)
+    inline constexpr VkPipelineInputAssemblyStateCreateInfo const InputAssemblyState(VkPrimitiveTopology const PrimitiveTopology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VkBool32 const PrimitiveRestartEnabled = VK_FALSE, VkPipelineInputAssemblyStateCreateFlags const Flags = 0u)
     {
         return VkPipelineInputAssemblyStateCreateInfo { VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO, nullptr, Flags, PrimitiveTopology, PrimitiveRestartEnabled };
     }
 
-    inline constexpr VkPipelineRasterizationStateCreateInfo RasterizationState(/*VkCullModeFlags const CullMode, VkPolygonMode PolygonMode = VK_POLYGON_MODE_FILL,*/ VkPipelineRasterizationStateCreateFlags const Flags = 0u)
+    inline constexpr VkPipelineRasterizationStateCreateInfo const RasterizationState(VkCullModeFlags const CullMode, VkPolygonMode const PolygonMode = VK_POLYGON_MODE_FILL,
+                                                                                     VkFrontFace const FrontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
+                                                                                     VkBool32 const bEnableDepthBias = VK_FALSE, VkBool32 const bEnableDepthClamp = VK_FALSE,
+                                                                                     float const DepthBiasFactor = 0.0f, float const DepthBiasSlopeFactor = 0.0f, float const DepthBiasClamp = 0.0f,
+                                                                                     float const LineWidth = 1.0f, VkBool32 const bEnableRasterizerDiscard = VK_FALSE, VkPipelineRasterizationStateCreateFlags const Flags = 0u)
     {
-        return VkPipelineRasterizationStateCreateInfo { VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO, nullptr, Flags };
+        return VkPipelineRasterizationStateCreateInfo { VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO, nullptr, Flags, bEnableDepthClamp, bEnableRasterizerDiscard, PolygonMode, CullMode, FrontFace, bEnableDepthBias, DepthBiasFactor, DepthBiasClamp, DepthBiasSlopeFactor, LineWidth };
+    }
+
+    inline constexpr VkPipelineColorBlendAttachmentState const ColourAttachmentBlendState(VkBool32 const bEnableBlending = VK_FALSE,
+                                                                                          VkBlendFactor const SourceColourBlendFactor = VK_BLEND_FACTOR_ONE, VkBlendFactor const DestinationColourBlendFactor = VK_BLEND_FACTOR_ZERO,
+                                                                                          VkBlendOp const ColourBlendOperation = VK_BLEND_OP_ADD,
+                                                                                          VkBlendFactor const SourceAlphaBlendFactor = VK_BLEND_FACTOR_ONE, VkBlendFactor const DestinationAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
+                                                                                          VkBlendOp const AlphaBlendOperation = VK_BLEND_OP_ADD,
+                                                                                          VkColorComponentFlags const ColourMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT)
+    {
+        return VkPipelineColorBlendAttachmentState { bEnableBlending, SourceColourBlendFactor, DestinationColourBlendFactor, ColourBlendOperation, SourceAlphaBlendFactor, DestinationAlphaBlendFactor, AlphaBlendOperation, ColourMask };
+    }
+
+    inline VkPipelineColorBlendStateCreateInfo const ColourBlendState(std::uint32_t const AttachmentCount, VkPipelineColorBlendAttachmentState const * const Attachments, VkBool32 const bEnableLogicOperation = VK_FALSE, VkLogicOp const LogicOperation = VK_LOGIC_OP_CLEAR, float const BlendConstants [4u] = nullptr, VkPipelineColorBlendStateCreateFlags const Flags = 0u)
+    {
+        return VkPipelineColorBlendStateCreateInfo { VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO, nullptr, Flags, bEnableLogicOperation, LogicOperation, AttachmentCount, Attachments,  { BlendConstants ? BlendConstants [0u] : 0.0f, BlendConstants ? BlendConstants [1u] : 0.0f, BlendConstants ? BlendConstants [2u] : 0.0f, BlendConstants ? BlendConstants [3u] : 0.0f } };
+    }
+
+    inline constexpr VkStencilOpState const StencilOpState()
+    {
+        return VkStencilOpState {};
+    }
+
+    inline constexpr VkPipelineDepthStencilStateCreateInfo const DepthStencilState(VkBool32 const bEnableDepthTest, VkBool32 const bEnableDepthWrite, VkCompareOp const DepthComparison,
+                                                                                   VkBool32 const bEnableStencilTest = VK_FALSE, VkStencilOpState const FrontFaceStencilOperation = {}, VkStencilOpState const BackFaceStencilOperation = {},
+                                                                                   VkBool32 const bEnableDepthBoundsTest = VK_FALSE, float const MinDepthBound = 0.0f, float const MaxDepthBound = 1.0f,
+                                                                                   VkPipelineDepthStencilStateCreateFlags const Flags = 0u)
+    {
+        return VkPipelineDepthStencilStateCreateInfo { VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO, nullptr, Flags, bEnableDepthTest, bEnableDepthWrite, DepthComparison, bEnableDepthBoundsTest, bEnableStencilTest, FrontFaceStencilOperation, BackFaceStencilOperation, MinDepthBound, MaxDepthBound };
+    }
+
+    inline VkPipelineMultisampleStateCreateInfo const MultiSampleState(VkSampleCountFlags const SampleCount = VK_SAMPLE_COUNT_1_BIT, VkSampleMask const * const SampleMasks = nullptr, VkBool32 const bEnableAlphaToCoverage = VK_FALSE, VkBool32 const bEnableAlphaToOne = VK_FALSE, VkBool32 const bEnableSampleShading = VK_FALSE, float const MinSampleShadingFraction = 1.0f, VkPipelineMultisampleStateCreateFlags const Flags = 0u)
+    {
+        return VkPipelineMultisampleStateCreateInfo { VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO, nullptr, Flags, static_cast<VkSampleCountFlagBits>(SampleCount), bEnableSampleShading, MinSampleShadingFraction, SampleMasks, bEnableAlphaToCoverage, bEnableAlphaToOne };
+    }
+
+    inline VkPipelineViewportStateCreateInfo const ViewportState(std::uint32_t const ViewportCount, VkViewport const * const Viewports, std::uint32_t const ScissorRectangleCount, VkRect2D const * const ScissorRectangles, VkPipelineViewportStateCreateFlags const Flags = 0u)
+    {
+        return VkPipelineViewportStateCreateInfo { VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO, nullptr, Flags, ViewportCount, Viewports, ScissorRectangleCount, ScissorRectangles };
+    }
+
+    inline VkPipelineDynamicStateCreateInfo const DynamicState(std::uint32_t const DynamicStateCount = 0u, VkDynamicState const * const DynamicStates = nullptr, VkPipelineDynamicStateCreateFlags const Flags = 0u)
+    {
+        return VkPipelineDynamicStateCreateInfo { VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO, nullptr, Flags, DynamicStateCount, DynamicStates };
+    }
+
+    inline VkGraphicsPipelineCreateInfo const GraphicsPipelineState(VkPipelineLayout const PipelineLayout, VkRenderPass const RenderPass, std::uint32_t const SubPassIndex,
+                                                                    std::uint32_t const ShaderStageCount, VkPipelineShaderStageCreateInfo const * const ShaderStages,
+                                                                    VkPipelineVertexInputStateCreateInfo const * const VertexInputState, VkPipelineInputAssemblyStateCreateInfo const * const InputAssemblyState,
+                                                                    VkPipelineViewportStateCreateInfo const * const ViewportState, VkPipelineRasterizationStateCreateInfo const * const RasterizationState,
+                                                                    VkPipelineColorBlendStateCreateInfo const * const BlendState, VkPipelineDepthStencilStateCreateInfo const * const DepthStencilState,
+                                                                    VkPipelineDynamicStateCreateInfo const * const DynamicState, VkPipelineMultisampleStateCreateInfo const * const MultiSampleState,
+                                                                    VkPipelineCreateFlags const Flags = 0u)
+    {
+        return VkGraphicsPipelineCreateInfo { VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO, nullptr, Flags, ShaderStageCount, ShaderStages, VertexInputState, InputAssemblyState, nullptr, ViewportState, RasterizationState, MultiSampleState, DepthStencilState, BlendState, DynamicState, PipelineLayout, RenderPass, SubPassIndex, VK_NULL_HANDLE, -1l };
     }
 }
 
@@ -158,8 +318,8 @@ VULKAN_WRAPPER_API VkResult vkEndCommandBuffer(VkCommandBuffer commandBuffer);
 VULKAN_WRAPPER_API VkResult vkDeviceWaitIdle(VkDevice device);
 
 VULKAN_WRAPPER_API void vkUpdateDescriptorSets(VkDevice device,
-                                               std::uint32_t descriptorWriteCount, VkWriteDescriptorSet const* pDescriptorWrites,
-                                               std::uint32_t descriptorCopyCount, VkCopyDescriptorSet const* pDescriptorCopies);
+                                               std::uint32_t descriptorWriteCount, VkWriteDescriptorSet const * pDescriptorWrites,
+                                               std::uint32_t descriptorCopyCount, VkCopyDescriptorSet const * pDescriptorCopies);
 
 VULKAN_WRAPPER_API VkResult vkQueueSubmit(VkQueue queue, std::uint32_t submitCount, VkSubmitInfo const * pSubmits, VkFence fence);
 VULKAN_WRAPPER_API VkResult vkQueuePresentKHR(VkQueue queue, VkPresentInfoKHR const * pPresentInfo);
@@ -179,10 +339,10 @@ VULKAN_WRAPPER_API void vkCmdBeginRenderPass(VkCommandBuffer commandBuffer, VkRe
 VULKAN_WRAPPER_API void vkCmdEndRenderPass(VkCommandBuffer commandBuffer);
 
 VULKAN_WRAPPER_API void vkCmdBindPipeline(VkCommandBuffer commandBuffer, VkPipelineBindPoint pipelineBindPoint, VkPipeline pipeline);
-VULKAN_WRAPPER_API void vkCmdBindDescriptorSets(VkCommandBuffer commandBuffer, 
-                                                VkPipelineBindPoint pipelineBindPoint, VkPipelineLayout layout, 
-                                                std::uint32_t firstSet, 
-                                                std::uint32_t descriptorSetCount, VkDescriptorSet const * pDescriptorSets, 
+VULKAN_WRAPPER_API void vkCmdBindDescriptorSets(VkCommandBuffer commandBuffer,
+                                                VkPipelineBindPoint pipelineBindPoint, VkPipelineLayout layout,
+                                                std::uint32_t firstSet,
+                                                std::uint32_t descriptorSetCount, VkDescriptorSet const * pDescriptorSets,
                                                 std::uint32_t dynamicOffsetCount, std::uint32_t const * pDynamicOffsets);
 VULKAN_WRAPPER_API void vkCmdBindVertexBuffers(VkCommandBuffer commandBuffer, std::uint32_t firstBinding, std::uint32_t bindingCount, VkBuffer const * pBuffers, VkDeviceSize const * pOffsets);
 VULKAN_WRAPPER_API void vkCmdBindIndexBuffer(VkCommandBuffer commandBuffer, VkBuffer buffer, VkDeviceSize offset, VkIndexType indexType);
