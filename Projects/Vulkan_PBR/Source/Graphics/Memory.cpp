@@ -1,4 +1,4 @@
-#include "Memory.hpp"
+#include "Graphics/Memory.hpp"
 
 #include "Graphics/Device.hpp"
 
@@ -23,7 +23,7 @@ struct DeviceMemoryPool
     uint8 NextUnallocatedMemoryBlockIndex = { 0u };
 };
 
-static uint64 const kDefaultBlockSizeInBytes = { 1u << 10u << 10u }; // 1Mb
+static uint64 const kDefaultBlockSizeInBytes = { 128u << 10u << 10u }; // 128 MiB
 
 static std::array<DeviceMemoryPool, VK_MAX_MEMORY_TYPES> MemoryPools;
 
