@@ -1,15 +1,37 @@
 #include "Scene.hpp"
 
-bool const Scene::CreateActor(Scene::SceneData & Scene, Scene::ActorData const & ActorData)
+#include "Common.hpp"
+#include "Logging.hpp"
+
+bool const Scene::CreateActor(Scene::SceneData & Scene, Scene::ActorData const & ActorData, uint32 & OutputActorHandle)
 {
-    uint32 const NewActorIndex = { static_cast<uint32>(Scene.ActorMeshHandles.size() + 1u) };
+    uint32 NewActorHandle = {};
 
-    Scene.ActorNameToIDMap [ActorData.DebugName] = NewActorIndex;
+    if (Scene.FreeActorHandles.size() == 0u)
+    {
+        Scene.ActorCount++;
+        NewActorHandle = Scene.ActorCount;
 
-    Scene.ActorMeshHandles.push_back(ActorData.MeshHandle);
-    Scene.NewActorIndices.push_back(NewActorIndex);
+        Scene.ComponentMasks.emplace_back();
+    }
+    else
+    {
+        NewActorHandle = Scene.FreeActorHandles.front();
+        Scene.FreeActorHandles.pop();
+    }
 
-    Logging::Log(Logging::LogTypes::Info, String::Format(PBR_TEXT("Creating New Actor [ID = %d]"), NewActorIndex));
+    Scene.NewActorHandles.push_back(NewActorHandle);
+    Scene.ActorNameToHandleMap [ActorData.DebugName] = NewActorHandle;
+
+    OutputActorHandle = NewActorHandle;
+
+    Logging::Log(Logging::LogTypes::Info, String::Format(PBR_TEXT("Creating New Actor [ID = %d]"), NewActorHandle));
 
     return true;
+}
+
+bool const Scene::DoesActorHaveComponent(Scene::SceneData const & Scene, uint32 const ActorHandle, Scene::ComponentMasks const ComponentMask)
+{
+    uint32 const ActorIndex = ActorHandle - 1u;
+    return (Scene.ComponentMasks [ActorIndex] & static_cast<uint32>(ComponentMask)) > 0u;
 }
