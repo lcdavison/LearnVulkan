@@ -117,7 +117,7 @@ static void CreateVertexHash(uint32 const VertexIndex, uint32 const NormalIndex,
 static void ProcessOBJMeshData(OBJLoader::OBJMeshData const & OBJMeshData, AssetManager::MeshAsset & OutputMeshAsset)
 {
     /* Use this to check if we have already encountered a vertex previously */
-    std::unordered_map<uint32, uint32> VertexLookUpTable = {};
+    std::unordered_map<std::string, uint32> VertexLookUpTable = {};
 
     AssetManager::MeshAsset IntermediateAsset = {};
 
@@ -129,7 +129,7 @@ static void ProcessOBJMeshData(OBJLoader::OBJMeshData const & OBJMeshData, Asset
              CurrentFaceVertexIndex < 3u;
              CurrentFaceVertexIndex++)
         {
-            uint32 VertexIndex = OBJMeshData.FaceVertexIndices [CurrentFaceOffset + CurrentFaceVertexIndex];
+            uint32 const VertexIndex = OBJMeshData.FaceVertexIndices [CurrentFaceOffset + CurrentFaceVertexIndex];
 
             uint32 NormalIndex = {};
             if (OBJMeshData.FaceNormalIndices.size() > 0u)
@@ -148,7 +148,9 @@ static void ProcessOBJMeshData(OBJLoader::OBJMeshData const & OBJMeshData, Asset
 
             uint32 Index = {};
 
-            auto FoundVertex = VertexLookUpTable.find(VertexHash);
+            std::string const IndexString = std::to_string(VertexIndex) + std::to_string(NormalIndex) + std::to_string(TextureCoordinateIndex);
+
+            auto FoundVertex = VertexLookUpTable.find(IndexString);
 
             if (FoundVertex != VertexLookUpTable.end())
             {
@@ -156,14 +158,15 @@ static void ProcessOBJMeshData(OBJLoader::OBJMeshData const & OBJMeshData, Asset
             }
             else
             {
+                Index = static_cast<uint32>(IntermediateAsset.Vertices.size());
+
                 OBJLoader::OBJVertex const & VertexData = OBJMeshData.Positions [VertexIndex - 1u];
                 IntermediateAsset.Vertices.emplace_back(Math::Vector3 { VertexData.X, VertexData.Y, VertexData.Z });
 
                 OBJLoader::OBJNormal const & NormalData = OBJMeshData.Normals [NormalIndex - 1u];
                 IntermediateAsset.Normals.emplace_back(Math::Vector3 { NormalData.X, NormalData.Y, NormalData.Z });
 
-                Index = static_cast<uint32>(IntermediateAsset.Vertices.size()) - 1u;
-                VertexLookUpTable [VertexHash] = Index;
+                VertexLookUpTable [IndexString] = Index;
             }
 
             IntermediateAsset.Indices.push_back(Index);
@@ -171,6 +174,7 @@ static void ProcessOBJMeshData(OBJLoader::OBJMeshData const & OBJMeshData, Asset
     }
 
     IntermediateAsset.Vertices.shrink_to_fit();
+    IntermediateAsset.Normals.shrink_to_fit();
     IntermediateAsset.Indices.shrink_to_fit();
 
     OutputMeshAsset = std::move(IntermediateAsset);
@@ -242,19 +246,23 @@ bool const AssetManager::LoadMeshAsset(std::string const & AssetName, AssetManag
 
         if (bFoundAssetFile)
         {
+            uint32 NewMeshHandle = {};
             uint32 NewMeshIndex = {};
 
             if (AssetTable.FreeMeshIndices.size() > 0u)
             {
-                NewMeshIndex = AssetTable.FreeMeshIndices.front();
+                NewMeshHandle = AssetTable.FreeMeshIndices.front();
                 AssetTable.FreeMeshIndices.pop();
             }
             else
             {
-                NewMeshIndex = static_cast<uint32>(AssetTable.MeshAssets.size());
                 AssetTable.MeshAssets.emplace_back();
                 AssetTable.ReadyMeshFlags.emplace_back();
+
+                NewMeshHandle = static_cast<uint32>(AssetTable.MeshAssets.size());
             }
+
+            NewMeshIndex = NewMeshHandle - 1u;
 
             AssetTable.ReadyMeshFlags [NewMeshIndex] = false;
 
@@ -287,7 +295,9 @@ bool const AssetManager::LoadMeshAsset(std::string const & AssetName, AssetManag
             AssetLoaderThread::WorkCondition.notify_one();
 
             /* Remove this from table if loading fails */
-            AssetTable.AssetLookUpTable [AssetName] = NewMeshIndex;
+            AssetTable.AssetLookUpTable [AssetName] = NewMeshHandle;
+            OutputMeshHandle.AssetIndex = NewMeshHandle;
+            bResult = true;
         }
     }
 
@@ -298,23 +308,25 @@ bool const AssetManager::GetMeshData(AssetManager::AssetHandle<AssetManager::Mes
 {
     bool bResult = true;
 
-    if (!AssetTable.ReadyMeshFlags [MeshHandle.AssetIndex])
+    uint32 const AssetIndex = MeshHandle.AssetIndex - 1u;
+
+    if (!AssetTable.ReadyMeshFlags [AssetIndex])
     {
         /* TODO: Check that a future exists for the mesh first */
 
-        bResult = AssetTable.PendingMeshAssets [MeshHandle.AssetIndex].get();
+        bResult = AssetTable.PendingMeshAssets [AssetIndex].get();
 
-        AssetTable.ReadyMeshFlags [MeshHandle.AssetIndex] = bResult;
+        AssetTable.ReadyMeshFlags [AssetIndex] = bResult;
 
-        AssetTable.PendingMeshAssets.erase(MeshHandle.AssetIndex);
+        AssetTable.PendingMeshAssets.erase(AssetIndex);
 
         if (bResult)
         {
-            OutputMeshData = &AssetTable.MeshAssets [MeshHandle.AssetIndex];
+            OutputMeshData = &AssetTable.MeshAssets [AssetIndex];
         }
     }
 
-    OutputMeshData = &AssetTable.MeshAssets [MeshHandle.AssetIndex];
+    OutputMeshData = &AssetTable.MeshAssets [AssetIndex];
 
     return bResult;
 }
