@@ -120,6 +120,36 @@ static void StoreSwapChainImages(Vulkan::Device::DeviceState const & DeviceState
     }
 }
 
+static void CreateDepthStencilImage(Vulkan::Device::DeviceState const & DeviceState, VkExtent2D const & Extents, Vulkan::Viewport::ViewportState & State)
+{
+    Vulkan::ImageDescriptor ImageDesc = {};
+    ImageDesc.ImageType = VK_IMAGE_TYPE_2D;
+    ImageDesc.UsageFlags = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+    ImageDesc.Format = VK_FORMAT_D24_UNORM_S8_UINT;
+    ImageDesc.Width = Extents.width;
+    ImageDesc.Height = Extents.height;
+    ImageDesc.Depth = 1u;
+    ImageDesc.ArrayLayerCount = 1u;
+    ImageDesc.MipLevelCount = 1u;
+    ImageDesc.SampleCount = VK_SAMPLE_COUNT_1_BIT;
+
+    uint32 DepthStencilImage = {};
+    Vulkan::Device::CreateImage(DeviceState, ImageDesc, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, DepthStencilImage);
+
+    Vulkan::ImageViewDescriptor ImageViewDesc = {};
+    ImageViewDesc.ViewType = VK_IMAGE_VIEW_TYPE_2D;
+    ImageViewDesc.Format = VK_FORMAT_D24_UNORM_S8_UINT;
+    ImageViewDesc.AspectFlags = VK_IMAGE_ASPECT_DEPTH_BIT;
+    ImageViewDesc.ArrayLayerCount = 1u;
+    ImageViewDesc.MipLevelCount = 1u;
+
+    uint32 DepthStencilImageView = {};
+    Vulkan::Device::CreateImageView(DeviceState, DepthStencilImage, ImageViewDesc, DepthStencilImageView);
+
+    State.DepthStencilImage = DepthStencilImage;
+    State.DepthStencilImageView = DepthStencilImageView;
+}
+
 bool const Vulkan::Viewport::CreateViewport(Vulkan::Instance::InstanceState const & InstanceState, Vulkan::Device::DeviceState const & DeviceState, Vulkan::Viewport::ViewportState & OutputState)
 {
     if (!InstanceState.Instance || 
@@ -166,6 +196,8 @@ bool const Vulkan::Viewport::CreateViewport(Vulkan::Instance::InstanceState cons
 
         ::StoreSwapChainImages(DeviceState, IntermediateState);
 
+        ::CreateDepthStencilImage(DeviceState, IntermediateState.ImageExtents, IntermediateState);
+
         IntermediateState.DynamicViewport.width = static_cast<float>(IntermediateState.ImageExtents.width);
         IntermediateState.DynamicViewport.height = static_cast<float>(IntermediateState.ImageExtents.height);
         IntermediateState.DynamicViewport.x = 0.0f;
@@ -187,20 +219,25 @@ bool const Vulkan::Viewport::ResizeViewport(Vulkan::Instance::InstanceState cons
 {
     bool bResult = false;
 
-    for (VkImageView & ImageView : State.SwapChainImageViews)
-    {
-        if (ImageView)
-        {
-            vkDestroyImageView(DeviceState.Device, ImageView, nullptr);
-            ImageView = VK_NULL_HANDLE;
-        }
-    }
-
     VkSurfaceCapabilitiesKHR SurfaceCapabilities = {};
     VkResult SurfaceCapabilityError = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(DeviceState.PhysicalDevice, InstanceState.Surface, &SurfaceCapabilities);
 
-    if (SurfaceCapabilityError != VK_ERROR_SURFACE_LOST_KHR)
+    if (SurfaceCapabilityError != VK_ERROR_SURFACE_LOST_KHR
+        && SurfaceCapabilities.currentExtent.width > 0u
+        && SurfaceCapabilities.currentExtent.height > 0u)
     {
+        for (VkImageView & ImageView : State.SwapChainImageViews)
+        {
+            if (ImageView)
+            {
+                vkDestroyImageView(DeviceState.Device, ImageView, nullptr);
+                ImageView = VK_NULL_HANDLE;
+            }
+        }
+
+        Vulkan::Device::DestroyImageView(DeviceState, State.DepthStencilImageView, VK_NULL_HANDLE);
+        Vulkan::Device::DestroyImage(DeviceState, State.DepthStencilImage, VK_NULL_HANDLE);
+
         Vulkan::Viewport::ViewportState IntermediateState = {};
 
         VkExtent2D NewImageExtents = {};
@@ -233,6 +270,8 @@ bool const Vulkan::Viewport::ResizeViewport(Vulkan::Instance::InstanceState cons
 
         ::StoreSwapChainImages(DeviceState, IntermediateState);
 
+        ::CreateDepthStencilImage(DeviceState, IntermediateState.ImageExtents, IntermediateState);
+
         IntermediateState.DynamicViewport.width = static_cast<float>(IntermediateState.ImageExtents.width);
         IntermediateState.DynamicViewport.height = static_cast<float>(IntermediateState.ImageExtents.height);
         IntermediateState.DynamicViewport.x = 0.0f;
@@ -246,12 +285,19 @@ bool const Vulkan::Viewport::ResizeViewport(Vulkan::Instance::InstanceState cons
         State = std::move(IntermediateState);
         bResult = true;
     }
+    else
+    {
+        Logging::Log(Logging::LogTypes::Info, PBR_TEXT("Surface lost or degenerate extents"));
+    }
 
     return bResult;
 }
 
 void Vulkan::Viewport::DestroyViewport(Vulkan::Device::DeviceState const & DeviceState, Vulkan::Viewport::ViewportState & State)
 {
+    Vulkan::Device::DestroyImageView(DeviceState, State.DepthStencilImageView, VK_NULL_HANDLE);
+    Vulkan::Device::DestroyImage(DeviceState, State.DepthStencilImage, VK_NULL_HANDLE);
+
     for (VkImageView & ImageView : State.SwapChainImageViews)
     {
         if (ImageView)

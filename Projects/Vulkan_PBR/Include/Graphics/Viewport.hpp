@@ -28,6 +28,9 @@ namespace Vulkan::Viewport
 
         VkExtent2D ImageExtents;
 
+        uint32 DepthStencilImage;
+        uint32 DepthStencilImageView;
+
         VkSwapchainKHR SwapChain;
         VkSurfaceFormatKHR SurfaceFormat;
     };
