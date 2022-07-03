@@ -1,7 +1,5 @@
 #include "VulkanModule.hpp"
 
-#include "GPUResourceManager.hpp"
-
 #include <vector>
 
 /* TODO: Separate resource management, still use this for Create\Destroy Buffer */

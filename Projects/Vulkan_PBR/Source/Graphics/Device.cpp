@@ -2,9 +2,10 @@
 
 #include "Graphics/Instance.hpp"
 
-#include "Memory.hpp"
+#include "Graphics/Memory.hpp"
 
 #include <vector>
+#include <queue>
 #include <string>
 #include <functional>
 
