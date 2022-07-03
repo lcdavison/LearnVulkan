@@ -14,13 +14,13 @@ struct BufferCollection
     std::queue<uint32> AvailableResourceHandles = {};
 
     std::vector<VkBuffer> Resources = {};
-    std::vector<DeviceMemoryAllocator::Allocation> MemoryAllocations = {};  // TODO: Allocations should be packed better, to be more cache friendly
+    std::vector<DeviceMemoryAllocator::Allocation> MemoryAllocations = {};
     std::vector<VkDeviceSize> SizesInBytes = {};
 };
 
 struct ImageCollection
 {
-    struct Extents
+    struct ImageExtents
     {
         uint32 Width;
         uint32 Height;
@@ -31,7 +31,7 @@ struct ImageCollection
 
     std::vector<VkImage> Resources = {};
     std::vector<DeviceMemoryAllocator::Allocation> MemoryAllocations = {};
-    std::vector<Extents> Extents = {};
+    std::vector<ImageExtents> Extents = {};
 };
 
 struct ImageViewCollection
@@ -556,13 +556,13 @@ void Vulkan::Device::CreateImage(Vulkan::Device::DeviceState const & State, Vulk
         uint32 const NewImageIndex = { NewImageHandle - 1u };
         Images.Resources [NewImageIndex] = NewImage;
         Images.MemoryAllocations [NewImageIndex] = MemoryAllocation;
-        Images.Extents [NewImageIndex] = ImageCollection::Extents { Descriptor.Width, Descriptor.Height };
+        Images.Extents [NewImageIndex] = ImageCollection::ImageExtents { Descriptor.Width, Descriptor.Height };
     }
     else
     {
         Images.Resources.push_back(NewImage);
         Images.MemoryAllocations.push_back(MemoryAllocation);
-        Images.Extents.push_back(ImageCollection::Extents { Descriptor.Width, Descriptor.Height });
+        Images.Extents.push_back(ImageCollection::ImageExtents { Descriptor.Width, Descriptor.Height });
 
         NewImageHandle = static_cast<uint32>(Images.Resources.size());
     }
