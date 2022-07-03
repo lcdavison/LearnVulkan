@@ -37,6 +37,8 @@ namespace Math
 
             return IdentityMatrix;
         }
+
+        static Matrix4x4 const Inverse(Matrix4x4 const & Matrix);
     };
 
     extern Matrix4x4 const operator * (Matrix4x4 const & Left, Matrix4x4 const & Right);
