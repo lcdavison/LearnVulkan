@@ -1,5 +1,7 @@
 #include "Math/Transform.hpp"
 
+#include "Math/Utilities.hpp"
+
 #include <cmath>
 
 #if USE_SSE2
@@ -56,6 +58,42 @@ constexpr Math::Matrix4x4 const Math::ScaleMatrix(Vector3 const & Scale)
     Matrix [Math::Matrix4x4::Index { 3u, 3u }] = 1.0f;
 
     return Matrix;
+}
+
+Math::Matrix4x4 const Math::RotateZAxis(float const AngleInDegrees)
+{
+    Math::Matrix4x4 Matrix = { Math::Matrix4x4::Identity() };
+
+    float const SineRotationAngle = std::sin(Math::ConvertDegreesToRadians(AngleInDegrees));
+    float const CosineRotationAngle = std::cos(Math::ConvertDegreesToRadians(AngleInDegrees));
+
+    Matrix [Math::Matrix4x4::Index { 0u, 0u }] = CosineRotationAngle;
+    Matrix [Math::Matrix4x4::Index { 1u, 0u }] = SineRotationAngle;
+
+    Matrix [Math::Matrix4x4::Index { 0u, 1u }] = -SineRotationAngle;
+    Matrix [Math::Matrix4x4::Index { 1u, 1u }] = CosineRotationAngle;
+
+    return Matrix;
+}
+
+Math::Matrix4x4 const Math::RotateAxisAngle(Math::Vector3 const & Axis, float const AngleInDegrees)
+{
+    /* Use Rodrigues Rotation Formula in matrix form */
+    /* This can be derived by creating a basis around the axis of rotation */
+    /* Using the tensor product for creating a matrix form of dot product, and skew symmetric matrix for cross product */
+    float const AngleInRadians = Math::ConvertDegreesToRadians(AngleInDegrees);
+    float const CosineAngle = std::cos(AngleInRadians);
+    float const SineAngle = std::sin(AngleInRadians);
+    float const OneMinusCosineAngle = 1.0f - CosineAngle;
+
+    /* There is some repetition in here that can be factored out */
+    return Math::Matrix4x4 
+    {
+        Axis.X * Axis.X * OneMinusCosineAngle + CosineAngle, OneMinusCosineAngle * Axis.X * Axis.Y + SineAngle * Axis.Z, OneMinusCosineAngle * Axis.X * Axis.Z - SineAngle * Axis.Y, 0.0f,
+        OneMinusCosineAngle * Axis.X * Axis.Y - SineAngle * Axis.Z, OneMinusCosineAngle * Axis.Y * Axis.Y + CosineAngle, OneMinusCosineAngle * Axis.Y * Axis.Z + SineAngle * Axis.X, 0.0f,
+        OneMinusCosineAngle * Axis.X * Axis.Z + SineAngle * Axis.Y, OneMinusCosineAngle * Axis.Y * Axis.Z - SineAngle * Axis.X, OneMinusCosineAngle * Axis.Z * Axis.Z + CosineAngle, 0.0f,
+        0.0f, 0.0f, 0.0f, 1.0f,
+    };
 }
 
 Math::Matrix4x4 const Math::PerspectiveMatrix(float const HorizontalFieldOfViewInRadians, float const AspectRatio, float const NearPlaneDistance, float const FarPlaneDistance)
