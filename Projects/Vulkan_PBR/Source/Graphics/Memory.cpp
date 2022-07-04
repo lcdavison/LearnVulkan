@@ -132,10 +132,8 @@ bool const DeviceMemoryAllocator::AllocateMemory(Vulkan::Device::DeviceState con
     }
 
     /* Offsets should be aligned in the memory block */
-    /* We will cause fragmentation due to the alignment, so when freeing it would be worth */
     uint64 const MemoryBlockBaseOffset = SelectedMemoryPool.BlockFreeListOffsetsInBytes [MemoryBlockIndex][FreeListChunkIndex];
 
-    /* Alignment here may not be necessary, since VkMemoryRequirements already aligns the size */
     uint64 const MemoryBlockAlignedOffset = (MemoryBlockBaseOffset + MemoryRequirements.alignment - 1u) & ~(MemoryRequirements.alignment - 1u);
     uint16 const MemoryBlockAlignmentWasteInBytes = static_cast<uint16>(MemoryBlockAlignedOffset - MemoryBlockBaseOffset);
 
@@ -171,8 +169,6 @@ bool const DeviceMemoryAllocator::AllocateMemory(Vulkan::Device::DeviceState con
 
 bool const DeviceMemoryAllocator::FreeMemory(DeviceMemoryAllocator::Allocation & Allocation)
 {
-    /* TODO: This needs to take into account alignment when freeing */
-
     bool bResult = false;
 
     /* First find pool, then find block that this allocation is from */
@@ -180,6 +176,9 @@ bool const DeviceMemoryAllocator::FreeMemory(DeviceMemoryAllocator::Allocation &
     uint32 const PoolBlockIndex = (Allocation.AllocationID & 0x00000000FFFFFFFF);
 
     DeviceMemoryPool & SelectedMemoryPool = MemoryPools [MemoryPoolIndex];
+
+    uint64 const AllocationOffsetInBytes = Allocation.OffsetInBytes - Allocation.AlignmentWasteInBytes;
+    uint64 const AllocationSizeInBytes = Allocation.SizeInBytes + Allocation.AlignmentWasteInBytes;
 
     /* Get indices of lower and upper bound chunks */
     uint32 GreatestLowerOffsetIndex = {};
@@ -197,14 +196,14 @@ bool const DeviceMemoryAllocator::FreeMemory(DeviceMemoryAllocator::Allocation &
     {
         uint64 CurrentOffsetInBytes = SelectedMemoryPool.BlockFreeListOffsetsInBytes [PoolBlockIndex][CurrentOffsetIndex];
 
-        if (CurrentOffsetInBytes < Allocation.OffsetInBytes && CurrentOffsetInBytes >= GreatestLowerOffset)
+        if (CurrentOffsetInBytes < AllocationOffsetInBytes && CurrentOffsetInBytes >= GreatestLowerOffset)
         {
             GreatestLowerOffsetIndex = CurrentOffsetIndex;
             GreatestLowerOffset = CurrentOffsetInBytes;
 
             bFoundLowerOffset = true;
         }
-        else if (CurrentOffsetInBytes > Allocation.OffsetInBytes && CurrentOffsetInBytes <= SmallestHigherOffset)
+        else if (CurrentOffsetInBytes > AllocationOffsetInBytes && CurrentOffsetInBytes <= SmallestHigherOffset)
         {
             SmallestHigherOffsetIndex = CurrentOffsetIndex;
             SmallestHigherOffset = CurrentOffsetInBytes;
@@ -221,32 +220,32 @@ bool const DeviceMemoryAllocator::FreeMemory(DeviceMemoryAllocator::Allocation &
     */
     bool const bCanMergeLeftBlock =
         bFoundLowerOffset &&
-        GreatestLowerOffset + SelectedMemoryPool.BlockFreeListSizesInBytes [PoolBlockIndex][GreatestLowerOffsetIndex] == Allocation.OffsetInBytes;
+        GreatestLowerOffset + SelectedMemoryPool.BlockFreeListSizesInBytes [PoolBlockIndex][GreatestLowerOffsetIndex] == AllocationOffsetInBytes;
 
     bool const bCanMergeRightBlock =
         bFoundHigherOffset &&
-        Allocation.OffsetInBytes + Allocation.SizeInBytes == SelectedMemoryPool.BlockFreeListOffsetsInBytes [PoolBlockIndex][SmallestHigherOffsetIndex];
+        AllocationOffsetInBytes + AllocationSizeInBytes == SelectedMemoryPool.BlockFreeListOffsetsInBytes [PoolBlockIndex][SmallestHigherOffsetIndex];
 
     if (bCanMergeLeftBlock && bCanMergeRightBlock)
     {
-        SelectedMemoryPool.BlockFreeListSizesInBytes [PoolBlockIndex][GreatestLowerOffsetIndex] += Allocation.SizeInBytes + SelectedMemoryPool.BlockFreeListSizesInBytes [PoolBlockIndex][SmallestHigherOffsetIndex];
+        SelectedMemoryPool.BlockFreeListSizesInBytes [PoolBlockIndex][GreatestLowerOffsetIndex] += AllocationSizeInBytes + SelectedMemoryPool.BlockFreeListSizesInBytes [PoolBlockIndex][SmallestHigherOffsetIndex];
 
         SelectedMemoryPool.BlockFreeListSizesInBytes [PoolBlockIndex].erase(SelectedMemoryPool.BlockFreeListSizesInBytes [PoolBlockIndex].cbegin() + SmallestHigherOffsetIndex);
         SelectedMemoryPool.BlockFreeListOffsetsInBytes [PoolBlockIndex].erase(SelectedMemoryPool.BlockFreeListOffsetsInBytes [PoolBlockIndex].cbegin() + SmallestHigherOffsetIndex);
     }
     else if (bCanMergeLeftBlock)
     {
-        SelectedMemoryPool.BlockFreeListSizesInBytes [PoolBlockIndex][GreatestLowerOffsetIndex] += Allocation.SizeInBytes;
+        SelectedMemoryPool.BlockFreeListSizesInBytes [PoolBlockIndex][GreatestLowerOffsetIndex] += AllocationSizeInBytes;
     }
     else if (bCanMergeRightBlock)
     {
-        SelectedMemoryPool.BlockFreeListOffsetsInBytes [PoolBlockIndex][SmallestHigherOffsetIndex] -= Allocation.SizeInBytes;
-        SelectedMemoryPool.BlockFreeListSizesInBytes [PoolBlockIndex][SmallestHigherOffsetIndex] += Allocation.SizeInBytes;
+        SelectedMemoryPool.BlockFreeListOffsetsInBytes [PoolBlockIndex][SmallestHigherOffsetIndex] -= AllocationSizeInBytes;
+        SelectedMemoryPool.BlockFreeListSizesInBytes [PoolBlockIndex][SmallestHigherOffsetIndex] += AllocationSizeInBytes;
     }
     else
     {
-        SelectedMemoryPool.BlockFreeListOffsetsInBytes [PoolBlockIndex].push_back(Allocation.OffsetInBytes);
-        SelectedMemoryPool.BlockFreeListSizesInBytes [PoolBlockIndex].push_back(Allocation.SizeInBytes);
+        SelectedMemoryPool.BlockFreeListOffsetsInBytes [PoolBlockIndex].push_back(AllocationOffsetInBytes);
+        SelectedMemoryPool.BlockFreeListSizesInBytes [PoolBlockIndex].push_back(AllocationSizeInBytes);
     }
 
     return bResult;
