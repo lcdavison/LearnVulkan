@@ -189,7 +189,7 @@ bool const Vulkan::Viewport::CreateViewport(Vulkan::Instance::InstanceState cons
         SwapChainCreateInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
         SwapChainCreateInfo.preTransform = SurfaceCapabilities.currentTransform;
         SwapChainCreateInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-        SwapChainCreateInfo.presentMode = VK_PRESENT_MODE_MAILBOX_KHR;
+        SwapChainCreateInfo.presentMode = VK_PRESENT_MODE_FIFO_KHR;
         SwapChainCreateInfo.clipped = VK_TRUE;
 
         VERIFY_VKRESULT(vkCreateSwapchainKHR(DeviceState.Device, &SwapChainCreateInfo, nullptr, &IntermediateState.SwapChain));
@@ -259,7 +259,7 @@ bool const Vulkan::Viewport::ResizeViewport(Vulkan::Instance::InstanceState cons
         SwapChainCreateInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
         SwapChainCreateInfo.preTransform = SurfaceCapabilities.currentTransform;
         SwapChainCreateInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-        SwapChainCreateInfo.presentMode = VK_PRESENT_MODE_MAILBOX_KHR;
+        SwapChainCreateInfo.presentMode = VK_PRESENT_MODE_FIFO_KHR;
         SwapChainCreateInfo.clipped = VK_TRUE;
 
         /* Need to find out whether we should keep track of the old swapchains and destroy them ourselves */
