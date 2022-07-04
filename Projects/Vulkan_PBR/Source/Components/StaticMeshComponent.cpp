@@ -74,9 +74,9 @@ bool const Components::StaticMesh::TransferToGPU(uint32 const ActorHandle, VkCom
 
         std::array<uint32, 3u> StagingBufferHandles = {};
 
-        Vulkan::Device::CreateBuffer(DeviceState, VertexBufferSizeInBytes, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, StagingBufferHandles [0u]);
-        Vulkan::Device::CreateBuffer(DeviceState, NormalBufferSizeInBytes, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, StagingBufferHandles [1u]);
-        Vulkan::Device::CreateBuffer(DeviceState, IndexBufferSizeInBytes, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, StagingBufferHandles [2u]);
+        Vulkan::Device::CreateBuffer(DeviceState, VertexBufferSizeInBytes, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, StagingBufferHandles [0u]);
+        Vulkan::Device::CreateBuffer(DeviceState, NormalBufferSizeInBytes, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, StagingBufferHandles [1u]);
+        Vulkan::Device::CreateBuffer(DeviceState, IndexBufferSizeInBytes, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, StagingBufferHandles [2u]);
 
         std::array<Vulkan::Resource::Buffer, 3u> StagingBuffers = {};
 
@@ -100,9 +100,9 @@ bool const Components::StaticMesh::TransferToGPU(uint32 const ActorHandle, VkCom
             Vulkan::BufferMemoryBarrier(StagingBuffers [1u].Resource, VK_ACCESS_HOST_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT),
             Vulkan::BufferMemoryBarrier(StagingBuffers [2u].Resource, VK_ACCESS_HOST_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT),
 
-            Vulkan::BufferMemoryBarrier(Buffers [0u].Resource, VK_ACCESS_TRANSFER_READ_BIT, VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT),
-            Vulkan::BufferMemoryBarrier(Buffers [1u].Resource, VK_ACCESS_TRANSFER_READ_BIT, VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT),
-            Vulkan::BufferMemoryBarrier(Buffers [2u].Resource, VK_ACCESS_TRANSFER_READ_BIT, VK_ACCESS_INDEX_READ_BIT),
+            Vulkan::BufferMemoryBarrier(Buffers [0u].Resource, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT),
+            Vulkan::BufferMemoryBarrier(Buffers [1u].Resource, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT),
+            Vulkan::BufferMemoryBarrier(Buffers [2u].Resource, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_INDEX_READ_BIT),
         };
 
         vkCmdPipelineBarrier(CommandBuffer,
