@@ -194,8 +194,19 @@ static bool const Run()
 {
     bool bResult = true;
 
+    std::chrono::high_resolution_clock::time_point PreviousFrameBeginTime = { std::chrono::high_resolution_clock::now() };
+
+    uint64 AccumulatedFrameTimeInMicroSeconds = {};
+    uint32 const FrameDeltaTimeInMicroSeconds = { 1000000u / 60u };
+
     for (;;)
     {
+        std::chrono::high_resolution_clock::time_point CurrentFrameBeginTime = { std::chrono::high_resolution_clock::now() };
+        uint64 const FrameDuration = std::chrono::duration_cast<std::chrono::duration<uint64, std::micro>>(CurrentFrameBeginTime - PreviousFrameBeginTime).count();
+        AccumulatedFrameTimeInMicroSeconds += FrameDuration;
+
+        PreviousFrameBeginTime = CurrentFrameBeginTime;
+
         Input::UpdateInputState();
 
         if (::ProcessWindowMessages())
@@ -204,22 +215,32 @@ static bool const Run()
             {
                 /* Could do some actor culling and stuff here */
 
-                Camera::UpdateOrientation(PBRScene.MainCamera, 
-                                          -1.0f * (Input::State.CurrentMouseY - Input::State.PreviousMouseY) * Input::State.MouseSensitivity * 0.016666667f, 
-                                          -1.0f * (Input::State.CurrentMouseX - Input::State.PreviousMouseX) * Input::State.MouseSensitivity * 0.016666667f);
+                if (AccumulatedFrameTimeInMicroSeconds >= FrameDeltaTimeInMicroSeconds)
+                {
+                    constexpr float DeltaTimeInSeconds = static_cast<float>(FrameDeltaTimeInMicroSeconds) / 1000000.0f;
 
-                /* Branchless WASD */
-                constexpr float kMovementSpeed = 8.0f * 0.016666667f;
-                float const ForwardSpeed = { kMovementSpeed * (Input::IsKeyDown(0x53) * -1.0f + Input::IsKeyDown(0x57)) };
-                float const StrafeSpeed = { kMovementSpeed * (Input::IsKeyDown(0x41) * -1.0f + Input::IsKeyDown(0x44)) };
+                    Camera::UpdateOrientation(PBRScene.MainCamera,
+                                              -1.0f * (Input::State.CurrentMouseY - Input::State.PreviousMouseY) * Input::State.MouseSensitivity * DeltaTimeInSeconds,
+                                              -1.0f * (Input::State.CurrentMouseX - Input::State.PreviousMouseX) * Input::State.MouseSensitivity * DeltaTimeInSeconds);
 
-                Camera::UpdatePosition(PBRScene.MainCamera, ForwardSpeed, StrafeSpeed);
+                    /* Branchless WASD */
+                    constexpr float kMovementSpeed = 8.0f * DeltaTimeInSeconds;
+                    float const ForwardSpeed = { kMovementSpeed * (Input::IsKeyDown(0x53) * -1.0f + Input::IsKeyDown(0x57)) };
+                    float const StrafeSpeed = { kMovementSpeed * (Input::IsKeyDown(0x41) * -1.0f + Input::IsKeyDown(0x44)) };
+
+                    Camera::UpdatePosition(PBRScene.MainCamera, ForwardSpeed, StrafeSpeed);
+
+                    AccumulatedFrameTimeInMicroSeconds -= FrameDeltaTimeInMicroSeconds;
+                }
 
                 ForwardRenderer::CreateNewActorResources(PBRScene);
 
                 ForwardRenderer::Render(PBRScene);
 
-                PBRScene.NewActorHandles.clear();
+                if (PBRScene.NewActorHandles.size() > 0u)
+                {
+                    PBRScene.NewActorHandles.clear();
+                }
             }
             else
             {
