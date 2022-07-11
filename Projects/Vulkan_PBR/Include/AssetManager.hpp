@@ -2,33 +2,37 @@
 
 #include <string>
 #include <vector>
+#include <filesystem>
 
-#include "CommonTypes.hpp"
+#include "Common.hpp"
 
 #include <Math/Vector.hpp>
 
 namespace AssetManager
 {
-    template<typename TAssetType>
-    struct AssetHandle
-    {
-        uint32 AssetIndex;
-    };
-
     struct MeshAsset
     {
-        std::vector<Math::Vector3> Vertices;
-        std::vector<Math::Vector3> Normals;
-        std::vector<uint32> Indices;
+        std::vector<Math::Vector3> Vertices = {};
+        std::vector<Math::Vector3> Normals = {};
+        std::vector<uint32> Indices = {};
+    };
+
+    struct TextureAsset
+    {
+        std::vector<std::byte> RawData = {};
+        uint32 WidthInPixels = {};
+        uint32 HeightInPixels = {};
     };
 
     extern void Initialise();
 
     extern void Destroy();
 
-    extern bool const LoadMeshAsset(std::string const & AssetName, AssetHandle<MeshAsset> & OutputAssetHandle);
+    extern bool const LoadTextureAsset(std::string const & AssetName, uint32 & OutputAssetHandle);
 
-    extern bool const GetMeshData(uint32 const AssetHandle, AssetManager::MeshAsset const *& OutputMeshData);
+    extern bool const LoadMeshAsset(std::filesystem::path const & RelativeFilePath, uint32 & OutputAssetHandle);
 
-    extern bool const GetMeshData(AssetHandle<MeshAsset> const AssetHandle, AssetManager::MeshAsset const *& OutputMeshData);
+    extern bool const UnloadMeshAsset(uint32 const AssetHandle);
+
+    extern bool const GetMeshAsset(uint32 const AssetHandle, MeshAsset const *& OutputMeshData);
 }

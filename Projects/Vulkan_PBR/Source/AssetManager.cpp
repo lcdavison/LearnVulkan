@@ -4,6 +4,8 @@
 
 #include "Platform/Windows.hpp"
 
+#include "Logging.hpp"
+
 #include <OBJLoader/OBJLoader.hpp>
 
 #include <vector>
@@ -13,22 +15,40 @@
 #include <thread>
 #include <future>
 
+enum class AssetTypes
+{
+    Mesh = 0x1,
+    Texture = 0x2,
+};
+
 struct Assets
 {
-    std::unordered_map<std::string, uint32> AssetLookUpTable;
+    static uint32 const kMaximumAssetHandleValue = { 1u << 16u };
 
-    std::unordered_map<uint32, std::future<bool>> PendingMeshAssets = {};
+    std::unordered_map<std::string, uint32> AssetLookUpTable = {};
 
-    std::vector<AssetManager::MeshAsset> MeshAssets;
+    std::unordered_map<uint32, std::future<std::pair<bool, int32>>> PendingAssets = {};
+
+    /* Store as unique_ptrs atm, will need to write an allocator to make memory allocation more efficient */
+    /* Storing the raw objects is dangerous since this will change when new assets are loaded and so all pointers/references will be invalidated */
+    std::vector<std::unique_ptr<AssetManager::MeshAsset>> MeshAssets = {};
+    std::vector<std::string> MeshFileNames = {};
 
     std::queue<uint32> FreeMeshIndices = {};
 
     std::vector<bool> ReadyMeshFlags = {};
 };
 
+struct AssetMailbox
+{
+    std::mutex MeshQueueMutex = {};
+    std::queue<int32> FreeMeshIndices = {};
+    std::vector<std::unique_ptr<AssetManager::MeshAsset>> Meshes = {};
+};
+
 namespace AssetLoaderThread
 {
-    using AssetLoadTask = std::packaged_task<bool()>;
+    using AssetLoadTask = std::packaged_task<std::pair<bool, int32>()>;
 
     static std::wstring const kThreadName = L"Asset Loader Thread";
 
@@ -91,6 +111,7 @@ static std::filesystem::path const kAssetDirectoryPath = std::filesystem::curren
 static std::filesystem::path const kOBJFileExtension = ".obj";
 
 static Assets AssetTable;
+static AssetMailbox LoadedAssets;
 
 static void CreateVertexHash(uint32 const VertexIndex, uint32 const NormalIndex, uint32 const TextureCoordinateIndex, uint32 & OutputHash)
 {
@@ -263,43 +284,46 @@ void AssetManager::Destroy()
     AssetLoaderThread::Stop();
 }
 
-bool const AssetManager::LoadMeshAsset(std::string const & AssetName, AssetManager::AssetHandle<AssetManager::MeshAsset> & OutputMeshHandle)
+bool const AssetManager::LoadTextureAsset(std::string const & /*AssetName*/, uint32 & /*OutputAssetHandle*/)
+{
+    return false;
+}
+
+bool const AssetManager::LoadMeshAsset(std::filesystem::path const & RelativeFilePath, uint32 & OutputAssetHandle)
 {
     bool bResult = false;
 
-    auto FoundAsset = AssetTable.AssetLookUpTable.find(AssetName);
+    std::filesystem::path const AbsoluteFilePath = kAssetDirectoryPath / RelativeFilePath;
 
-    if (FoundAsset != AssetTable.AssetLookUpTable.end())
+    if (std::filesystem::exists(AbsoluteFilePath))
     {
-        OutputMeshHandle.AssetIndex = FoundAsset->second;
-        bResult = true;
-    }
-    else
-    {
-        std::filesystem::path AssetFilePath = {};
-        bool bFoundAssetFile = ::FindAssetFileRecursive(AssetName, kOBJFileExtension, kAssetDirectoryPath, AssetFilePath);
+        std::string const AssetName = AbsoluteFilePath.string();
 
-        if (bFoundAssetFile)
+        auto const FoundAsset = AssetTable.AssetLookUpTable.find(AssetName);
+
+        if (FoundAsset == AssetTable.AssetLookUpTable.cend())
         {
-            uint32 NewMeshHandle = {};
-            uint32 NewMeshIndex = {};
+            PBR_ASSERT(AssetTable.MeshAssets.size() + 1u <= Assets::kMaximumAssetHandleValue);
 
-            if (AssetTable.FreeMeshIndices.size() > 0u)
+            uint32 NewAssetHandle = {};
+
+            if (AssetTable.FreeMeshIndices.size() == 0u)
             {
-                NewMeshHandle = AssetTable.FreeMeshIndices.front();
-                AssetTable.FreeMeshIndices.pop();
+                AssetTable.MeshAssets.emplace_back();
+                AssetTable.MeshFileNames.emplace_back();
+                AssetTable.ReadyMeshFlags.push_back(false);
+
+                NewAssetHandle = (static_cast<uint32>(AssetTypes::Mesh) << 16u) | static_cast<uint16>(AssetTable.MeshAssets.size());
             }
             else
             {
-                AssetTable.MeshAssets.emplace_back();
-                AssetTable.ReadyMeshFlags.emplace_back();
-
-                NewMeshHandle = static_cast<uint32>(AssetTable.MeshAssets.size());
+                NewAssetHandle = AssetTable.FreeMeshIndices.front();
+                AssetTable.FreeMeshIndices.pop();
             }
 
-            NewMeshIndex = NewMeshHandle - 1u;
+            uint16 const NewMeshIndex = { (NewAssetHandle & 0xFFFF) - 1u };
 
-            AssetTable.ReadyMeshFlags [NewMeshIndex] = false;
+            AssetTable.MeshFileNames [NewMeshIndex] = AbsoluteFilePath.filename().string();
 
             AssetLoaderThread::AssetLoadTask LoadTask = AssetLoaderThread::AssetLoadTask(
                 [AssetFilePath = std::move(AbsoluteFilePath)]()
@@ -307,48 +331,80 @@ bool const AssetManager::LoadMeshAsset(std::string const & AssetName, AssetManag
                     return ::LoadOBJMeshData(AssetFilePath);
                 });
 
+            AssetTable.PendingAssets [NewAssetHandle] = LoadTask.get_future();
 
             {
                 std::scoped_lock Lock = std::scoped_lock(AssetLoaderThread::WorkQueueMutex);
 
-                AssetLoaderThread::WorkQueue.push(std::move(LoadTask));
+                AssetLoaderThread::WorkQueue.emplace(std::move(LoadTask));
             }
 
             AssetLoaderThread::WorkCondition.notify_one();
 
-            /* Remove this from table if loading fails */
-            AssetTable.AssetLookUpTable [AssetName] = NewMeshHandle;
-            OutputMeshHandle.AssetIndex = NewMeshHandle;
-            bResult = true;
+            AssetTable.AssetLookUpTable [std::move(AssetName)] = NewAssetHandle;
+            OutputAssetHandle = NewAssetHandle;
         }
+        else
+        {
+            OutputAssetHandle = AssetTable.AssetLookUpTable [AssetName];
+        }
+
+        bResult = true;
+    }
+    else
+    {
+        Logging::Log(Logging::LogTypes::Info, String::Format(PBR_TEXT("LoadMeshAsset: Could not load mesh asset at [%s]. Please make sure the supplied path exists."), AbsoluteFilePath.c_str()));
     }
 
     return bResult;
 }
 
-bool const AssetManager::GetMeshData(AssetManager::AssetHandle<AssetManager::MeshAsset> const MeshHandle, AssetManager::MeshAsset const *& OutputMeshData)
+bool const AssetManager::GetMeshAsset(uint32 const AssetHandle, AssetManager::MeshAsset const *& OutputMeshAsset)
 {
-    bool bResult = true;
+    if ((AssetHandle & 0xFFFF) == 0u
+        || ((AssetHandle & 0xFFFF0000) >> 16u) != static_cast<uint32>(AssetTypes::Mesh))
+    {
+        Logging::Log(Logging::LogTypes::Error, PBR_TEXT("GetMeshAsset: Asset handle is NULL OR handle does not reference a mesh."));
+        return false;
+    }
 
-    uint32 const AssetIndex = MeshHandle.AssetIndex - 1u;
+    uint16 const AssetIndex = { (AssetHandle & 0xFFFF) - 1u };
+
+    PBR_ASSERT(AssetIndex < AssetTable.MeshAssets.size());
 
     if (!AssetTable.ReadyMeshFlags [AssetIndex])
     {
-        /* TODO: Check that a future exists for the mesh first */
-
-        bResult = AssetTable.PendingMeshAssets [AssetIndex].get();
-
-        AssetTable.ReadyMeshFlags [AssetIndex] = bResult;
-
-        AssetTable.PendingMeshAssets.erase(AssetIndex);
-
-        if (bResult)
+        auto const FoundPendingAsset = AssetTable.PendingAssets.find(AssetHandle);
+        if (FoundPendingAsset == AssetTable.PendingAssets.cend())
         {
-            OutputMeshData = &AssetTable.MeshAssets [AssetIndex];
+            Logging::Log(Logging::LogTypes::Error, PBR_TEXT("Trying to access mesh data for an asset that isn't pending load. This is likely due to the asset failing to load previously."));
+            return false;
+        }
+        else
+        {
+            auto [bResult, MailboxIndex] = FoundPendingAsset->second.get();
+            AssetTable.PendingAssets.erase(AssetHandle);
+
+            if (bResult)
+            {
+                std::scoped_lock Lock = std::scoped_lock(LoadedAssets.MeshQueueMutex);
+
+                AssetTable.MeshAssets [AssetIndex] = std::move(LoadedAssets.Meshes [MailboxIndex]);
+                AssetTable.ReadyMeshFlags [AssetIndex] = true;
+
+                LoadedAssets.FreeMeshIndices.push(MailboxIndex);
+            }
+            else
+            {
+                Logging::Log(Logging::LogTypes::Error, String::Format(PBR_TEXT("Failed to load mesh [%s]"), AssetTable.MeshFileNames [AssetIndex].c_str()));
+
+                OutputMeshAsset = nullptr;
+                return false;
+            }
         }
     }
 
-    OutputMeshData = &AssetTable.MeshAssets [AssetIndex];
+    OutputMeshAsset = AssetTable.MeshAssets [AssetIndex].get();
 
-    return bResult;
+    return true;
 }

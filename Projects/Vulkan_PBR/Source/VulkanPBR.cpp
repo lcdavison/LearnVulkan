@@ -85,7 +85,7 @@ static bool const Initialise()
     WindowClass.lpszClassName = Application::kWindowClassName;
     WindowClass.hInstance = CurrentInstance;
     WindowClass.lpfnWndProc = &::WindowProcedure;
-    WindowClass.style = CS_HREDRAW | CS_VREDRAW;
+    WindowClass.style = CS_HREDRAW | CS_VREDRAW | CS_OWNDC;
     WindowClass.hCursor = ::LoadCursor(nullptr, IDC_ARROW);
     WindowClass.hIcon = ::LoadIcon(nullptr, IDI_APPLICATION);
     WindowClass.hbrBackground = static_cast<HBRUSH>(::GetStockObject(WHITE_BRUSH));
@@ -119,11 +119,8 @@ static bool const Initialise()
         bResult = ShaderLibrary::Initialise();
         AssetManager::Initialise();
 
-        AssetManager::AssetHandle<AssetManager::MeshAsset> CubeHandle = {};
-        AssetManager::LoadMeshAsset("Cube", CubeHandle);
-
-        AssetManager::AssetHandle<AssetManager::MeshAsset> BoatHandle = {};
-        bool bFoundBoat = AssetManager::LoadMeshAsset("Boat", BoatHandle);
+        uint32 BoatHandle = {};
+        bool bFoundBoat = AssetManager::LoadMeshAsset("Fishing Boat/Boat.obj", BoatHandle);
 
         if (!bFoundBoat)
         {
