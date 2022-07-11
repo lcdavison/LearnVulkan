@@ -7,7 +7,7 @@
 
 Components::StaticMesh::StaticMeshCollection Components::StaticMesh::StaticMeshes = {};
 
-bool const Components::StaticMesh::CreateComponent(uint32 const ActorHandle, AssetManager::AssetHandle<AssetManager::MeshAsset> const AssetHandle)
+bool const Components::StaticMesh::CreateComponent(uint32 const ActorHandle, uint32 const AssetHandle)
 {
     if (ActorHandle == 0u)
     {
@@ -38,7 +38,7 @@ bool const Components::StaticMesh::CreateGPUResources(uint32 const ActorHandle, 
     uint32 const ComponentIndex = { Components::StaticMesh::StaticMeshes.ActorIDToStaticMeshIndex [ActorHandle] - 1u };
 
     AssetManager::MeshAsset const * MeshData = {};
-    bool bResult = AssetManager::GetMeshData(Components::StaticMesh::StaticMeshes.MeshAssetHandles [ComponentIndex], MeshData);
+    bool bResult = AssetManager::GetMeshAsset(Components::StaticMesh::StaticMeshes.MeshAssetHandles [ComponentIndex], MeshData);
 
     if (MeshData)
     {
@@ -64,13 +64,15 @@ bool const Components::StaticMesh::TransferToGPU(uint32 const ActorHandle, VkCom
     uint32 const ComponentIndex = { Components::StaticMesh::StaticMeshes.ActorIDToStaticMeshIndex [ActorHandle] - 1u };
 
     AssetManager::MeshAsset const * MeshData = {};
-    bool bResult = AssetManager::GetMeshData(Components::StaticMesh::StaticMeshes.MeshAssetHandles [ComponentIndex], MeshData);
+    bool bResult = AssetManager::GetMeshAsset(Components::StaticMesh::StaticMeshes.MeshAssetHandles [ComponentIndex], MeshData);
 
     if (MeshData)
     {
         uint64 const VertexBufferSizeInBytes = { MeshData->Vertices.size() * sizeof(decltype(MeshData->Vertices [0u])) };
         uint64 const NormalBufferSizeInBytes = { MeshData->Normals.size() * sizeof(decltype(MeshData->Normals [0u])) };
         uint64 const IndexBufferSizeInBytes = { MeshData->Indices.size() * sizeof(decltype(MeshData->Indices [0u])) };
+
+        /* TODO: Just allocate one massive buffer here for the transfer. May need to adjust allocation block size for device memory allocator */
 
         std::array<uint32, 3u> StagingBufferHandles = {};
 

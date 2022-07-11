@@ -18,7 +18,7 @@ namespace Components::StaticMesh
     {
         std::unordered_map<uint32, uint32> ActorIDToStaticMeshIndex = {};
 
-        std::vector<AssetManager::AssetHandle<AssetManager::MeshAsset>> MeshAssetHandles = {};
+        std::vector<uint32> MeshAssetHandles = {};
         std::vector<uint32> VertexBuffers = {};
         std::vector<uint32> NormalBuffers = {};
         std::vector<uint32> IndexBuffers = {};
@@ -35,7 +35,7 @@ namespace Components::StaticMesh
 
     extern StaticMeshCollection StaticMeshes;
 
-    extern bool const CreateComponent(uint32 const ActorHandle, AssetManager::AssetHandle<AssetManager::MeshAsset> const AssetHandle);
+    extern bool const CreateComponent(uint32 const ActorHandle, uint32 const AssetHandle);
 
     //extern bool const DestroyComponent(uint32 const ActorHandle);
 
