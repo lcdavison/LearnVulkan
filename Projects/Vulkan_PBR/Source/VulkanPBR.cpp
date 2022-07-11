@@ -125,6 +125,16 @@ static bool const Initialise()
         if (!bFoundBoat)
         {
             Logging::Log(Logging::LogTypes::Error, PBR_TEXT("Failed to load boat model."));
+
+            //AssetManager::LoadMeshAsset("Cube", CubeHandle);
+
+            Scene::ActorData CubeActorData = { "Cube" };
+
+            uint32 CubeActorHandle = {};
+            Scene::CreateActor(PBRScene, CubeActorData, CubeActorHandle);
+            //Components::StaticMesh::CreateComponent(CubeActorHandle, CubeHandle);
+
+            PBRScene.ComponentMasks [CubeActorHandle - 1u] |= static_cast<uint32>(Scene::ComponentMasks::StaticMesh);
         }
         else
         {
@@ -138,14 +148,6 @@ static bool const Initialise()
             /* Temporary */
             PBRScene.ComponentMasks [BoatActorHandle - 1u] |= static_cast<uint32>(Scene::ComponentMasks::StaticMesh);
         }
-
-        Scene::ActorData CubeActorData = { "Cube" };
-
-        uint32 CubeActorHandle = {};
-        Scene::CreateActor(PBRScene, CubeActorData, CubeActorHandle);
-        Components::StaticMesh::CreateComponent(CubeActorHandle, CubeHandle);
-
-        //PBRScene.ComponentMasks [CubeActorHandle - 1u] |= static_cast<uint32>(Scene::ComponentMasks::StaticMesh);
 
         bResult = ForwardRenderer::Initialise(ApplicationInfo);
     }
