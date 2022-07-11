@@ -1,6 +1,7 @@
 #pragma once
 
 #include <vector>
+#include <array>
 #include <filesystem>
 
 #if defined(OBJ_LOADER_EXPORT)
@@ -35,15 +36,37 @@ namespace OBJLoader
 
     struct OBJMeshData
     {
-        std::vector<OBJVertex> Positions;
-        std::vector<OBJNormal> Normals;
-        std::vector<OBJTextureCoordinate> TextureCoordinates;
+        std::vector<OBJVertex> Positions = {};
+        std::vector<OBJNormal> Normals = {};
+        std::vector<OBJTextureCoordinate> TextureCoordinates = {};
 
-        std::vector<std::uint32_t> FaceOffsets;
-        std::vector<std::uint32_t> FaceVertexIndices;
-        std::vector<std::uint32_t> FaceNormalIndices;
-        std::vector<std::uint32_t> FaceTextureCoordinateIndices;
+        std::vector<std::uint32_t> FaceOffsets = {};
+        std::vector<std::uint32_t> FaceVertexIndices = {};
+        std::vector<std::uint32_t> FaceNormalIndices = {};
+        std::vector<std::uint32_t> FaceTextureCoordinateIndices = {};
     };
 
-    OBJ_LOADER_API bool const LoadFile(std::filesystem::path const & OBJFilePath, OBJMeshData & OutputMeshData);
+    /* Indices into OBJMaterialData::TexturePaths */
+    enum TexturePaths
+    {
+        AmbientMap,
+        DiffuseMap,
+        SpecularMap,
+        PathCount,
+    };
+
+    struct OBJMaterialData
+    {
+        std::string MaterialName = {};
+        std::array<std::string, TexturePaths::PathCount> TexturePaths = {};
+        std::array<float, 3u> AmbientColour = {};
+        std::array<float, 3u> DiffuseColour = {};
+        std::array<float, 3u> SpecularColour = {};
+        std::array<float, 3u> TransmissionFilter = {};
+        float SpecularExponent = {};
+        float Transparency = {};
+        float IndexOfRefraction = {};
+    };
+
+    OBJ_LOADER_API bool const LoadFile(std::filesystem::path const & OBJFilePath, OBJMeshData & OutputMeshData, std::vector<OBJMaterialData> & OutputMaterials);
 }

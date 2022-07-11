@@ -180,6 +180,41 @@ static void ProcessOBJMeshData(OBJLoader::OBJMeshData const & OBJMeshData, Asset
     OutputMeshAsset = std::move(IntermediateAsset);
 }
 
+static std::pair<bool, int32> LoadOBJMeshData(std::filesystem::path const & AssetFilePath)
+{
+    OBJLoader::OBJMeshData MeshData = {};
+
+    /* TODO: These materials need to be stored somewhere */
+    std::vector<OBJLoader::OBJMaterialData> Materials = {};
+
+    bool bLoadedMesh = OBJLoader::LoadFile(AssetFilePath, MeshData, Materials);
+
+    int32 OutputIndex = { -1l };
+
+    if (bLoadedMesh)
+    {
+        std::unique_ptr Asset = std::make_unique<AssetManager::MeshAsset>();
+        ::ProcessOBJMeshData(MeshData, *Asset);
+
+        std::scoped_lock Lock = std::scoped_lock(LoadedAssets.MeshQueueMutex);
+
+        if (LoadedAssets.FreeMeshIndices.size() == 0u)
+        {
+            OutputIndex = static_cast<int32>(LoadedAssets.Meshes.size());
+            LoadedAssets.Meshes.emplace_back(std::move(Asset));
+        }
+        else
+        {
+            OutputIndex = { LoadedAssets.FreeMeshIndices.front() };
+            LoadedAssets.FreeMeshIndices.pop();
+
+            LoadedAssets.Meshes [OutputIndex] = std::move(Asset);
+        }
+    }
+
+    return std::make_pair(bLoadedMesh, OutputIndex);
+}
+
 static bool const FindAssetFileRecursive(std::string const & AssetName, std::filesystem::path const & FileExtension, std::filesystem::path const & CurrentDirectory, std::filesystem::path & OutputAssetFilePath)
 {
     bool bResult = false;
@@ -267,24 +302,11 @@ bool const AssetManager::LoadMeshAsset(std::string const & AssetName, AssetManag
             AssetTable.ReadyMeshFlags [NewMeshIndex] = false;
 
             AssetLoaderThread::AssetLoadTask LoadTask = AssetLoaderThread::AssetLoadTask(
-                [FilePath = std::move(AssetFilePath), NewMeshIndex]()
+                [AssetFilePath = std::move(AbsoluteFilePath)]()
                 {
-                    OBJLoader::OBJMeshData LoadedMeshData = {};
-                    bool bResult = OBJLoader::LoadFile(FilePath, LoadedMeshData);
+                    return ::LoadOBJMeshData(AssetFilePath);
+                });
 
-                    if (bResult)
-                    {
-                        AssetManager::MeshAsset NewMesh = {};
-                        ::ProcessOBJMeshData(LoadedMeshData, NewMesh);
-
-                        AssetTable.MeshAssets [NewMeshIndex] = std::move(NewMesh);
-                    }
-
-                    return bResult;
-                }
-            );
-
-            AssetTable.PendingMeshAssets [NewMeshIndex] = LoadTask.get_future();
 
             {
                 std::scoped_lock Lock = std::scoped_lock(AssetLoaderThread::WorkQueueMutex);
