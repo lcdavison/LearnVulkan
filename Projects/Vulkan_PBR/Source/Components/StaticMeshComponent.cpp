@@ -5,9 +5,11 @@
 
 #include <array>
 
-Components::StaticMesh::StaticMeshCollection Components::StaticMesh::StaticMeshes = {};
+using namespace Components;
 
-bool const Components::StaticMesh::CreateComponent(uint32 const ActorHandle, uint32 const AssetHandle)
+StaticMesh::StaticMeshCollection Components::StaticMesh::StaticMeshes = {};
+
+bool const StaticMesh::CreateComponent(uint32 const ActorHandle, uint32 const AssetHandle)
 {
     if (ActorHandle == 0u)
     {
@@ -15,19 +17,31 @@ bool const Components::StaticMesh::CreateComponent(uint32 const ActorHandle, uin
         return false;
     }
 
-    Components::StaticMesh::StaticMeshes.MeshAssetHandles.push_back(AssetHandle);
-    Components::StaticMesh::StaticMeshes.VertexBuffers.emplace_back();
-    Components::StaticMesh::StaticMeshes.NormalBuffers.emplace_back();
-    Components::StaticMesh::StaticMeshes.IndexBuffers.emplace_back();
-    Components::StaticMesh::StaticMeshes.IndexCounts.emplace_back();
+    auto FoundMesh = StaticMesh::StaticMeshes.AssetHandleToMeshIndex.find(AssetHandle);
+    if (FoundMesh == StaticMesh::StaticMeshes.AssetHandleToMeshIndex.cend())
+    {
+        uint32 const NewMeshIndex = static_cast<uint32>(StaticMesh::StaticMeshes.MeshAssetHandles.size());
+        StaticMesh::StaticMeshes.ActorIDToMeshIndex [ActorHandle] = NewMeshIndex;
+        StaticMesh::StaticMeshes.AssetHandleToMeshIndex [AssetHandle] = NewMeshIndex;
 
-    uint32 const NewComponentHandle = static_cast<uint32>(Components::StaticMesh::StaticMeshes.MeshAssetHandles.size());
-    Components::StaticMesh::StaticMeshes.ActorIDToStaticMeshIndex [ActorHandle] = NewComponentHandle;
+        StaticMesh::StaticMeshes.MeshAssetHandles.push_back(AssetHandle);
+        StaticMesh::StaticMeshes.VertexBuffers.emplace_back();
+        StaticMesh::StaticMeshes.NormalBuffers.emplace_back();
+        StaticMesh::StaticMeshes.UVBuffers.emplace_back();
+        StaticMesh::StaticMeshes.IndexBuffers.emplace_back();
+        StaticMesh::StaticMeshes.IndexCounts.emplace_back();
+        StaticMesh::StaticMeshes.StatusFlags.emplace_back();
+    }
+    else
+    {
+        uint32 const NewMeshIndex = FoundMesh->second;
+        StaticMesh::StaticMeshes.ActorIDToMeshIndex [ActorHandle] = NewMeshIndex;
+    }
 
     return true;
 }
 
-bool const Components::StaticMesh::CreateGPUResources(uint32 const ActorHandle, Vulkan::Device::DeviceState const & DeviceState)
+bool const StaticMesh::CreateGPUResources(uint32 const ActorHandle, Vulkan::Device::DeviceState const & DeviceState)
 {
     if (ActorHandle == 0u)
     {
@@ -35,112 +49,128 @@ bool const Components::StaticMesh::CreateGPUResources(uint32 const ActorHandle, 
         return false;
     }
 
-    uint32 const ComponentIndex = { Components::StaticMesh::StaticMeshes.ActorIDToStaticMeshIndex [ActorHandle] - 1u };
+    bool bResult = true;
 
-    AssetManager::MeshAsset const * MeshData = {};
-    bool bResult = AssetManager::GetMeshAsset(Components::StaticMesh::StaticMeshes.MeshAssetHandles [ComponentIndex], MeshData);
+    uint32 const MeshIndex = { StaticMesh::StaticMeshes.ActorIDToMeshIndex [ActorHandle] };
 
-    if (MeshData)
+    if (!StaticMesh::StaticMeshes.StatusFlags [MeshIndex].bReady 
+        && !StaticMesh::StaticMeshes.StatusFlags [MeshIndex].bPendingTransfer)
     {
-        uint64 const VertexBufferSizeInBytes = { MeshData->Vertices.size() * sizeof(decltype(MeshData->Vertices [0u])) };
-        uint64 const NormalBufferSizeInBytes = { MeshData->Normals.size() * sizeof(decltype(MeshData->Normals [0u])) };
-        uint64 const IndexBufferSizeInBytes = { MeshData->Indices.size() * sizeof(decltype(MeshData->Indices [0u])) };
+        AssetManager::MeshAsset const * MeshData = {};
+        bResult = AssetManager::GetMeshAsset(StaticMesh::StaticMeshes.MeshAssetHandles [MeshIndex], MeshData);
 
-        Logging::Log(Logging::LogTypes::Info, String::Format(PBR_TEXT("Creating GPU resources for Actor [ID = %d]. Sizes: [VB = %llu Bytes | NB = %llu Bytes | IB = %llu Bytes]"), ActorHandle, VertexBufferSizeInBytes, NormalBufferSizeInBytes, IndexBufferSizeInBytes));
+        if (MeshData)
+        {
+            uint64 const VertexBufferSizeInBytes = { MeshData->Vertices.size() * sizeof(decltype(MeshData->Vertices [0u])) };
+            uint64 const NormalBufferSizeInBytes = { MeshData->Normals.size() * sizeof(decltype(MeshData->Normals [0u])) };
+            uint64 const UVBufferSizeInBytes = { MeshData->UVs.size() * sizeof(decltype(MeshData->UVs [0u])) };
+            uint64 const IndexBufferSizeInBytes = { MeshData->Indices.size() * sizeof(decltype(MeshData->Indices [0u])) };
 
-        /* TODO: Need to return whether creation was successful */
-        Vulkan::Device::CreateBuffer(DeviceState, VertexBufferSizeInBytes, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, Components::StaticMesh::StaticMeshes.VertexBuffers [ComponentIndex]);
-        Vulkan::Device::CreateBuffer(DeviceState, NormalBufferSizeInBytes, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, Components::StaticMesh::StaticMeshes.NormalBuffers [ComponentIndex]);
-        Vulkan::Device::CreateBuffer(DeviceState, IndexBufferSizeInBytes, VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, Components::StaticMesh::StaticMeshes.IndexBuffers [ComponentIndex]);
+            Logging::Log(Logging::LogTypes::Info, String::Format(PBR_TEXT("Creating GPU resources for Actor [ID = %d]. Sizes: [VB = %llu Bytes | NB = %llu Bytes | UVB = %llu | IB = %llu Bytes]"), ActorHandle, VertexBufferSizeInBytes, NormalBufferSizeInBytes, UVBufferSizeInBytes, IndexBufferSizeInBytes));
 
-        Components::StaticMesh::StaticMeshes.IndexCounts [ComponentIndex] = static_cast<uint32>(MeshData->Indices.size());
+            /* TODO: Need to return whether creation was successful */
+            Vulkan::Device::CreateBuffer(DeviceState, VertexBufferSizeInBytes, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, StaticMesh::StaticMeshes.VertexBuffers [MeshIndex]);
+            Vulkan::Device::CreateBuffer(DeviceState, NormalBufferSizeInBytes, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, StaticMesh::StaticMeshes.NormalBuffers [MeshIndex]);
+            Vulkan::Device::CreateBuffer(DeviceState, UVBufferSizeInBytes, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, StaticMesh::StaticMeshes.UVBuffers [MeshIndex]);
+            Vulkan::Device::CreateBuffer(DeviceState, IndexBufferSizeInBytes, VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, StaticMesh::StaticMeshes.IndexBuffers [MeshIndex]);
+
+            StaticMesh::StaticMeshes.IndexCounts [MeshIndex] = static_cast<uint32>(MeshData->Indices.size());
+
+            StaticMesh::StaticMeshes.StatusFlags [MeshIndex].bPendingTransfer = true;
+        }
     }
 
     return bResult;
 }
 
-bool const Components::StaticMesh::TransferToGPU(uint32 const ActorHandle, VkCommandBuffer const CommandBuffer, Vulkan::Device::DeviceState const & DeviceState, VkFence const TransferFence)
+bool const StaticMesh::TransferToGPU(uint32 const ActorHandle, VkCommandBuffer const CommandBuffer, Vulkan::Device::DeviceState const & DeviceState, VkFence const TransferFence)
 {
-    uint32 const ComponentIndex = { Components::StaticMesh::StaticMeshes.ActorIDToStaticMeshIndex [ActorHandle] - 1u };
+    bool bResult = true;
 
-    AssetManager::MeshAsset const * MeshData = {};
-    bool bResult = AssetManager::GetMeshAsset(Components::StaticMesh::StaticMeshes.MeshAssetHandles [ComponentIndex], MeshData);
+    uint32 const MeshIndex = { StaticMesh::StaticMeshes.ActorIDToMeshIndex [ActorHandle] };
 
-    if (MeshData)
+    if (StaticMesh::StaticMeshes.StatusFlags [MeshIndex].bPendingTransfer)
     {
-        uint64 const VertexBufferSizeInBytes = { MeshData->Vertices.size() * sizeof(decltype(MeshData->Vertices [0u])) };
-        uint64 const NormalBufferSizeInBytes = { MeshData->Normals.size() * sizeof(decltype(MeshData->Normals [0u])) };
-        uint64 const IndexBufferSizeInBytes = { MeshData->Indices.size() * sizeof(decltype(MeshData->Indices [0u])) };
+        AssetManager::MeshAsset const * MeshData = {};
+        bResult = AssetManager::GetMeshAsset(StaticMesh::StaticMeshes.MeshAssetHandles [MeshIndex], MeshData);
 
-        /* TODO: Just allocate one massive buffer here for the transfer. May need to adjust allocation block size for device memory allocator */
-
-        std::array<uint32, 3u> StagingBufferHandles = {};
-
-        Vulkan::Device::CreateBuffer(DeviceState, VertexBufferSizeInBytes, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, StagingBufferHandles [0u]);
-        Vulkan::Device::CreateBuffer(DeviceState, NormalBufferSizeInBytes, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, StagingBufferHandles [1u]);
-        Vulkan::Device::CreateBuffer(DeviceState, IndexBufferSizeInBytes, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, StagingBufferHandles [2u]);
-
-        std::array<Vulkan::Resource::Buffer, 3u> StagingBuffers = {};
-
-        Vulkan::Resource::GetBuffer(StagingBufferHandles [0u], StagingBuffers [0u]);
-        Vulkan::Resource::GetBuffer(StagingBufferHandles [1u], StagingBuffers [1u]);
-        Vulkan::Resource::GetBuffer(StagingBufferHandles [2u], StagingBuffers [2u]);
-
-        ::memcpy_s(StagingBuffers [0u].MemoryAllocation->MappedAddress, StagingBuffers [0u].MemoryAllocation->SizeInBytes, MeshData->Vertices.data(), VertexBufferSizeInBytes);
-        ::memcpy_s(StagingBuffers [1u].MemoryAllocation->MappedAddress, StagingBuffers [1u].MemoryAllocation->SizeInBytes, MeshData->Normals.data(), NormalBufferSizeInBytes);
-        ::memcpy_s(StagingBuffers [2u].MemoryAllocation->MappedAddress, StagingBuffers [2u].MemoryAllocation->SizeInBytes, MeshData->Indices.data(), IndexBufferSizeInBytes);
-
-        std::array<Vulkan::Resource::Buffer, 3u> Buffers = {};
-
-        Vulkan::Resource::GetBuffer(Components::StaticMesh::StaticMeshes.VertexBuffers [ComponentIndex], Buffers [0u]);
-        Vulkan::Resource::GetBuffer(Components::StaticMesh::StaticMeshes.NormalBuffers [ComponentIndex], Buffers [1u]);
-        Vulkan::Resource::GetBuffer(Components::StaticMesh::StaticMeshes.IndexBuffers [ComponentIndex], Buffers [2u]);
-
-        std::array<VkBufferMemoryBarrier, 6u> BufferBarriers =
+        if (MeshData)
         {
-            Vulkan::BufferMemoryBarrier(StagingBuffers [0u].Resource, VK_ACCESS_HOST_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT),
-            Vulkan::BufferMemoryBarrier(StagingBuffers [1u].Resource, VK_ACCESS_HOST_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT),
-            Vulkan::BufferMemoryBarrier(StagingBuffers [2u].Resource, VK_ACCESS_HOST_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT),
+            uint64 const VertexBufferSizeInBytes = { MeshData->Vertices.size() * sizeof(decltype(MeshData->Vertices [0u])) };
+            uint64 const NormalBufferSizeInBytes = { MeshData->Normals.size() * sizeof(decltype(MeshData->Normals [0u])) };
+            uint64 const UVBufferSizeInBytes = { MeshData->UVs.size() * sizeof(decltype(MeshData->UVs [0u])) };
+            uint64 const IndexBufferSizeInBytes = { MeshData->Indices.size() * sizeof(decltype(MeshData->Indices [0u])) };
 
-            Vulkan::BufferMemoryBarrier(Buffers [0u].Resource, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT),
-            Vulkan::BufferMemoryBarrier(Buffers [1u].Resource, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT),
-            Vulkan::BufferMemoryBarrier(Buffers [2u].Resource, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_INDEX_READ_BIT),
-        };
+            /* TODO: Just allocate one massive buffer here for the transfer. May need to adjust allocation block size for device memory allocator */
 
-        vkCmdPipelineBarrier(CommandBuffer,
-                             VK_PIPELINE_STAGE_HOST_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
-                             0u,
-                             0u, nullptr,
-                             3u, &BufferBarriers [0u],
-                             0u, nullptr);
+            std::array<uint32, 4u> StagingBufferHandles = {};
 
-        std::array<VkBufferCopy, 3u> CopyRegions =
-        {
-            VkBufferCopy { 0u, 0u, VertexBufferSizeInBytes },
-            VkBufferCopy { 0u, 0u, NormalBufferSizeInBytes },
-            VkBufferCopy { 0u, 0u, IndexBufferSizeInBytes },
-        };
+            Vulkan::Device::CreateBuffer(DeviceState, VertexBufferSizeInBytes, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, StagingBufferHandles [0u]);
+            Vulkan::Device::CreateBuffer(DeviceState, NormalBufferSizeInBytes, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, StagingBufferHandles [1u]);
+            Vulkan::Device::CreateBuffer(DeviceState, UVBufferSizeInBytes, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, StagingBufferHandles [2u]);
+            Vulkan::Device::CreateBuffer(DeviceState, IndexBufferSizeInBytes, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, StagingBufferHandles [3u]);
 
-        vkCmdCopyBuffer(CommandBuffer, StagingBuffers [0u].Resource, Buffers [0u].Resource, 1u, &CopyRegions [0u]);
-        vkCmdCopyBuffer(CommandBuffer, StagingBuffers [1u].Resource, Buffers [1u].Resource, 1u, &CopyRegions [1u]);
-        vkCmdCopyBuffer(CommandBuffer, StagingBuffers [2u].Resource, Buffers [2u].Resource, 1u, &CopyRegions [2u]);
+            std::array<Vulkan::Resource::Buffer, 4u> StagingBuffers = {};
 
-        vkCmdPipelineBarrier(CommandBuffer,
-                             VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_VERTEX_INPUT_BIT,
-                             0u,
-                             0u, nullptr,
-                             3u, &BufferBarriers [3u],
-                             0u, nullptr);
+            Vulkan::Resource::GetBuffer(StagingBufferHandles [0u], StagingBuffers [0u]);
+            Vulkan::Resource::GetBuffer(StagingBufferHandles [1u], StagingBuffers [1u]);
+            Vulkan::Resource::GetBuffer(StagingBufferHandles [2u], StagingBuffers [2u]);
+            Vulkan::Resource::GetBuffer(StagingBufferHandles [3u], StagingBuffers [3u]);
 
-        Vulkan::Device::DestroyBuffer(DeviceState, StagingBufferHandles [0u], TransferFence);
-        Vulkan::Device::DestroyBuffer(DeviceState, StagingBufferHandles [1u], TransferFence);
-        Vulkan::Device::DestroyBuffer(DeviceState, StagingBufferHandles [2u], TransferFence);
+            ::memcpy_s(StagingBuffers [0u].MemoryAllocation->MappedAddress, StagingBuffers [0u].MemoryAllocation->SizeInBytes, MeshData->Vertices.data(), VertexBufferSizeInBytes);
+            ::memcpy_s(StagingBuffers [1u].MemoryAllocation->MappedAddress, StagingBuffers [1u].MemoryAllocation->SizeInBytes, MeshData->Normals.data(), NormalBufferSizeInBytes);
+            ::memcpy_s(StagingBuffers [2u].MemoryAllocation->MappedAddress, StagingBuffers [2u].MemoryAllocation->SizeInBytes, MeshData->UVs.data(), UVBufferSizeInBytes);
+            ::memcpy_s(StagingBuffers [3u].MemoryAllocation->MappedAddress, StagingBuffers [3u].MemoryAllocation->SizeInBytes, MeshData->Indices.data(), IndexBufferSizeInBytes);
+
+            std::array<Vulkan::Resource::Buffer, 4u> Buffers = {};
+
+            Vulkan::Resource::GetBuffer(Components::StaticMesh::StaticMeshes.VertexBuffers [MeshIndex], Buffers [0u]);
+            Vulkan::Resource::GetBuffer(Components::StaticMesh::StaticMeshes.NormalBuffers [MeshIndex], Buffers [1u]);
+            Vulkan::Resource::GetBuffer(Components::StaticMesh::StaticMeshes.UVBuffers [MeshIndex], Buffers [2u]);
+            Vulkan::Resource::GetBuffer(Components::StaticMesh::StaticMeshes.IndexBuffers [MeshIndex], Buffers [3u]);
+
+            std::array<VkBufferCopy, 4u> CopyRegions =
+            {
+                VkBufferCopy { 0u, 0u, VertexBufferSizeInBytes },
+                VkBufferCopy { 0u, 0u, NormalBufferSizeInBytes },
+                VkBufferCopy { 0u, 0u, UVBufferSizeInBytes },
+                VkBufferCopy { 0u, 0u, IndexBufferSizeInBytes },
+            };
+
+            vkCmdCopyBuffer(CommandBuffer, StagingBuffers [0u].Resource, Buffers [0u].Resource, 1u, &CopyRegions [0u]);
+            vkCmdCopyBuffer(CommandBuffer, StagingBuffers [1u].Resource, Buffers [1u].Resource, 1u, &CopyRegions [1u]);
+            vkCmdCopyBuffer(CommandBuffer, StagingBuffers [2u].Resource, Buffers [2u].Resource, 1u, &CopyRegions [2u]);
+            vkCmdCopyBuffer(CommandBuffer, StagingBuffers [3u].Resource, Buffers [3u].Resource, 1u, &CopyRegions [3u]);
+
+            std::array<VkBufferMemoryBarrier, 4u> BufferBarriers =
+            {
+                Vulkan::BufferMemoryBarrier(Buffers [0u].Resource, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT),
+                Vulkan::BufferMemoryBarrier(Buffers [1u].Resource, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT),
+                Vulkan::BufferMemoryBarrier(Buffers [2u].Resource, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT),
+                Vulkan::BufferMemoryBarrier(Buffers [3u].Resource, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_INDEX_READ_BIT),
+            };
+
+            vkCmdPipelineBarrier(CommandBuffer,
+                                 VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_VERTEX_INPUT_BIT,
+                                 0u,
+                                 0u, nullptr,
+                                 static_cast<uint32>(BufferBarriers.size()), BufferBarriers.data(),
+                                 0u, nullptr);
+
+            Vulkan::Device::DestroyBuffer(DeviceState, StagingBufferHandles [0u], TransferFence);
+            Vulkan::Device::DestroyBuffer(DeviceState, StagingBufferHandles [1u], TransferFence);
+            Vulkan::Device::DestroyBuffer(DeviceState, StagingBufferHandles [2u], TransferFence);
+            Vulkan::Device::DestroyBuffer(DeviceState, StagingBufferHandles [3u], TransferFence);
+
+            StaticMesh::StaticMeshes.StatusFlags [MeshIndex].bPendingTransfer = false;
+            StaticMesh::StaticMeshes.StatusFlags [MeshIndex].bReady = true;
+        }
     }
 
     return bResult;
 }
 
-bool const Components::StaticMesh::GetStaticMeshResources(uint32 const ActorID, Components::StaticMesh::StaticMeshData & OutputStaticMeshData)
+bool const StaticMesh::GetStaticMeshResources(uint32 const ActorID, StaticMesh::StaticMeshData & OutputStaticMeshData)
 {
     bool bResult = false;
 
@@ -150,14 +180,17 @@ bool const Components::StaticMesh::GetStaticMeshResources(uint32 const ActorID, 
         return false;
     }
 
-    uint32 const StaticMeshID = Components::StaticMesh::StaticMeshes.ActorIDToStaticMeshIndex [ActorID] - 1u;
+    /* TODO: Make ActorHandle a 32bit component mask and 32bit actor handle */
 
-    if (StaticMeshID >= 0u && StaticMeshID < Components::StaticMesh::StaticMeshes.MeshAssetHandles.size())
+    uint32 const MeshIndex = StaticMesh::StaticMeshes.ActorIDToMeshIndex [ActorID];
+
+    if (MeshIndex < StaticMesh::StaticMeshes.MeshAssetHandles.size())
     {
-        OutputStaticMeshData.VertexBuffer = Components::StaticMesh::StaticMeshes.VertexBuffers [StaticMeshID];
-        OutputStaticMeshData.NormalBuffer = Components::StaticMesh::StaticMeshes.NormalBuffers [StaticMeshID];
-        OutputStaticMeshData.IndexBuffer = Components::StaticMesh::StaticMeshes.IndexBuffers [StaticMeshID];
-        OutputStaticMeshData.IndexCount = Components::StaticMesh::StaticMeshes.IndexCounts [StaticMeshID];
+        OutputStaticMeshData.VertexBuffer = StaticMesh::StaticMeshes.VertexBuffers [MeshIndex];
+        OutputStaticMeshData.NormalBuffer = StaticMesh::StaticMeshes.NormalBuffers [MeshIndex];
+        OutputStaticMeshData.UVBuffer = StaticMesh::StaticMeshes.UVBuffers [MeshIndex];
+        OutputStaticMeshData.IndexBuffer = StaticMesh::StaticMeshes.IndexBuffers [MeshIndex];
+        OutputStaticMeshData.IndexCount = StaticMesh::StaticMeshes.IndexCounts [MeshIndex];
 
         bResult = OutputStaticMeshData.VertexBuffer > 0u
                 && OutputStaticMeshData.NormalBuffer > 0u
@@ -166,6 +199,29 @@ bool const Components::StaticMesh::GetStaticMeshResources(uint32 const ActorID, 
     else
     {
         Logging::Log(Logging::LogTypes::Error, String::Format(PBR_TEXT("Failed to get Static Mesh for Actor [ID = %d]"), ActorID));
+    }
+
+    return bResult;
+}
+
+bool const StaticMesh::GetComponentStatus(uint32 const ActorID, StaticMeshStatus & OutputStatus)
+{
+    if (ActorID == 0u)
+    {
+        /* ERROR */
+        return false;
+    }
+
+    bool bResult = false;
+
+    auto FoundMesh = StaticMesh::StaticMeshes.ActorIDToMeshIndex.find(ActorID);
+    if (FoundMesh == StaticMesh::StaticMeshes.ActorIDToMeshIndex.cend())
+    {
+        /* ERROR */
+    }
+    else
+    {
+        OutputStatus = StaticMesh::StaticMeshes.StatusFlags [FoundMesh->second];
     }
 
     return bResult;
