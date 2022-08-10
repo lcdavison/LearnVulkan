@@ -30,8 +30,8 @@ bool const Scene::CreateActor(Scene::SceneData & Scene, Scene::ActorData const &
     return true;
 }
 
-bool const Scene::DoesActorHaveComponent(Scene::SceneData const & Scene, uint32 const ActorHandle, Scene::ComponentMasks const ComponentMask)
+bool const Scene::DoesActorHaveComponents(Scene::SceneData const & Scene, uint32 const ActorHandle, uint32 const ComponentMask)
 {
     uint32 const ActorIndex = ActorHandle - 1u;
-    return (Scene.ComponentMasks [ActorIndex] & static_cast<uint32>(ComponentMask)) > 0u;
+    return (Scene.ComponentMasks [ActorIndex] & ComponentMask) == ComponentMask;
 }

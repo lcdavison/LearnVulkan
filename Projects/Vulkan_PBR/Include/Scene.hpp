@@ -19,7 +19,9 @@ namespace Scene
 
     enum class ComponentMasks : uint32
     {
-        StaticMesh = 0x1,
+        Transform = 0x1,
+        StaticMesh = Transform << 1u,
+        Material = StaticMesh << 1u,
     };
 
     struct SceneData
@@ -40,5 +42,5 @@ namespace Scene
 
     //extern bool const DestroyActor(SceneData & Scene, uint32 const ActorHandle);
 
-    extern bool const DoesActorHaveComponent(SceneData const & Scene, uint32 const ActorHandle, ComponentMasks const ComponentMask);
+    extern bool const DoesActorHaveComponents(SceneData const & Scene, uint32 const ActorHandle, uint32 const ComponentMask);
 }
