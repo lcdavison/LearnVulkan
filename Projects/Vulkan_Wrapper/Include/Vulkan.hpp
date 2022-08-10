@@ -16,22 +16,22 @@ namespace Vulkan
         return VkDescriptorBufferInfo { Buffer, OffsetInBytes, RangeInBytes };
     }
 
-    inline VkWriteDescriptorSet WriteDescriptorSet(VkDescriptorSet const DescriptorSet, VkDescriptorType const DescriptorType, 
-                                                   std::uint32_t const BindingIndex, std::uint32_t const DescriptorCount, 
-                                                   VkDescriptorBufferInfo const * const BufferDescriptors, VkDescriptorImageInfo const * const ImageDescriptors, 
+    inline VkWriteDescriptorSet WriteDescriptorSet(VkDescriptorSet const DescriptorSet, VkDescriptorType const DescriptorType,
+                                                   std::uint32_t const BindingIndex, std::uint32_t const DescriptorCount,
+                                                   VkDescriptorBufferInfo const * const BufferDescriptors, VkDescriptorImageInfo const * const ImageDescriptors,
                                                    std::uint32_t const ArrayElementIndex = 0u, VkBufferView const * const TexelBufferViews = nullptr)
     {
         return VkWriteDescriptorSet { VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, nullptr, DescriptorSet, BindingIndex, ArrayElementIndex, DescriptorCount, DescriptorType, ImageDescriptors, BufferDescriptors, TexelBufferViews };
     }
 
-    inline constexpr VkComponentMapping ComponentMapping(VkComponentSwizzle const Red = VK_COMPONENT_SWIZZLE_IDENTITY, VkComponentSwizzle const Green = VK_COMPONENT_SWIZZLE_IDENTITY, 
+    inline constexpr VkComponentMapping ComponentMapping(VkComponentSwizzle const Red = VK_COMPONENT_SWIZZLE_IDENTITY, VkComponentSwizzle const Green = VK_COMPONENT_SWIZZLE_IDENTITY,
                                                          VkComponentSwizzle const Blue = VK_COMPONENT_SWIZZLE_IDENTITY, VkComponentSwizzle const Alpha = VK_COMPONENT_SWIZZLE_IDENTITY)
     {
         return VkComponentMapping { Red, Green, Blue, Alpha };
     }
 
     inline constexpr VkImageSubresourceRange ImageSubResourceRange(VkImageAspectFlags const AspectFlags,
-                                                                   std::uint32_t const MipMapLevelCount, std::uint32_t const ArrayLayerCount, 
+                                                                   std::uint32_t const MipMapLevelCount, std::uint32_t const ArrayLayerCount,
                                                                    std::uint32_t const BaseMipMapLevelIndex = 0u, std::uint32_t const BaseArrayLayerIndex = 0u)
     {
         return VkImageSubresourceRange { AspectFlags, BaseMipMapLevelIndex, MipMapLevelCount, BaseArrayLayerIndex, ArrayLayerCount };
@@ -126,9 +126,14 @@ namespace Vulkan
         return VkRenderPassBeginInfo { VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO, nullptr, RenderPass, FrameBuffer, RenderArea, ClearValueCount, ClearValues };
     }
 
-    inline VkBufferMemoryBarrier BufferMemoryBarrier(VkBuffer Buffer, VkAccessFlags SourceAccessFlags, VkAccessFlags DestinationAccessFlags, VkDeviceSize const SizeInBytes = VK_WHOLE_SIZE, VkDeviceSize const OffsetInBytes = 0u)
+    inline VkBufferMemoryBarrier BufferMemoryBarrier(VkBuffer const Buffer, VkAccessFlags const SourceAccessFlags, VkAccessFlags const DestinationAccessFlags, VkDeviceSize const SizeInBytes = VK_WHOLE_SIZE, VkDeviceSize const OffsetInBytes = 0u)
     {
         return VkBufferMemoryBarrier { VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER, nullptr, SourceAccessFlags, DestinationAccessFlags, 0u, 0u, Buffer, OffsetInBytes, SizeInBytes };
+    }
+
+    inline VkImageMemoryBarrier ImageMemoryBarrier(VkImage const Image, VkAccessFlags const SourceAccessFlags, VkAccessFlags const DestinationAccessFlags, VkImageLayout const OldLayout, VkImageLayout const NewLayout, VkImageSubresourceRange const SubResourceRange, std::uint32_t SourceQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED, std::uint32_t DestinationQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED)
+    {
+        return VkImageMemoryBarrier { VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER, nullptr, SourceAccessFlags, DestinationAccessFlags, OldLayout, NewLayout, SourceQueueFamilyIndex, DestinationQueueFamilyIndex, Image, SubResourceRange };
     }
 
     inline constexpr VkVertexInputBindingDescription VertexInputBinding(std::uint32_t const BindingSlotIndex, std::uint32_t const StrideInBytes, VkVertexInputRate InputRate = VK_VERTEX_INPUT_RATE_VERTEX)
@@ -220,6 +225,17 @@ namespace Vulkan
     {
         return VkGraphicsPipelineCreateInfo { VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO, nullptr, Flags, ShaderStageCount, ShaderStages, VertexInputState, InputAssemblyState, nullptr, ViewportState, RasterizationState, MultiSampleState, DepthStencilState, BlendState, DynamicState, PipelineLayout, RenderPass, SubPassIndex, VK_NULL_HANDLE, -1l };
     }
+
+    inline VkSwapchainCreateInfoKHR const SwapChain(VkSwapchainKHR const OldSwapChain, 
+                                                    VkSurfaceKHR const Surface, VkExtent2D const & ImageExtents, 
+                                                    VkFormat const ImageFormat, VkColorSpaceKHR const ImageColourSpace, 
+                                                    VkImageUsageFlags const UsageFlags, std::uint32_t const MinImageCount, std::uint32_t const ArrayLayerCount = 1u, 
+                                                    VkPresentModeKHR const PresentMode = VK_PRESENT_MODE_FIFO_KHR, VkBool32 const bClipped = VK_TRUE, 
+                                                    VkCompositeAlphaFlagsKHR const AlphaCompositionFlags = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR, VkSurfaceTransformFlagsKHR const PreTransformFlags = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR, 
+                                                    VkSharingMode const SharingMode = VK_SHARING_MODE_EXCLUSIVE, std::uint32_t const QueueFamilyIndexCount = 0u, std::uint32_t const * const QueueFamilyIndices = nullptr, VkSwapchainCreateFlagsKHR const Flags = 0u)
+    {
+        return VkSwapchainCreateInfoKHR { VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR, nullptr, Flags, Surface, MinImageCount, ImageFormat, ImageColourSpace, ImageExtents, ArrayLayerCount, UsageFlags, SharingMode, QueueFamilyIndexCount, QueueFamilyIndices, static_cast<VkSurfaceTransformFlagBitsKHR>(PreTransformFlags), static_cast<VkCompositeAlphaFlagBitsKHR>(AlphaCompositionFlags), PresentMode, bClipped, OldSwapChain };
+    }
 }
 
 VULKAN_WRAPPER_API bool const InitialiseVulkanWrapper();
@@ -242,6 +258,7 @@ VULKAN_WRAPPER_API void vkGetPhysicalDeviceProperties(VkPhysicalDevice physicalD
 VULKAN_WRAPPER_API void vkGetPhysicalDeviceFeatures(VkPhysicalDevice physicalDevice, VkPhysicalDeviceFeatures * pFeatures);
 VULKAN_WRAPPER_API void vkGetPhysicalDeviceMemoryProperties(VkPhysicalDevice physicalDevice, VkPhysicalDeviceMemoryProperties * pMemoryProperties);
 VULKAN_WRAPPER_API void vkGetPhysicalDeviceQueueFamilyProperties(VkPhysicalDevice physicalDevice, std::uint32_t * pQueueFamilyPropertyCount, VkQueueFamilyProperties * pQueueFamilyProperties);
+VULKAN_WRAPPER_API void vkGetPhysicalDeviceImageFormatProperties(VkPhysicalDevice physicalDevice, VkFormat format, VkImageType type, VkImageTiling tiling, VkImageUsageFlags usage, VkImageCreateFlags flags, VkImageFormatProperties * pImageFormatProperties);
 VULKAN_WRAPPER_API VkResult vkGetPhysicalDeviceSurfaceSupportKHR(VkPhysicalDevice physicalDevice, std::uint32_t queueFamilyIndex, VkSurfaceKHR surface, VkBool32 * pSupported);
 VULKAN_WRAPPER_API VkResult vkGetPhysicalDeviceSurfaceFormatsKHR(VkPhysicalDevice physicalDevice, VkSurfaceKHR surface, std::uint32_t * pFormatCount, VkSurfaceFormatKHR * pSurfaceFormat);
 VULKAN_WRAPPER_API VkResult vkGetPhysicalDeviceSurfaceCapabilitiesKHR(VkPhysicalDevice physicalDevice, VkSurfaceKHR surface, VkSurfaceCapabilitiesKHR * pSurfaceCapabilities);
@@ -269,6 +286,7 @@ VULKAN_WRAPPER_API VkResult vkCreateBuffer(VkDevice device, VkBufferCreateInfo c
 VULKAN_WRAPPER_API VkResult vkCreateImage(VkDevice device, VkImageCreateInfo const * pCreateInfo, VkAllocationCallbacks const * pAllocator, VkImage * pImage);
 VULKAN_WRAPPER_API VkResult vkCreateBufferView(VkDevice device, VkBufferViewCreateInfo const * pCreateInfo, VkAllocationCallbacks const * pAllocator, VkBufferView * pView);
 VULKAN_WRAPPER_API VkResult vkCreateImageView(VkDevice device, VkImageViewCreateInfo const * pCreateInfo, VkAllocationCallbacks const * pAllocator, VkImageView * pImageView);
+VULKAN_WRAPPER_API VkResult vkCreateSampler(VkDevice device, VkSamplerCreateInfo const * pCreateInfo, VkAllocationCallbacks const * pAllocator, VkSampler * pSampler);
 VULKAN_WRAPPER_API VkResult vkCreateSwapchainKHR(VkDevice device, VkSwapchainCreateInfoKHR const * pCreateInfo, VkAllocationCallbacks const * pAllocator, VkSwapchainKHR * pSwapchain);
 
 VULKAN_WRAPPER_API void vkDestroyInstance(VkInstance instance, VkAllocationCallbacks const * pAllocator);
@@ -302,6 +320,7 @@ VULKAN_WRAPPER_API VkResult vkWaitForFences(VkDevice device, std::uint32_t fence
 VULKAN_WRAPPER_API VkResult vkResetFences(VkDevice device, std::uint32_t fenceCount, VkFence const * pFences);
 VULKAN_WRAPPER_API VkResult vkResetCommandPool(VkDevice device, VkCommandPool commandPool, VkCommandPoolResetFlags flags);
 VULKAN_WRAPPER_API VkResult vkResetCommandBuffer(VkCommandBuffer commandBuffer, VkCommandBufferResetFlags flags);
+VULKAN_WRAPPER_API VkResult vkResetDescriptorPool(VkDevice device, VkDescriptorPool descriptorPool, VkDescriptorPoolResetFlags flags);
 
 VULKAN_WRAPPER_API VkResult vkAllocateCommandBuffers(VkDevice device, VkCommandBufferAllocateInfo const * pAllocateInfo, VkCommandBuffer * pCommandBuffers);
 VULKAN_WRAPPER_API VkResult vkAllocateDescriptorSets(VkDevice device, VkDescriptorSetAllocateInfo const * pAllocateInfo, VkDescriptorSet * pDescriptorSets);
@@ -338,6 +357,8 @@ VULKAN_WRAPPER_API void vkCmdPipelineBarrier(VkCommandBuffer commandBuffer,
 VULKAN_WRAPPER_API void vkCmdBeginRenderPass(VkCommandBuffer commandBuffer, VkRenderPassBeginInfo const * pRenderPassBegin, VkSubpassContents contents);
 VULKAN_WRAPPER_API void vkCmdEndRenderPass(VkCommandBuffer commandBuffer);
 
+VULKAN_WRAPPER_API void vkCmdNextSubpass(VkCommandBuffer commandBuffer, VkSubpassContents contents);
+
 VULKAN_WRAPPER_API void vkCmdBindPipeline(VkCommandBuffer commandBuffer, VkPipelineBindPoint pipelineBindPoint, VkPipeline pipeline);
 VULKAN_WRAPPER_API void vkCmdBindDescriptorSets(VkCommandBuffer commandBuffer,
                                                 VkPipelineBindPoint pipelineBindPoint, VkPipelineLayout layout,
@@ -355,3 +376,4 @@ VULKAN_WRAPPER_API void vkCmdSetScissor(VkCommandBuffer commandBuffer, std::uint
 VULKAN_WRAPPER_API void vkCmdSetEvent(VkCommandBuffer commandBuffer, VkEvent event, VkPipelineStageFlags stageMask);
 
 VULKAN_WRAPPER_API void vkCmdCopyBuffer(VkCommandBuffer commandBuffer, VkBuffer srcBuffer, VkBuffer dstBuffer, std::uint32_t regionCount, VkBufferCopy const * pRegions);
+VULKAN_WRAPPER_API void vkCmdCopyBufferToImage(VkCommandBuffer commandBuffer, VkBuffer srcBuffer, VkImage dstImage, VkImageLayout dstImageLayout, std::uint32_t const regionCount, VkBufferImageCopy const * pRegions);

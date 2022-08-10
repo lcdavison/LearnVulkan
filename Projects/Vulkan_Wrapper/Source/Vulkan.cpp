@@ -187,6 +187,11 @@ void vkGetPhysicalDeviceQueueFamilyProperties(VkPhysicalDevice physicalDevice, s
     Functions::vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, pQueueFamilyPropertyCount, pQueueFamilyProperties);
 }
 
+void vkGetPhysicalDeviceImageFormatProperties(VkPhysicalDevice physicalDevice, VkFormat format, VkImageType type, VkImageTiling tiling, VkImageUsageFlags usage, VkImageCreateFlags flags, VkImageFormatProperties * pImageFormatProperties)
+{
+    Functions::vkGetPhysicalDeviceImageFormatProperties(physicalDevice, format, type, tiling, usage, flags, pImageFormatProperties);
+}
+
 VkResult vkGetPhysicalDeviceSurfaceSupportKHR(VkPhysicalDevice physicalDevice, std::uint32_t queueFamilyIndex, VkSurfaceKHR surface, VkBool32 * pSupported)
 {
     return Functions::vkGetPhysicalDeviceSurfaceSupportKHR(physicalDevice, queueFamilyIndex, surface, pSupported);
@@ -316,6 +321,11 @@ VkResult vkCreateBufferView(VkDevice device, VkBufferViewCreateInfo const * pCre
 VkResult vkCreateImageView(VkDevice device, VkImageViewCreateInfo const * pCreateInfo, VkAllocationCallbacks const * pAllocator, VkImageView * pImageView)
 {
     return Functions::vkCreateImageView(device, pCreateInfo, pAllocator, pImageView);
+}
+
+VkResult vkCreateSampler(VkDevice device, VkSamplerCreateInfo const * pCreateInfo, VkAllocationCallbacks const * pAllocator, VkSampler * pSampler)
+{
+    return Functions::vkCreateSampler(device, pCreateInfo, pAllocator, pSampler);
 }
 
 VkResult vkCreateWin32SurfaceKHR(VkInstance instance, VkWin32SurfaceCreateInfoKHR const * pCreateInfo, VkAllocationCallbacks const * pAllocator, VkSurfaceKHR * pSurface)
@@ -468,6 +478,11 @@ VkResult vkResetCommandBuffer(VkCommandBuffer commandBuffer, VkCommandBufferRese
     return Functions::vkResetCommandBuffer(commandBuffer, flags);
 }
 
+VkResult vkResetDescriptorPool(VkDevice device, VkDescriptorPool descriptorPool, VkDescriptorPoolResetFlags flags)
+{
+    return Functions::vkResetDescriptorPool(device, descriptorPool, flags);
+}
+
 
 VkResult vkAllocateCommandBuffers(VkDevice device, VkCommandBufferAllocateInfo const * pAllocateInfo, VkCommandBuffer * pCommandBuffers)
 {
@@ -570,6 +585,11 @@ void vkCmdEndRenderPass(VkCommandBuffer commandBuffer)
     Functions::vkCmdEndRenderPass(commandBuffer);
 }
 
+void vkCmdNextSubpass(VkCommandBuffer commandBuffer, VkSubpassContents contents)
+{
+    Functions::vkCmdNextSubpass(commandBuffer, contents);
+}
+
 void vkCmdBindPipeline(VkCommandBuffer commandBuffer, VkPipelineBindPoint pipelineBindPoint, VkPipeline pipeline)
 {
     Functions::vkCmdBindPipeline(commandBuffer, pipelineBindPoint, pipeline);
@@ -622,4 +642,9 @@ void vkCmdSetEvent(VkCommandBuffer commandBuffer, VkEvent event, VkPipelineStage
 void vkCmdCopyBuffer(VkCommandBuffer commandBuffer, VkBuffer srcBuffer, VkBuffer dstBuffer, std::uint32_t regionCount, VkBufferCopy const * pRegions)
 {
     Functions::vkCmdCopyBuffer(commandBuffer, srcBuffer, dstBuffer, regionCount, pRegions);
+}
+
+void vkCmdCopyBufferToImage(VkCommandBuffer commandBuffer, VkBuffer srcBuffer, VkImage dstImage, VkImageLayout dstImageLayout, std::uint32_t const regionCount, VkBufferImageCopy const * pRegions)
+{
+    Functions::vkCmdCopyBufferToImage(commandBuffer, srcBuffer, dstImage, dstImageLayout, regionCount, pRegions);
 }

@@ -31,6 +31,7 @@ VK_INSTANCE_FUNCTION(vkGetPhysicalDeviceProperties);
 VK_INSTANCE_FUNCTION(vkGetPhysicalDeviceFeatures);
 VK_INSTANCE_FUNCTION(vkGetPhysicalDeviceMemoryProperties);
 VK_INSTANCE_FUNCTION(vkGetPhysicalDeviceQueueFamilyProperties);
+VK_INSTANCE_FUNCTION(vkGetPhysicalDeviceImageFormatProperties);
 
 VK_INSTANCE_FUNCTION(vkCreateDevice);
 
@@ -87,6 +88,7 @@ VK_DEVICE_FUNCTION(vkCreateBuffer);
 VK_DEVICE_FUNCTION(vkCreateImage);
 VK_DEVICE_FUNCTION(vkCreateBufferView);
 VK_DEVICE_FUNCTION(vkCreateImageView);
+VK_DEVICE_FUNCTION(vkCreateSampler);
 
 VK_DEVICE_FUNCTION(vkDestroyDevice);
 VK_DEVICE_FUNCTION(vkDestroyCommandPool);
@@ -140,11 +142,14 @@ VK_DEVICE_FUNCTION(vkCmdDrawIndexed);
 VK_DEVICE_FUNCTION(vkCmdBeginRenderPass);
 VK_DEVICE_FUNCTION(vkCmdEndRenderPass);
 
+VK_DEVICE_FUNCTION(vkCmdNextSubpass);
+
 VK_DEVICE_FUNCTION(vkCmdSetViewport);
 VK_DEVICE_FUNCTION(vkCmdSetScissor);
 VK_DEVICE_FUNCTION(vkCmdSetEvent);
 
 VK_DEVICE_FUNCTION(vkCmdCopyBuffer);
+VK_DEVICE_FUNCTION(vkCmdCopyBufferToImage);
 
 #undef VK_DEVICE_FUNCTION
 
