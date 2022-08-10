@@ -15,7 +15,7 @@
     #endif
 
     #define VERIFY_VKRESULT(Function)\
-        {\
+        do {\
             VkResult Result = Function;\
             if (Result < VK_SUCCESS)\
             {\
