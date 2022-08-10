@@ -13,7 +13,5 @@ namespace ForwardRenderer
 
     extern bool const Shutdown();
 
-    extern void CreateNewActorResources(Scene::SceneData const & Scene);
-
     extern void Render(Scene::SceneData const & Scene);
 }

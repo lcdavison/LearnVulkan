@@ -6,8 +6,14 @@
 #include "Graphics/Device.hpp"
 #include "Graphics/Viewport.hpp"
 #include "Graphics/ShaderLibrary.hpp"
+#include "Graphics/Descriptors.hpp"
 
 #include "Components/StaticMeshComponent.hpp"
+#include "Components/TransformComponent.hpp"
+#include "Components/MaterialComponent.hpp"
+
+#include "Assets/Texture.hpp"
+#include "Assets/Material.hpp"
 
 #include "Graphics/Memory.hpp"
 #include "Allocation.hpp"
@@ -36,21 +42,30 @@ struct PerDrawUniformBufferData
     Math::Matrix4x4 ModelToWorldMatrix;
 };
 
-/* TODO: Separate out the frame state */
 struct FrameStateCollection
 {
-    std::vector<VkCommandBuffer> CommandBuffers;
-    std::vector<VkSemaphore> Semaphores;
-    std::vector<VkFence> Fences;
-    std::vector<uint32> FrameBuffers;
+    std::vector<LinearBufferAllocator::AllocatorState> LinearAllocators = {};
 
-    std::vector<VkDescriptorSet> DescriptorSets;
+    std::vector<VkCommandBuffer> CommandBuffers = {};
 
-    std::vector<LinearBufferAllocator::AllocatorState> LinearAllocators;
+    std::vector<VkSemaphore> Semaphores = {};
+    std::vector<VkFence> Fences = {};
 
-    uint32 CurrentImageIndex;
+    std::vector<VkDescriptorSet> DescriptorSets = {};
 
-    uint8 CurrentFrameStateIndex;
+    std::vector<uint32> FrameBuffers = {};
+
+    std::vector<uint32> SceneColourImages = {};
+    std::vector<uint32> SceneColourImageViews = {};
+
+    std::vector<uint32> DepthStencilImages = {};
+    std::vector<uint32> DepthStencilImageViews = {};
+
+    std::vector<uint16> DescriptorAllocators = {};
+
+    uint32 CurrentImageIndex = {};
+
+    uint8 CurrentFrameStateIndex = {};
 };
 
 static std::string const kDefaultShaderEntryPointName = "main";
@@ -63,16 +78,31 @@ static FrameStateCollection FrameState = {};
 
 static VkRenderPass MainRenderPass = {};
 
-static VkPipelineLayout TrianglePipelineLayout = {};
-static VkPipeline TrianglePipelineState = {};
+static VkPipelineLayout RenderPipelineLayout = {};
+static VkPipeline RenderPipeline = {};
 
-static uint16 VertexShaderHandle = {};
-static uint16 FragmentShaderHandle = {};
+static VkPipelineLayout OutputPipelineLayout = {};
+static VkPipeline OutputPipelineState = {};
 
-static VkShaderModule VertexShaderModule = {};
-static VkShaderModule FragmentShaderModule = {};
+static uint16 ProjectVerticesVSHandle = {};
+static uint16 TorranceSparrowFSHandle = {};
 
-static VkDescriptorSetLayout DescriptorSetLayout = {};
+static uint16 FullScreenTriangleVSHandle = {};
+static uint16 PostProcessFSHandle = {};
+
+static VkShaderModule ProjectVerticesVSShaderModule = {};
+static VkShaderModule TorranceSparrowFSShaderModule = {};
+
+static VkShaderModule FullScreenTriangleVSShaderModule = {};
+static VkShaderModule PostProcessFSShaderModule = {};
+
+static uint16 RenderDescriptorSetLayoutHandle = {};
+static uint16 OutputDescriptorSetLayoutHandle = {};
+
+static std::array<uint32, 4u> TextureHandles = {};
+
+static VkSampler LinearImageSampler = {};
+static VkSampler AnisotropicImageSampler = {};
 
 /*
     For reference.
@@ -98,30 +128,60 @@ static void CreateFrameState()
 
     FrameState.CommandBuffers.resize(kCommandBufferCount); // Pre-Render Command Buffer and Render Command Buffer
     FrameState.FrameBuffers.resize(kFrameStateCount);
+    FrameState.SceneColourImages.resize(kFrameStateCount);
+    FrameState.SceneColourImageViews.resize(kFrameStateCount);
+    FrameState.DepthStencilImages.resize(kFrameStateCount);
+    FrameState.DepthStencilImageViews.resize(kFrameStateCount);
     FrameState.Semaphores.resize(kFrameStateCount * 2u);    // Each frame uses 2 semaphores
     FrameState.Fences.resize(kFrameStateCount);
-    FrameState.DescriptorSets.resize(kFrameStateCount);
+    FrameState.DescriptorSets.resize(kFrameStateCount * 2u); // Each pipeline uses a different set
     FrameState.LinearAllocators.resize(kFrameStateCount);
+    FrameState.DescriptorAllocators.resize(kFrameStateCount);
 
     Vulkan::Device::CreateCommandBuffers(DeviceState, VK_COMMAND_BUFFER_LEVEL_PRIMARY, kCommandBufferCount, FrameState.CommandBuffers);
 
+    for (uint8 CurrentImageIndex = {};
+         CurrentImageIndex < kFrameStateCount;
+         CurrentImageIndex++)
     {
-        uint8 CurrentImageViewIndex = { 0u };
-        for (uint32 & FrameBuffer : FrameState.FrameBuffers)
+        Vulkan::ImageDescriptor ImageDescriptor =
         {
-            VkImageView DepthStencilImageView = {};
-            Vulkan::Resource::GetImageView(ViewportState.DepthStencilImageView, DepthStencilImageView);
+            VK_IMAGE_TYPE_2D,
+            VK_FORMAT_R32G32B32A32_SFLOAT,
+            ViewportState.ImageExtents.width,
+            ViewportState.ImageExtents.height,
+            1u,
+            1u,
+            1u,
+            VK_SAMPLE_COUNT_1_BIT,
+            VK_IMAGE_TILING_OPTIMAL,
+            VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT,
+            0u,
+            false
+        };
 
-            std::vector<VkImageView> FrameBufferAttachments =
-            {
-                ViewportState.SwapChainImageViews [CurrentImageViewIndex],
-                DepthStencilImageView,
-            };
+        Vulkan::Device::CreateImage(DeviceState, ImageDescriptor, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, FrameState.SceneColourImages [CurrentImageIndex]);
 
-            Vulkan::Device::CreateFrameBuffer(DeviceState, ViewportState.ImageExtents.width, ViewportState.ImageExtents.height, MainRenderPass, FrameBufferAttachments, FrameBuffer);
+        ImageDescriptor.Format = VK_FORMAT_D24_UNORM_S8_UINT;
+        ImageDescriptor.UsageFlags = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
 
-            CurrentImageViewIndex++;
-        }
+        Vulkan::Device::CreateImage(DeviceState, ImageDescriptor, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, FrameState.DepthStencilImages [CurrentImageIndex]);
+
+        Vulkan::ImageViewDescriptor ImageViewDesc =
+        {
+            VK_IMAGE_VIEW_TYPE_2D,
+            VK_FORMAT_R32G32B32A32_SFLOAT,
+            VK_IMAGE_ASPECT_COLOR_BIT,
+            0u, 1u,
+            0u, 1u,
+        };
+
+        Vulkan::Device::CreateImageView(DeviceState, FrameState.SceneColourImages [CurrentImageIndex], ImageViewDesc, FrameState.SceneColourImageViews [CurrentImageIndex]);
+
+        ImageViewDesc.Format = VK_FORMAT_D24_UNORM_S8_UINT;
+        ImageViewDesc.AspectFlags = VK_IMAGE_ASPECT_DEPTH_BIT;
+
+        Vulkan::Device::CreateImageView(DeviceState, FrameState.DepthStencilImages [CurrentImageIndex], ImageViewDesc, FrameState.DepthStencilImageViews [CurrentImageIndex]);
     }
 
     for (VkSemaphore & Semaphore : FrameState.Semaphores)
@@ -134,21 +194,24 @@ static void CreateFrameState()
         Vulkan::Device::CreateFence(DeviceState, VK_FENCE_CREATE_SIGNALED_BIT, Fence);
     }
 
-    {
-        std::vector DescriptorSetLayouts = std::vector<VkDescriptorSetLayout>(2u, DescriptorSetLayout);
-
-        VkDescriptorSetAllocateInfo AllocateInfo = {};
-        AllocateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-        AllocateInfo.descriptorPool = DeviceState.DescriptorPool;
-        AllocateInfo.descriptorSetCount = static_cast<uint32>(FrameState.DescriptorSets.size());
-        AllocateInfo.pSetLayouts = DescriptorSetLayouts.data();
-
-        vkAllocateDescriptorSets(DeviceState.Device, &AllocateInfo, FrameState.DescriptorSets.data());
-    }
-
     for (LinearBufferAllocator::AllocatorState & AllocatorState : FrameState.LinearAllocators)
     {
         LinearBufferAllocator::CreateAllocator(DeviceState, 1024u, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, AllocatorState);
+    }
+
+    {
+        uint8 CurrentStateIndex = {};
+        for (uint16 & AllocatorHandle : FrameState.DescriptorAllocators)
+        {
+            Vulkan::Descriptors::CreateDescriptorAllocator(DeviceState,
+                                                           Vulkan::Descriptors::DescriptorTypes::Uniform | Vulkan::Descriptors::DescriptorTypes::SampledImage | Vulkan::Descriptors::DescriptorTypes::Sampler,
+                                                           AllocatorHandle);
+
+            Vulkan::Descriptors::AllocateDescriptorSet(DeviceState, AllocatorHandle, RenderDescriptorSetLayoutHandle, FrameState.DescriptorSets [(CurrentStateIndex << 1u) + 0u]);
+            Vulkan::Descriptors::AllocateDescriptorSet(DeviceState, AllocatorHandle, OutputDescriptorSetLayoutHandle, FrameState.DescriptorSets [(CurrentStateIndex << 1u) + 1u]);
+
+            CurrentStateIndex++;
+        }
     }
 }
 
@@ -181,31 +244,39 @@ static bool const CreateMainRenderPass()
 {
     bool bResult = true;
 
-    std::array<VkAttachmentDescription, 2u> Attachments =
+    std::array<VkAttachmentDescription, 3u> const Attachments =
     {
-        VkAttachmentDescription { 0u, VK_FORMAT_B8G8R8A8_UNORM, VK_SAMPLE_COUNT_1_BIT, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE, VK_ATTACHMENT_LOAD_OP_DONT_CARE, VK_ATTACHMENT_STORE_OP_DONT_CARE, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR },
-        VkAttachmentDescription { 0u, VK_FORMAT_D24_UNORM_S8_UINT, VK_SAMPLE_COUNT_1_BIT, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE, VK_ATTACHMENT_LOAD_OP_DONT_CARE, VK_ATTACHMENT_STORE_OP_DONT_CARE, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL },
+        Vulkan::Attachment(VK_FORMAT_R32G32B32A32_SFLOAT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE, VK_SAMPLE_COUNT_1_BIT),
+        Vulkan::Attachment(VK_FORMAT_D24_UNORM_S8_UINT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE, VK_SAMPLE_COUNT_1_BIT),
+        Vulkan::Attachment(VK_FORMAT_B8G8R8A8_UNORM, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE, VK_SAMPLE_COUNT_1_BIT),
     };
 
-    std::array<VkAttachmentReference, 2u> AttachmentReferences =
+    std::array<VkAttachmentReference, 4u> const AttachmentReferences =
     {
         VkAttachmentReference { 0u, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL },
         VkAttachmentReference { 1u, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL },
+        VkAttachmentReference { 0u, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL },
+        VkAttachmentReference { 2u, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL },
     };
 
-    VkSubpassDescription Subpass = {};
-    Subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-    Subpass.colorAttachmentCount = 1u;
-    Subpass.pColorAttachments = &AttachmentReferences [0u];
-    Subpass.pDepthStencilAttachment = &AttachmentReferences [1u];
+    std::array<VkSubpassDependency, 2u> const SubpassDependencies =
+    {
+        VkSubpassDependency { VK_SUBPASS_EXTERNAL, 0u, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 0u, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_DEPENDENCY_BY_REGION_BIT },
+        VkSubpassDependency { 0u, 1u, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_DEPENDENCY_BY_REGION_BIT },
+    };
+
+    uint32 const DepthStencilAttachmentIndex = { 1u };
+
+    std::array<VkSubpassDescription, 2u> const Subpasses =
+    {
+        Vulkan::Subpass(VK_PIPELINE_BIND_POINT_GRAPHICS, 1u, &AttachmentReferences [0u], &AttachmentReferences [1u]),
+        Vulkan::Subpass(VK_PIPELINE_BIND_POINT_GRAPHICS, 1u, &AttachmentReferences [3u], nullptr, nullptr, 1u, &AttachmentReferences [2u], 1u, &DepthStencilAttachmentIndex),
+    };
 
     {
-        VkRenderPassCreateInfo CreateInfo = {};
-        CreateInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-        CreateInfo.attachmentCount = static_cast<uint32>(Attachments.size());
-        CreateInfo.pAttachments = Attachments.data();
-        CreateInfo.subpassCount = 1u;
-        CreateInfo.pSubpasses = &Subpass;
+        VkRenderPassCreateInfo const CreateInfo = Vulkan::RenderPass(static_cast<uint32>(Attachments.size()), Attachments.data(),
+                                                                     static_cast<uint32>(Subpasses.size()), Subpasses.data(),
+                                                                     static_cast<uint32>(SubpassDependencies.size()), SubpassDependencies.data());
 
         VERIFY_VKRESULT(vkCreateRenderPass(DeviceState.Device, &CreateInfo, nullptr, &MainRenderPass));
     }
@@ -215,64 +286,62 @@ static bool const CreateMainRenderPass()
 
 static bool const CreateDescriptorSetLayout()
 {
-    std::vector DescriptorBindings = std::vector<VkDescriptorSetLayoutBinding>(1u);
-    DescriptorBindings [0u].binding = 0u;
-    DescriptorBindings [0u].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    DescriptorBindings [0u].descriptorCount = 1u;
-    DescriptorBindings [0u].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+    std::vector<VkDescriptorSetLayoutBinding> const DescriptorBindings =
+    {
+        Vulkan::DescriptorSetBinding(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1u, 0u, VK_SHADER_STAGE_VERTEX_BIT),
+        Vulkan::DescriptorSetBinding(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1u, 1u, VK_SHADER_STAGE_VERTEX_BIT),
+        Vulkan::DescriptorSetBinding(VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1u, 2u, VK_SHADER_STAGE_FRAGMENT_BIT),
+        Vulkan::DescriptorSetBinding(VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1u, 3u, VK_SHADER_STAGE_FRAGMENT_BIT),
+        Vulkan::DescriptorSetBinding(VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1u, 4u, VK_SHADER_STAGE_FRAGMENT_BIT),
+        Vulkan::DescriptorSetBinding(VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1u, 5u, VK_SHADER_STAGE_FRAGMENT_BIT),
+        Vulkan::DescriptorSetBinding(VK_DESCRIPTOR_TYPE_SAMPLER, 1u, 6u, VK_SHADER_STAGE_FRAGMENT_BIT),
+        Vulkan::DescriptorSetBinding(VK_DESCRIPTOR_TYPE_SAMPLER, 1u, 7u, VK_SHADER_STAGE_FRAGMENT_BIT),
+        Vulkan::DescriptorSetBinding(VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1u, 0u, VK_SHADER_STAGE_FRAGMENT_BIT),
+    };
 
-    VkDescriptorSetLayoutCreateInfo CreateInfo = {};
-    CreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    CreateInfo.bindingCount = static_cast<uint32>(DescriptorBindings.size());
-    CreateInfo.pBindings = DescriptorBindings.data();
-
-    VERIFY_VKRESULT(vkCreateDescriptorSetLayout(DeviceState.Device, &CreateInfo, nullptr, &DescriptorSetLayout));
+    Vulkan::Descriptors::CreateDescriptorSetLayout(DeviceState, 8u, DescriptorBindings.data(), RenderDescriptorSetLayoutHandle);
+    Vulkan::Descriptors::CreateDescriptorSetLayout(DeviceState, 1u, DescriptorBindings.data() + 8u, OutputDescriptorSetLayoutHandle);
 
     return true;
 }
 
-static bool const CreateGraphicsPipeline()
+static bool const CreateTorranceSparrowPipeline()
 {
-    /* TODO: Do following from the shader libary */
-    /* Loading required shaders */
-    /* Setup pipeline shader slot bindings */
-    /* Setup pipeline state */
-    /* Create pipeline state */
-
     {
-        VkPipelineLayoutCreateInfo CreateInfo = {};
-        CreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-        CreateInfo.setLayoutCount = 1u;
-        CreateInfo.pSetLayouts = &DescriptorSetLayout;
+        VkDescriptorSetLayout SetLayout = {};
+        Vulkan::Descriptors::GetDescriptorSetLayout(RenderDescriptorSetLayoutHandle, SetLayout);
 
-        VERIFY_VKRESULT(vkCreatePipelineLayout(DeviceState.Device, &CreateInfo, nullptr, &TrianglePipelineLayout));
+        VkPipelineLayoutCreateInfo const CreateInfo = Vulkan::PipelineLayout(1u, &SetLayout);
+        VERIFY_VKRESULT(vkCreatePipelineLayout(DeviceState.Device, &CreateInfo, nullptr, &RenderPipelineLayout));
     }
 
-    ShaderLibrary::CreateShaderModule(DeviceState, VertexShaderHandle, VertexShaderModule);
-    ShaderLibrary::CreateShaderModule(DeviceState, FragmentShaderHandle, FragmentShaderModule);
+    ShaderLibrary::CreateShaderModule(DeviceState, ProjectVerticesVSHandle, ProjectVerticesVSShaderModule);
+    ShaderLibrary::CreateShaderModule(DeviceState, TorranceSparrowFSHandle, TorranceSparrowFSShaderModule);
 
-    if (VertexShaderModule == VK_NULL_HANDLE || FragmentShaderModule == VK_NULL_HANDLE)
+    if (ProjectVerticesVSShaderModule == VK_NULL_HANDLE || TorranceSparrowFSShaderModule == VK_NULL_HANDLE)
     {
         return false;
     }
 
     std::array<VkPipelineShaderStageCreateInfo, 2u> const ShaderStages =
     {
-        Vulkan::PipelineShaderStage(VK_SHADER_STAGE_VERTEX_BIT, VertexShaderModule, kDefaultShaderEntryPointName.c_str()),
-        Vulkan::PipelineShaderStage(VK_SHADER_STAGE_FRAGMENT_BIT, FragmentShaderModule, kDefaultShaderEntryPointName.c_str()),
+        Vulkan::PipelineShaderStage(VK_SHADER_STAGE_VERTEX_BIT, ProjectVerticesVSShaderModule, kDefaultShaderEntryPointName.c_str()),
+        Vulkan::PipelineShaderStage(VK_SHADER_STAGE_FRAGMENT_BIT, TorranceSparrowFSShaderModule, kDefaultShaderEntryPointName.c_str()),
     };
 
     {
-        std::array<VkVertexInputBindingDescription, 2u> VertexInputBindings =
+        std::array<VkVertexInputBindingDescription, 3u> VertexInputBindings =
         {
             Vulkan::VertexInputBinding(0u, sizeof(Math::Vector3)),
             Vulkan::VertexInputBinding(1u, sizeof(Math::Vector3)),
+            Vulkan::VertexInputBinding(2u, sizeof(Math::Vector3)),
         };
 
-        std::array<VkVertexInputAttributeDescription, 2u> VertexAttributes =
+        std::array<VkVertexInputAttributeDescription, 3u> VertexAttributes =
         {
             Vulkan::VertexInputAttribute(0u, 0u, 0u),
             Vulkan::VertexInputAttribute(1u, 1u, 0u),
+            Vulkan::VertexInputAttribute(2u, 2u, 0u),
         };
 
         VkPipelineVertexInputStateCreateInfo const VertexInputState = Vulkan::VertexInputState(static_cast<uint32>(VertexInputBindings.size()), VertexInputBindings.data(),
@@ -284,7 +353,6 @@ static bool const CreateGraphicsPipeline()
 
         VkPipelineColorBlendAttachmentState const ColourAttachmentState = Vulkan::ColourAttachmentBlendState();
         VkPipelineColorBlendStateCreateInfo const ColourBlendState = Vulkan::ColourBlendState(1u, &ColourAttachmentState);
-
 
         VkPipelineDepthStencilStateCreateInfo const DepthStencilState = Vulkan::DepthStencilState(VK_TRUE, VK_TRUE, VK_COMPARE_OP_LESS);
         VkPipelineMultisampleStateCreateInfo const MultiSampleState = Vulkan::MultiSampleState();
@@ -305,57 +373,178 @@ static bool const CreateGraphicsPipeline()
         DynamicState.dynamicStateCount = static_cast<uint32>(DynamicStates.size());
         DynamicState.pDynamicStates = DynamicStates.data();
 
-        VkGraphicsPipelineCreateInfo const CreateInfo = Vulkan::GraphicsPipelineState(TrianglePipelineLayout, MainRenderPass, 0u,
+        VkGraphicsPipelineCreateInfo const CreateInfo = Vulkan::GraphicsPipelineState(RenderPipelineLayout, MainRenderPass, 0u,
                                                                                       static_cast<uint32>(ShaderStages.size()), ShaderStages.data(),
                                                                                       &VertexInputState, &InputAssemblerState, &PipelineViewportState,
                                                                                       &RasterizationState, &ColourBlendState, &DepthStencilState, &DynamicState, &MultiSampleState);
 
-        VERIFY_VKRESULT(vkCreateGraphicsPipelines(DeviceState.Device, VK_NULL_HANDLE, 1u, &CreateInfo, nullptr, &TrianglePipelineState));
+        VERIFY_VKRESULT(vkCreateGraphicsPipelines(DeviceState.Device, VK_NULL_HANDLE, 1u, &CreateInfo, nullptr, &RenderPipeline));
     }
 
     return true;
 }
 
-static bool const CreateFrameUniformBuffer(LinearBufferAllocator::Allocation & OutputAllocation, Camera::CameraState const & Camera)
+static bool const CreateOutputPipeline()
 {
-    LinearBufferAllocator::Allocation IntermediateAllocation = {};
-    bool bResult = LinearBufferAllocator::Allocate(FrameState.LinearAllocators [FrameState.CurrentFrameStateIndex], sizeof(PerFrameUniformBufferData), IntermediateAllocation);
-
-    if (bResult)
     {
-        float const AspectRatio = static_cast<float>(ViewportState.ImageExtents.width) / static_cast<float>(ViewportState.ImageExtents.height);
+        VkDescriptorSetLayout SetLayout = {};
+        Vulkan::Descriptors::GetDescriptorSetLayout(OutputDescriptorSetLayoutHandle, SetLayout);
 
-        PerFrameUniformBufferData PerFrameData =
+        VkPipelineLayoutCreateInfo const PipelineLayout = Vulkan::PipelineLayout(1u, &SetLayout);
+        VERIFY_VKRESULT(vkCreatePipelineLayout(DeviceState.Device, &PipelineLayout, nullptr, &OutputPipelineLayout));
+    }
+
+    bool const bLoaded = ShaderLibrary::CreateShaderModule(DeviceState, FullScreenTriangleVSHandle, FullScreenTriangleVSShaderModule) 
+        && ShaderLibrary::CreateShaderModule(DeviceState, PostProcessFSHandle, PostProcessFSShaderModule);
+
+    if (!bLoaded)
+    {
+        Logging::Log(Logging::LogTypes::Error, PBR_TEXT("Failed to create shader module for Output pipeline"));
+        return false;
+    }
+
+    std::array<VkPipelineShaderStageCreateInfo, 2u> const ShaderStages =
+    {
+        Vulkan::PipelineShaderStage(VK_SHADER_STAGE_VERTEX_BIT, FullScreenTriangleVSShaderModule, kDefaultShaderEntryPointName.c_str()),
+        Vulkan::PipelineShaderStage(VK_SHADER_STAGE_FRAGMENT_BIT, PostProcessFSShaderModule, kDefaultShaderEntryPointName.c_str()),
+    };
+
+    VkPipelineVertexInputStateCreateInfo const VertexInputState = Vulkan::VertexInputState(0u, nullptr, 0u, nullptr);
+    VkPipelineInputAssemblyStateCreateInfo const InputAssemblerState = Vulkan::InputAssemblyState();
+
+    VkPipelineRasterizationStateCreateInfo const RasterizationState = Vulkan::RasterizationState(VK_CULL_MODE_NONE);
+
+    VkPipelineColorBlendAttachmentState const ColourAttachmentState = Vulkan::ColourAttachmentBlendState();
+    VkPipelineColorBlendStateCreateInfo const ColourBlendState = Vulkan::ColourBlendState(1u, &ColourAttachmentState);
+
+    VkPipelineDepthStencilStateCreateInfo const DepthStencilState = Vulkan::DepthStencilState(VK_FALSE, VK_FALSE, VK_COMPARE_OP_NEVER);
+    VkPipelineMultisampleStateCreateInfo const MultiSampleState = Vulkan::MultiSampleState();
+
+    VkPipelineViewportStateCreateInfo const Viewport = Vulkan::ViewportState(1u, nullptr, 1u, nullptr);
+
+    std::array<VkDynamicState, 2u> DynamicStateFlags =
+    {
+        VK_DYNAMIC_STATE_VIEWPORT,
+        VK_DYNAMIC_STATE_SCISSOR,
+    };
+
+    VkPipelineDynamicStateCreateInfo const DynamicState = Vulkan::DynamicState(static_cast<uint32>(DynamicStateFlags.size()), DynamicStateFlags.data());
+
+    VkGraphicsPipelineCreateInfo const PipelineCreateInfo = Vulkan::GraphicsPipelineState(OutputPipelineLayout, MainRenderPass, 1u,
+                                                                                          static_cast<uint32>(ShaderStages.size()), ShaderStages.data(),
+                                                                                          &VertexInputState, &InputAssemblerState, &Viewport,
+                                                                                          &RasterizationState, &ColourBlendState, &DepthStencilState,
+                                                                                          &DynamicState, &MultiSampleState);
+
+    VERIFY_VKRESULT(vkCreateGraphicsPipelines(DeviceState.Device, VK_NULL_HANDLE, 1u, &PipelineCreateInfo, nullptr, &OutputPipelineState));
+
+    return true;
+}
+
+static bool const CreateAndFillUniformBuffers(Scene::SceneData const & Scene, std::vector<LinearBufferAllocator::Allocation> & OutputUniformBufferAllocations)
+{
+    bool bResult = false;
+
+    {
+        LinearBufferAllocator::Allocation & FrameUniformBufferAllocation = { OutputUniformBufferAllocations.emplace_back() };
+        bResult = LinearBufferAllocator::Allocate(FrameState.LinearAllocators [FrameState.CurrentFrameStateIndex], sizeof(PerFrameUniformBufferData), FrameUniformBufferAllocation);
+
+        if (bResult)
         {
-            Math::Matrix4x4::Identity(),
-            Math::PerspectiveMatrix(Math::ConvertDegreesToRadians(90.0f), AspectRatio, 0.1f, 1000.0f),
-        };
+            float const AspectRatio = static_cast<float>(ViewportState.ImageExtents.width) / static_cast<float>(ViewportState.ImageExtents.height);
 
-        Camera::GetViewMatrix(Camera, PerFrameData.WorldToViewMatrix);
+            PerFrameUniformBufferData PerFrameData =
+            {
+                Math::Matrix4x4::Identity(),
+                Math::PerspectiveMatrix(Math::ConvertDegreesToRadians(90.0f), AspectRatio, 0.01f, 1000.0f),
+            };
 
-        PerFrameData.WorldToViewMatrix = Math::Matrix4x4::Inverse(PerFrameData.WorldToViewMatrix);
+            Camera::GetViewMatrix(Scene.MainCamera, PerFrameData.WorldToViewMatrix);
+            PerFrameData.WorldToViewMatrix = Math::Matrix4x4::Inverse(PerFrameData.WorldToViewMatrix);
 
-        ::memcpy_s(IntermediateAllocation.MappedAddress, IntermediateAllocation.SizeInBytes, &PerFrameData, sizeof(PerFrameData));
+            ::memcpy_s(FrameUniformBufferAllocation.MappedAddress, FrameUniformBufferAllocation.SizeInBytes, &PerFrameData, sizeof(PerFrameData));
+        }
+    }
+    
 
-        OutputAllocation = IntermediateAllocation;
+    if (Scene.ActorCount > 0u)
+    {
+        LinearBufferAllocator::Allocation & ActorUniformBufferAllocation = { OutputUniformBufferAllocations.emplace_back() };
+        bResult = LinearBufferAllocator::Allocate(FrameState.LinearAllocators [FrameState.CurrentFrameStateIndex], sizeof(PerDrawUniformBufferData) * Scene.ActorCount, ActorUniformBufferAllocation);
+
+        if (bResult)
+        {
+            std::vector PerDrawDatas = std::vector<PerDrawUniformBufferData>(Scene.ActorCount);
+
+            for (uint32 CurrentActorHandle = { 1u };
+                 CurrentActorHandle <= Scene.ActorCount;
+                 CurrentActorHandle++)
+            {
+                Components::Transform::GetTransformationMatrix(CurrentActorHandle, PerDrawDatas [CurrentActorHandle - 1u].ModelToWorldMatrix);
+            }
+
+            ::memcpy_s(ActorUniformBufferAllocation.MappedAddress, ActorUniformBufferAllocation.SizeInBytes, PerDrawDatas.data(), sizeof(PerDrawDatas [0u]) * PerDrawDatas.size());
+        }
     }
 
     return bResult;
 }
 
-static void UpdateUniformBufferDescriptors(LinearBufferAllocator::Allocation const & UniformBufferAllocation)
+static void UpdateFrameUniformBufferDescriptor(std::vector<LinearBufferAllocator::Allocation> const & UniformBufferAllocations)
 {
-    Vulkan::Resource::Buffer UniformBuffer = {};
-    Vulkan::Resource::GetBuffer(UniformBufferAllocation.Buffer, UniformBuffer);
+    std::array<Vulkan::Resource::Buffer, 2u> UniformBuffers = {};
+    Vulkan::Resource::GetBuffer(UniformBufferAllocations [0u].Buffer, UniformBuffers [0u]);
+    Vulkan::Resource::GetBuffer(UniformBufferAllocations [1u].Buffer, UniformBuffers [1u]);
 
-    std::array<VkDescriptorBufferInfo, 2u> UniformBufferDescs =
+    std::array<VkDescriptorBufferInfo, 2u> const UniformBufferDescs =
     {
-        Vulkan::DescriptorBufferInfo(UniformBuffer.Resource, UniformBufferAllocation.OffsetInBytes, UniformBufferAllocation.SizeInBytes),
+        Vulkan::DescriptorBufferInfo(UniformBuffers [0u].Resource, UniformBufferAllocations [0u].OffsetInBytes, UniformBufferAllocations [0u].SizeInBytes),
+        Vulkan::DescriptorBufferInfo(UniformBuffers [1u].Resource, UniformBufferAllocations [1u].OffsetInBytes, UniformBufferAllocations [1u].SizeInBytes),
     };
 
-    VkWriteDescriptorSet const WriteDescriptors = Vulkan::WriteDescriptorSet(FrameState.DescriptorSets [FrameState.CurrentFrameStateIndex], VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 0u, 1u, UniformBufferDescs.data(), nullptr);
+    /* TODO: Add descriptor image info helper function and then write the descriptors to the descriptor set */
+    VkImageView InputAttachmentView = {};
+    Vulkan::Resource::GetImageView(FrameState.SceneColourImageViews [FrameState.CurrentFrameStateIndex], InputAttachmentView);
 
-    vkUpdateDescriptorSets(DeviceState.Device, 1u, &WriteDescriptors, 0u, nullptr);
+    VkDescriptorImageInfo InputAttachmentDesc = {};
+    InputAttachmentDesc.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    InputAttachmentDesc.imageView = InputAttachmentView;
+
+    std::array<VkDescriptorImageInfo, TextureHandles.size() + 2u> ImageViewsAndSamplers = {};
+
+    Assets::Texture::TextureData TextureData = {};
+
+    for (uint8 TextureIndex = {};
+         TextureIndex < TextureHandles.size();
+         TextureIndex++)
+    {
+        if (TextureHandles [TextureIndex] > 0u)
+        {
+            Assets::Texture::GetTextureData(TextureHandles [TextureIndex], TextureData);
+
+            ImageViewsAndSamplers [TextureIndex].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+            Vulkan::Resource::GetImageView(TextureData.ViewHandle, ImageViewsAndSamplers [TextureIndex].imageView);
+        }
+    }
+
+    ImageViewsAndSamplers [ImageViewsAndSamplers.size() - 2u].sampler = AnisotropicImageSampler;
+    ImageViewsAndSamplers [ImageViewsAndSamplers.size() - 1u].sampler = LinearImageSampler;
+
+    std::array<VkWriteDescriptorSet, 9u> const DescriptorWrites =
+    {
+        Vulkan::WriteDescriptorSet(FrameState.DescriptorSets [FrameState.CurrentFrameStateIndex << 1u], VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 0u, 1u, &UniformBufferDescs [0u], nullptr),
+        Vulkan::WriteDescriptorSet(FrameState.DescriptorSets [FrameState.CurrentFrameStateIndex << 1u], VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1u, 1u, &UniformBufferDescs [1u], nullptr),
+        Vulkan::WriteDescriptorSet(FrameState.DescriptorSets [FrameState.CurrentFrameStateIndex << 1u], VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 2u, 1u, nullptr, &ImageViewsAndSamplers [0u]),
+        Vulkan::WriteDescriptorSet(FrameState.DescriptorSets [FrameState.CurrentFrameStateIndex << 1u], VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 3u, 1u, nullptr, &ImageViewsAndSamplers [1u]),
+        Vulkan::WriteDescriptorSet(FrameState.DescriptorSets [FrameState.CurrentFrameStateIndex << 1u], VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 4u, 1u, nullptr, &ImageViewsAndSamplers [2u]),
+        Vulkan::WriteDescriptorSet(FrameState.DescriptorSets [FrameState.CurrentFrameStateIndex << 1u], VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 5u, 1u, nullptr, &ImageViewsAndSamplers [2u]),
+        Vulkan::WriteDescriptorSet(FrameState.DescriptorSets [FrameState.CurrentFrameStateIndex << 1u], VK_DESCRIPTOR_TYPE_SAMPLER, 6u, 1u, nullptr, &ImageViewsAndSamplers [ImageViewsAndSamplers.size() - 2u]),
+        Vulkan::WriteDescriptorSet(FrameState.DescriptorSets [FrameState.CurrentFrameStateIndex << 1u], VK_DESCRIPTOR_TYPE_SAMPLER, 7u, 1u, nullptr, &ImageViewsAndSamplers [ImageViewsAndSamplers.size() - 1u]),
+        Vulkan::WriteDescriptorSet(FrameState.DescriptorSets [(FrameState.CurrentFrameStateIndex << 1u) + 1u], VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 0u, 1u, nullptr, &InputAttachmentDesc),
+    };
+
+    vkUpdateDescriptorSets(DeviceState.Device, static_cast<uint32>(DescriptorWrites.size()), DescriptorWrites.data(), 0u, nullptr);
 }
 
 static void ResetCurrentFrameState()
@@ -371,23 +560,14 @@ static void ResizeViewport()
 
     if (Vulkan::Viewport::ResizeViewport(InstanceState, DeviceState, ViewportState))
     {
-        uint8 CurrentImageIndex = { 0u };
-        for (uint32 & FrameBuffer : FrameState.FrameBuffers)
+        for (std::uint32_t CurrentImageIndex = {};
+             CurrentImageIndex < kFrameStateCount;
+             CurrentImageIndex++)
         {
-            Vulkan::Device::DestroyFrameBuffer(DeviceState, FrameBuffer, VK_NULL_HANDLE);
+            Vulkan::Device::DestroyImage(DeviceState, FrameState.SceneColourImages [CurrentImageIndex], VK_NULL_HANDLE);
+            Vulkan::Device::DestroyImage(DeviceState, FrameState.DepthStencilImages [CurrentImageIndex], VK_NULL_HANDLE);
 
-            VkImageView DepthStencilImageView = {};
-            Vulkan::Resource::GetImageView(ViewportState.DepthStencilImageView, DepthStencilImageView);
-
-            std::vector<VkImageView> FrameBufferAttachments =
-            {
-                ViewportState.SwapChainImageViews [CurrentImageIndex],
-                DepthStencilImageView,
-            };
-
-            Vulkan::Device::CreateFrameBuffer(DeviceState, Application::State.CurrentWindowWidth, Application::State.CurrentWindowHeight, MainRenderPass, FrameBufferAttachments, FrameBuffer);
-
-            CurrentImageIndex++;
+            /* TODO: Create new depth stencil images and scene colour images */
         }
     }
 
@@ -396,41 +576,62 @@ static void ResizeViewport()
 
 static bool const PreRender(Scene::SceneData const & Scene)
 {
-    VkResult ImageAcquireResult = vkAcquireNextImageKHR(DeviceState.Device, ViewportState.SwapChain, 0ull, FrameState.Semaphores [FrameState.CurrentFrameStateIndex], VK_NULL_HANDLE, &FrameState.CurrentImageIndex);
+    VkResult const ImageAcquireResult = vkAcquireNextImageKHR(DeviceState.Device, ViewportState.SwapChain, std::numeric_limits<uint64>::max(), FrameState.Semaphores [FrameState.CurrentFrameStateIndex], VK_NULL_HANDLE, &FrameState.CurrentImageIndex);
 
-    if (ImageAcquireResult == VK_SUBOPTIMAL_KHR ||
-        ImageAcquireResult == VK_ERROR_OUT_OF_DATE_KHR)
+    if (ImageAcquireResult == VK_ERROR_OUT_OF_DATE_KHR)
     {
         ::ResizeViewport();
         return false;
     }
+
+    /* Run through new assets and create + upload the GPU data */
+
+    VkImageView SceneColourImageView = {};
+    Vulkan::Resource::GetImageView(FrameState.SceneColourImageViews [FrameState.CurrentFrameStateIndex], SceneColourImageView);
+
+    VkImageView DepthStencilImageView = {};
+    Vulkan::Resource::GetImageView(FrameState.DepthStencilImageViews [FrameState.CurrentFrameStateIndex], DepthStencilImageView);
+
+    std::vector<VkImageView> FrameBufferAttachments =
+    {
+        SceneColourImageView,
+        DepthStencilImageView,
+        ViewportState.SwapChainImageViews [FrameState.CurrentImageIndex],
+    };
+
+    if (FrameState.FrameBuffers [FrameState.CurrentFrameStateIndex] != 0u)
+    {
+        Vulkan::Device::DestroyFrameBuffer(DeviceState, FrameState.FrameBuffers [FrameState.CurrentFrameStateIndex], VK_NULL_HANDLE);
+    }
+
+    Vulkan::Device::CreateFrameBuffer(DeviceState, ViewportState.ImageExtents.width, ViewportState.ImageExtents.height, MainRenderPass, FrameBufferAttachments, FrameState.FrameBuffers [FrameState.CurrentFrameStateIndex]);
 
     ::ResetCurrentFrameState();
 
     if (Scene.NewActorHandles.size() > 0u)
     {
         VkCommandBufferBeginInfo BeginInfo = Vulkan::CommandBufferBegin();
-        VkCommandBuffer & CurrentCommandBuffer = FrameState.CommandBuffers [kFrameStateCount + FrameState.CurrentFrameStateIndex];
+        VkCommandBuffer & CommandBuffer = FrameState.CommandBuffers [kFrameStateCount + FrameState.CurrentFrameStateIndex];
 
-        vkBeginCommandBuffer(CurrentCommandBuffer, &BeginInfo);
+        VERIFY_VKRESULT(vkResetCommandBuffer(CommandBuffer, 0u));
+        VERIFY_VKRESULT(vkBeginCommandBuffer(CommandBuffer, &BeginInfo));
 
         for (uint32 const ActorHandle : Scene.NewActorHandles)
         {
-            if (Scene::DoesActorHaveComponent(Scene, ActorHandle, Scene::ComponentMasks::StaticMesh))
+            if (Scene::DoesActorHaveComponents(Scene, ActorHandle, static_cast<uint32>(Scene::ComponentMasks::StaticMesh)))
             {
-                Components::StaticMesh::TransferToGPU(ActorHandle, CurrentCommandBuffer, DeviceState, FrameState.Fences [FrameState.CurrentFrameStateIndex]);
+                Components::StaticMesh::CreateGPUResources(ActorHandle, DeviceState);
+                Components::StaticMesh::TransferToGPU(ActorHandle, CommandBuffer, DeviceState, FrameState.Fences [FrameState.CurrentFrameStateIndex]);
             }
         }
 
-        vkEndCommandBuffer(CurrentCommandBuffer);
+        Assets::Texture::InitialiseNewTextureGPUResources(CommandBuffer, DeviceState, FrameState.Fences [FrameState.CurrentFrameStateIndex]);
 
-        VkSubmitInfo const SubmitInfo = Vulkan::SubmitInfo(1u, &CurrentCommandBuffer);
+        vkEndCommandBuffer(CommandBuffer);
+
+        VkSubmitInfo const SubmitInfo = Vulkan::SubmitInfo(1u, &CommandBuffer);
         VERIFY_VKRESULT(vkQueueSubmit(DeviceState.GraphicsQueue, 1u, &SubmitInfo, VK_NULL_HANDLE));
     }
-
-    LinearBufferAllocator::Allocation UniformBufferAllocation = {};
-    ::CreateFrameUniformBuffer(UniformBufferAllocation, Scene.MainCamera);
-    ::UpdateUniformBufferDescriptors(UniformBufferAllocation);
 
     return true;
 }
@@ -447,8 +648,16 @@ static void PostRender()
 bool const ForwardRenderer::Initialise(VkApplicationInfo const & ApplicationInfo)
 {
     /* These are loaded and compiled async, doing them here should mean they will be ready by the time we create the pipeline state */
-    ShaderLibrary::LoadShader("AmbientLighting.vert", VertexShaderHandle);
-    ShaderLibrary::LoadShader("AmbientLighting.frag", FragmentShaderHandle);
+    ShaderLibrary::LoadShader("ProjectOnScreen.vert", ProjectVerticesVSHandle);
+    ShaderLibrary::LoadShader("TorranceSparrow.frag", TorranceSparrowFSHandle);
+
+    ShaderLibrary::LoadShader("FullScreenTriangle.vert", FullScreenTriangleVSHandle);
+    ShaderLibrary::LoadShader("PostProcess.frag", PostProcessFSHandle);
+
+    Assets::Texture::FindTexture("Boat Diffuse", TextureHandles [0u]);
+    Assets::Texture::FindTexture("Boat AO", TextureHandles [1u]);
+    Assets::Texture::FindTexture("Boat Specular", TextureHandles [2u]);
+    Assets::Texture::FindTexture("Boat Gloss", TextureHandles [3u]);
 
     bool bResult = false;
 
@@ -460,7 +669,9 @@ bool const ForwardRenderer::Initialise(VkApplicationInfo const & ApplicationInfo
 
         ::CreateDescriptorSetLayout();
 
-        bResult = ::CreateGraphicsPipeline();
+        bResult = ::CreateTorranceSparrowPipeline() 
+            && ::CreateTorranceSparrowPipeline()
+            && ::CreateOutputPipeline();
 
         if (bResult)
         {
@@ -470,6 +681,28 @@ bool const ForwardRenderer::Initialise(VkApplicationInfo const & ApplicationInfo
         {
             Logging::Log(Logging::LogTypes::Error, PBR_TEXT("Failed to create graphics pipeline state. Exiting."));
         }
+
+        VkSamplerCreateInfo SamplerCreateInfo = 
+        {
+            VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+            nullptr,
+            0u,
+            VK_FILTER_LINEAR, VK_FILTER_LINEAR,
+            VK_SAMPLER_MIPMAP_MODE_NEAREST,
+            VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE, VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE, VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+            0.0f, 
+            VK_TRUE, 8.0f, 
+            VK_FALSE, VK_COMPARE_OP_NEVER,
+            0.0f, 0.0f,
+            VK_BORDER_COLOR_INT_OPAQUE_BLACK,
+            VK_FALSE,
+        };
+
+        VERIFY_VKRESULT(vkCreateSampler(DeviceState.Device, &SamplerCreateInfo, nullptr, &AnisotropicImageSampler));
+
+        SamplerCreateInfo.anisotropyEnable = VK_FALSE;
+
+        VERIFY_VKRESULT(vkCreateSampler(DeviceState.Device, &SamplerCreateInfo, nullptr, &LinearImageSampler));
     }
 
     return bResult;
@@ -483,22 +716,16 @@ bool const ForwardRenderer::Shutdown()
 
     DeviceMemoryAllocator::FreeAllDeviceMemory(DeviceState);
 
-    if (TrianglePipelineState)
+    if (RenderPipeline)
     {
-        vkDestroyPipeline(DeviceState.Device, TrianglePipelineState, nullptr);
-        TrianglePipelineState = VK_NULL_HANDLE;
+        vkDestroyPipeline(DeviceState.Device, RenderPipeline, nullptr);
+        RenderPipeline = VK_NULL_HANDLE;
     }
 
-    if (TrianglePipelineLayout)
+    if (RenderPipelineLayout)
     {
-        vkDestroyPipelineLayout(DeviceState.Device, TrianglePipelineLayout, nullptr);
-        TrianglePipelineLayout = VK_NULL_HANDLE;
-    }
-
-    if (DescriptorSetLayout)
-    {
-        vkDestroyDescriptorSetLayout(DeviceState.Device, DescriptorSetLayout, nullptr);
-        DescriptorSetLayout = VK_NULL_HANDLE;
+        vkDestroyPipelineLayout(DeviceState.Device, RenderPipelineLayout, nullptr);
+        RenderPipelineLayout = VK_NULL_HANDLE;
     }
 
     ShaderLibrary::DestroyShaderModules(DeviceState);
@@ -518,17 +745,6 @@ bool const ForwardRenderer::Shutdown()
     return true;
 }
 
-void ForwardRenderer::CreateNewActorResources(Scene::SceneData const & Scene)
-{
-    for (uint32 const ActorHandle : Scene.NewActorHandles)
-    {
-        if (Scene::DoesActorHaveComponent(Scene, ActorHandle, Scene::ComponentMasks::StaticMesh))
-        {
-            Components::StaticMesh::CreateGPUResources(ActorHandle, DeviceState);
-        }
-    }
-}
-
 void ForwardRenderer::Render(Scene::SceneData const & Scene)
 {
     if (!::PreRender(Scene))
@@ -545,17 +761,22 @@ void ForwardRenderer::Render(Scene::SceneData const & Scene)
         VERIFY_VKRESULT(vkBeginCommandBuffer(CurrentCommandBuffer, &BeginInfo));
     }
 
+    std::vector<LinearBufferAllocator::Allocation> UniformBufferAllocations = {};
+    ::CreateAndFillUniformBuffers(Scene, UniformBufferAllocations);
+    ::UpdateFrameUniformBufferDescriptor(UniformBufferAllocations);
+
     {
-        std::array<VkClearValue, 2u> AttachmentClearValues =
+        std::array<VkClearValue, 3u> AttachmentClearValues =
         {
             VkClearValue { 0.0f, 0.4f, 0.7f, 1.0f },
             VkClearValue { 1.0f, 0u },
+            VkClearValue { 0.0f, 0.0f, 0.0f, 1.0f },
         };
 
         VkFramebuffer CurrentFrameBuffer = {};
         Vulkan::Resource::GetFrameBuffer(FrameState.FrameBuffers [FrameState.CurrentFrameStateIndex], CurrentFrameBuffer);
 
-        VkRenderPassBeginInfo BeginInfo = Vulkan::RenderPassBegin(MainRenderPass, CurrentFrameBuffer, VkRect2D { VkOffset2D { 0u, 0u }, ViewportState.ImageExtents }, static_cast<uint32>(AttachmentClearValues.size()), AttachmentClearValues.data());
+        VkRenderPassBeginInfo const BeginInfo = Vulkan::RenderPassBegin(MainRenderPass, CurrentFrameBuffer, VkRect2D { VkOffset2D { 0u, 0u }, ViewportState.ImageExtents }, static_cast<uint32>(AttachmentClearValues.size()), AttachmentClearValues.data());
 
         vkCmdBeginRenderPass(CurrentCommandBuffer, &BeginInfo, VK_SUBPASS_CONTENTS_INLINE);
     }
@@ -563,36 +784,45 @@ void ForwardRenderer::Render(Scene::SceneData const & Scene)
     vkCmdSetViewport(CurrentCommandBuffer, 0u, 1u, &ViewportState.DynamicViewport);
     vkCmdSetScissor(CurrentCommandBuffer, 0u, 1u, &ViewportState.DynamicScissorRect);
 
-    vkCmdBindPipeline(CurrentCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, TrianglePipelineState);
+    vkCmdBindPipeline(CurrentCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, RenderPipeline);
 
-    vkCmdBindDescriptorSets(CurrentCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, TrianglePipelineLayout, 0u, 1u, &FrameState.DescriptorSets [FrameState.CurrentFrameStateIndex], 0u, nullptr);
+    vkCmdBindDescriptorSets(CurrentCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, RenderPipelineLayout, 0u, 1u, &FrameState.DescriptorSets [FrameState.CurrentFrameStateIndex << 1u], 0u, nullptr);
 
     for (uint32 CurrentActorHandle = { 1u };
          CurrentActorHandle <= Scene.ActorCount;
          CurrentActorHandle++)
     {
-        if (Scene::DoesActorHaveComponent(Scene, CurrentActorHandle, Scene::ComponentMasks::StaticMesh))
+        if (Scene::DoesActorHaveComponents(Scene, CurrentActorHandle, static_cast<uint32>(Scene::ComponentMasks::StaticMesh) | static_cast<uint32>(Scene::ComponentMasks::Material)))
         {
+            /* TODO: Render with material */
+            /* TODO: Per draw descriptor set */
+
             Components::StaticMesh::StaticMeshData CurrentMeshData = {};
-            bool const bHasResources = Components::StaticMesh::GetStaticMeshResources(CurrentActorHandle, CurrentMeshData);
+            bool bHasResources = Components::StaticMesh::GetStaticMeshResources(CurrentActorHandle, CurrentMeshData);
+
+            Components::Material::ComponentData MaterialData = {};
+            bHasResources &= Components::Material::GetComponentData(Scene, CurrentActorHandle, MaterialData);
 
             if (bHasResources)
             {
                 Vulkan::Resource::Buffer VertexBuffer = {};
                 Vulkan::Resource::Buffer NormalBuffer = {};
+                Vulkan::Resource::Buffer UVBuffer = {};
                 Vulkan::Resource::Buffer IndexBuffer = {};
 
                 Vulkan::Resource::GetBuffer(CurrentMeshData.VertexBuffer, VertexBuffer);
                 Vulkan::Resource::GetBuffer(CurrentMeshData.NormalBuffer, NormalBuffer);
+                Vulkan::Resource::GetBuffer(CurrentMeshData.UVBuffer, UVBuffer);
                 Vulkan::Resource::GetBuffer(CurrentMeshData.IndexBuffer, IndexBuffer);
 
                 vkCmdBindIndexBuffer(CurrentCommandBuffer, IndexBuffer.Resource, 0u, VK_INDEX_TYPE_UINT32);
 
                 {
-                    std::array<VkBuffer, 2u> const VertexBuffers =
+                    std::array<VkBuffer, 3u> const VertexBuffers =
                     {
                         VertexBuffer.Resource,
                         NormalBuffer.Resource,
+                        UVBuffer.Resource,
                     };
 
                     std::array const BufferOffsets = std::array<VkDeviceSize, VertexBuffers.size()>();
@@ -604,6 +834,13 @@ void ForwardRenderer::Render(Scene::SceneData const & Scene)
             }
         }
     }
+
+    vkCmdNextSubpass(CurrentCommandBuffer, VK_SUBPASS_CONTENTS_INLINE);
+
+    vkCmdBindPipeline(CurrentCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, OutputPipelineState);
+    vkCmdBindDescriptorSets(CurrentCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, OutputPipelineLayout, 0u, 1u, &FrameState.DescriptorSets [(FrameState.CurrentFrameStateIndex << 1u) + 1u], 0u, nullptr);
+
+    vkCmdDraw(CurrentCommandBuffer, 3u, 1u, 0u, 0u);
 
     vkCmdEndRenderPass(CurrentCommandBuffer);
 
@@ -629,7 +866,14 @@ void ForwardRenderer::Render(Scene::SceneData const & Scene)
         PresentInfo.pWaitSemaphores = &FrameState.Semaphores [kFrameStateCount + FrameState.CurrentFrameStateIndex];
         PresentInfo.pImageIndices = &FrameState.CurrentImageIndex;
 
-        vkQueuePresentKHR(DeviceState.GraphicsQueue, &PresentInfo);
+        VkResult PresentResult = vkQueuePresentKHR(DeviceState.GraphicsQueue, &PresentInfo);
+
+        if (PresentResult == VK_SUBOPTIMAL_KHR
+            || PresentResult == VK_ERROR_OUT_OF_DATE_KHR)
+        {
+            ::ResizeViewport();
+            return;
+        }
     }
 
     ::PostRender();

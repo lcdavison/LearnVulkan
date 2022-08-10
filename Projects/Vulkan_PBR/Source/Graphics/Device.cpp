@@ -413,7 +413,7 @@ void Vulkan::Device::DestroyFrameBuffer(Vulkan::Device::DeviceState const & Stat
 
     if (FenceToWaitFor == VK_NULL_HANDLE)
     {
-        Logging::Log(Logging::LogTypes::Info, String::Format(PBR_TEXT("DestroyFrameBuffer: Destroying frame buffer [ID: %u]"), FrameBufferHandle));
+        //Logging::Log(Logging::LogTypes::Info, String::Format(PBR_TEXT("DestroyFrameBuffer: Destroying frame buffer [ID: %u]"), FrameBufferHandle));
 
         uint32 const FrameBufferIndex = FrameBufferHandle - 1u;
 
