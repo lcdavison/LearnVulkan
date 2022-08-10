@@ -120,36 +120,6 @@ static void StoreSwapChainImages(Vulkan::Device::DeviceState const & DeviceState
     }
 }
 
-static void CreateDepthStencilImage(Vulkan::Device::DeviceState const & DeviceState, VkExtent2D const & Extents, Vulkan::Viewport::ViewportState & State)
-{
-    Vulkan::ImageDescriptor ImageDesc = {};
-    ImageDesc.ImageType = VK_IMAGE_TYPE_2D;
-    ImageDesc.UsageFlags = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
-    ImageDesc.Format = VK_FORMAT_D24_UNORM_S8_UINT;
-    ImageDesc.Width = Extents.width;
-    ImageDesc.Height = Extents.height;
-    ImageDesc.Depth = 1u;
-    ImageDesc.ArrayLayerCount = 1u;
-    ImageDesc.MipLevelCount = 1u;
-    ImageDesc.SampleCount = VK_SAMPLE_COUNT_1_BIT;
-
-    uint32 DepthStencilImage = {};
-    Vulkan::Device::CreateImage(DeviceState, ImageDesc, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, DepthStencilImage);
-
-    Vulkan::ImageViewDescriptor ImageViewDesc = {};
-    ImageViewDesc.ViewType = VK_IMAGE_VIEW_TYPE_2D;
-    ImageViewDesc.Format = VK_FORMAT_D24_UNORM_S8_UINT;
-    ImageViewDesc.AspectFlags = VK_IMAGE_ASPECT_DEPTH_BIT;
-    ImageViewDesc.ArrayLayerCount = 1u;
-    ImageViewDesc.MipLevelCount = 1u;
-
-    uint32 DepthStencilImageView = {};
-    Vulkan::Device::CreateImageView(DeviceState, DepthStencilImage, ImageViewDesc, DepthStencilImageView);
-
-    State.DepthStencilImage = DepthStencilImage;
-    State.DepthStencilImageView = DepthStencilImageView;
-}
-
 bool const Vulkan::Viewport::CreateViewport(Vulkan::Instance::InstanceState const & InstanceState, Vulkan::Device::DeviceState const & DeviceState, Vulkan::Viewport::ViewportState & OutputState)
 {
     if (!InstanceState.Instance || 
@@ -166,8 +136,6 @@ bool const Vulkan::Viewport::CreateViewport(Vulkan::Instance::InstanceState cons
     VkSurfaceCapabilitiesKHR SurfaceCapabilities = {};
     VERIFY_VKRESULT(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(DeviceState.PhysicalDevice, InstanceState.Surface, &SurfaceCapabilities));
 
-    uint32 ImageCount = ::GetSwapChainImageCount(SurfaceCapabilities);
-    
     VkExtent2D DesiredExtents = {};
     DesiredExtents.width = Application::State.CurrentWindowWidth;
     DesiredExtents.height = Application::State.CurrentWindowHeight;
@@ -177,26 +145,11 @@ bool const Vulkan::Viewport::CreateViewport(Vulkan::Instance::InstanceState cons
     if (::HasRequiredImageUsage(SurfaceCapabilities) &&
         ::SupportsRequiredSurfaceFormat(InstanceState, DeviceState, IntermediateState.SurfaceFormat))
     {
-        VkSwapchainCreateInfoKHR SwapChainCreateInfo = {};
-        SwapChainCreateInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-        SwapChainCreateInfo.surface = InstanceState.Surface;
-        SwapChainCreateInfo.imageExtent = IntermediateState.ImageExtents;
-        SwapChainCreateInfo.minImageCount = ImageCount;
-        SwapChainCreateInfo.imageFormat = IntermediateState.SurfaceFormat.format;
-        SwapChainCreateInfo.imageColorSpace = IntermediateState.SurfaceFormat.colorSpace;
-        SwapChainCreateInfo.imageArrayLayers = 1u;
-        SwapChainCreateInfo.imageUsage = kRequiredImageUsageFlags;
-        SwapChainCreateInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
-        SwapChainCreateInfo.preTransform = SurfaceCapabilities.currentTransform;
-        SwapChainCreateInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-        SwapChainCreateInfo.presentMode = VK_PRESENT_MODE_FIFO_KHR;
-        SwapChainCreateInfo.clipped = VK_TRUE;
+        VkSwapchainCreateInfoKHR SwapChainCreateInfo = Vulkan::SwapChain(VK_NULL_HANDLE, InstanceState.Surface, IntermediateState.ImageExtents, IntermediateState.SurfaceFormat.format, IntermediateState.SurfaceFormat.colorSpace, kRequiredImageUsageFlags, SurfaceCapabilities.minImageCount);
 
         VERIFY_VKRESULT(vkCreateSwapchainKHR(DeviceState.Device, &SwapChainCreateInfo, nullptr, &IntermediateState.SwapChain));
 
         ::StoreSwapChainImages(DeviceState, IntermediateState);
-
-        ::CreateDepthStencilImage(DeviceState, IntermediateState.ImageExtents, IntermediateState);
 
         IntermediateState.DynamicViewport.width = static_cast<float>(IntermediateState.ImageExtents.width);
         IntermediateState.DynamicViewport.height = static_cast<float>(IntermediateState.ImageExtents.height);
@@ -235,9 +188,6 @@ bool const Vulkan::Viewport::ResizeViewport(Vulkan::Instance::InstanceState cons
             }
         }
 
-        Vulkan::Device::DestroyImageView(DeviceState, State.DepthStencilImageView, VK_NULL_HANDLE);
-        Vulkan::Device::DestroyImage(DeviceState, State.DepthStencilImage, VK_NULL_HANDLE);
-
         Vulkan::Viewport::ViewportState IntermediateState = {};
 
         VkExtent2D NewImageExtents = {};
@@ -247,30 +197,13 @@ bool const Vulkan::Viewport::ResizeViewport(Vulkan::Instance::InstanceState cons
         IntermediateState.ImageExtents = ::GetSwapChainImageExtents(NewImageExtents, SurfaceCapabilities);
         IntermediateState.SurfaceFormat = State.SurfaceFormat;
 
-        VkSwapchainCreateInfoKHR SwapChainCreateInfo = {};
-        SwapChainCreateInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-        SwapChainCreateInfo.surface = InstanceState.Surface;
-        SwapChainCreateInfo.imageExtent = IntermediateState.ImageExtents;
-        SwapChainCreateInfo.minImageCount = SurfaceCapabilities.minImageCount;
-        SwapChainCreateInfo.imageFormat = IntermediateState.SurfaceFormat.format;
-        SwapChainCreateInfo.imageColorSpace = IntermediateState.SurfaceFormat.colorSpace;
-        SwapChainCreateInfo.imageArrayLayers = (1u < SurfaceCapabilities.maxImageArrayLayers) ? 1u : SurfaceCapabilities.maxImageArrayLayers;
-        SwapChainCreateInfo.imageUsage = kRequiredImageUsageFlags;
-        SwapChainCreateInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
-        SwapChainCreateInfo.preTransform = SurfaceCapabilities.currentTransform;
-        SwapChainCreateInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-        SwapChainCreateInfo.presentMode = VK_PRESENT_MODE_FIFO_KHR;
-        SwapChainCreateInfo.clipped = VK_TRUE;
-
         /* Need to find out whether we should keep track of the old swapchains and destroy them ourselves */
         /* Reading the spec images that aren't in use should get cleand up */
-        SwapChainCreateInfo.oldSwapchain = State.SwapChain;
+        VkSwapchainCreateInfoKHR SwapChainCreateInfo = Vulkan::SwapChain(State.SwapChain, InstanceState.Surface, IntermediateState.ImageExtents, IntermediateState.SurfaceFormat.format, IntermediateState.SurfaceFormat.colorSpace, kRequiredImageUsageFlags, SurfaceCapabilities.minImageCount);
 
         VERIFY_VKRESULT(vkCreateSwapchainKHR(DeviceState.Device, &SwapChainCreateInfo, nullptr, &IntermediateState.SwapChain));
 
         ::StoreSwapChainImages(DeviceState, IntermediateState);
-
-        ::CreateDepthStencilImage(DeviceState, IntermediateState.ImageExtents, IntermediateState);
 
         IntermediateState.DynamicViewport.width = static_cast<float>(IntermediateState.ImageExtents.width);
         IntermediateState.DynamicViewport.height = static_cast<float>(IntermediateState.ImageExtents.height);
@@ -281,6 +214,11 @@ bool const Vulkan::Viewport::ResizeViewport(Vulkan::Instance::InstanceState cons
 
         IntermediateState.DynamicScissorRect.extent = IntermediateState.ImageExtents;
         IntermediateState.DynamicScissorRect.offset = VkOffset2D { 0u, 0u };
+
+        if (SwapChainCreateInfo.oldSwapchain)
+        {
+            vkDestroySwapchainKHR(DeviceState.Device, SwapChainCreateInfo.oldSwapchain, nullptr);
+        }
 
         State = std::move(IntermediateState);
         bResult = true;
@@ -295,9 +233,6 @@ bool const Vulkan::Viewport::ResizeViewport(Vulkan::Instance::InstanceState cons
 
 void Vulkan::Viewport::DestroyViewport(Vulkan::Device::DeviceState const & DeviceState, Vulkan::Viewport::ViewportState & State)
 {
-    Vulkan::Device::DestroyImageView(DeviceState, State.DepthStencilImageView, VK_NULL_HANDLE);
-    Vulkan::Device::DestroyImage(DeviceState, State.DepthStencilImage, VK_NULL_HANDLE);
-
     for (VkImageView & ImageView : State.SwapChainImageViews)
     {
         if (ImageView)
