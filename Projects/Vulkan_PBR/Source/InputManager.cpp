@@ -8,7 +8,7 @@
 
 Input::InputState Input::State = {};
 
-void Input::UpdateInputState()
+void Input::UpdateInputState(uint32 const /*DPI*/)
 {
     std::copy(Input::State.CurrentKeyboardState.cbegin(), Input::State.CurrentKeyboardState.cend(), Input::State.PreviousKeyboardState.begin());
 
