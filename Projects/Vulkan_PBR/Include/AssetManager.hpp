@@ -14,21 +14,13 @@ namespace AssetManager
     {
         std::vector<Math::Vector3> Vertices = {};
         std::vector<Math::Vector3> Normals = {};
+        std::vector<Math::Vector3> UVs = {}; // TODO: Implement vector2 for these 
         std::vector<uint32> Indices = {};
-    };
-
-    struct TextureAsset
-    {
-        std::vector<std::byte> RawData = {};
-        uint32 WidthInPixels = {};
-        uint32 HeightInPixels = {};
     };
 
     extern void Initialise();
 
     extern void Destroy();
-
-    extern bool const LoadTextureAsset(std::string const & AssetName, uint32 & OutputAssetHandle);
 
     extern bool const LoadMeshAsset(std::filesystem::path const & RelativeFilePath, uint32 & OutputAssetHandle);
 

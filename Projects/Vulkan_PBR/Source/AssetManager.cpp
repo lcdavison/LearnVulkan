@@ -18,7 +18,6 @@
 enum class AssetTypes
 {
     Mesh = 0x1,
-    Texture = 0x2,
 };
 
 struct Assets
@@ -36,7 +35,7 @@ struct Assets
 
     std::queue<uint32> FreeMeshIndices = {};
 
-    std::vector<bool> ReadyMeshFlags = {};
+    std::vector<bool> MeshLoadedFlags = {};
 };
 
 struct AssetMailbox
@@ -113,28 +112,6 @@ static std::filesystem::path const kOBJFileExtension = ".obj";
 static Assets AssetTable;
 static AssetMailbox LoadedAssets;
 
-static void CreateVertexHash(uint32 const VertexIndex, uint32 const NormalIndex, uint32 const TextureCoordinateIndex, uint32 & OutputHash)
-{
-    uint32 Result = 0u;
-
-    uint32 HighBits = Result & 0xF8000000;
-    Result <<= 5u;
-    Result ^= HighBits >> 27u;
-    Result ^= VertexIndex;
-
-    HighBits = Result & 0xF8000000;
-    Result <<= 5u;
-    Result ^= HighBits >> 27u;
-    Result ^= NormalIndex;
-
-    HighBits = Result & 0xF8000000;
-    Result <<= 5u;
-    Result ^= HighBits >> 27u;
-    Result ^= TextureCoordinateIndex;
-
-    OutputHash = Result;
-}
-
 static void ProcessOBJMeshData(OBJLoader::OBJMeshData const & OBJMeshData, AssetManager::MeshAsset & OutputMeshAsset)
 {
     /* Use this to check if we have already encountered a vertex previously */
@@ -164,9 +141,6 @@ static void ProcessOBJMeshData(OBJLoader::OBJMeshData const & OBJMeshData, Asset
                 TextureCoordinateIndex = OBJMeshData.FaceTextureCoordinateIndices [CurrentFaceOffset + CurrentFaceVertexIndex];
             }
 
-            uint32 VertexHash = {};
-            ::CreateVertexHash(VertexIndex, NormalIndex, TextureCoordinateIndex, VertexHash);
-
             uint32 Index = {};
 
             std::string const IndexString = std::to_string(VertexIndex) + std::to_string(NormalIndex) + std::to_string(TextureCoordinateIndex);
@@ -186,6 +160,9 @@ static void ProcessOBJMeshData(OBJLoader::OBJMeshData const & OBJMeshData, Asset
 
                 OBJLoader::OBJNormal const & NormalData = OBJMeshData.Normals [NormalIndex - 1u];
                 IntermediateAsset.Normals.emplace_back(Math::Vector3 { NormalData.X, NormalData.Y, NormalData.Z });
+
+                OBJLoader::OBJTextureCoordinate const & UVData = OBJMeshData.TextureCoordinates [TextureCoordinateIndex - 1u];
+                IntermediateAsset.UVs.emplace_back(Math::Vector3 { UVData.U, UVData.V, UVData.W });
 
                 VertexLookUpTable [IndexString] = Index;
             }
@@ -284,11 +261,6 @@ void AssetManager::Destroy()
     AssetLoaderThread::Stop();
 }
 
-bool const AssetManager::LoadTextureAsset(std::string const & /*AssetName*/, uint32 & /*OutputAssetHandle*/)
-{
-    return false;
-}
-
 bool const AssetManager::LoadMeshAsset(std::filesystem::path const & RelativeFilePath, uint32 & OutputAssetHandle)
 {
     bool bResult = false;
@@ -311,7 +283,7 @@ bool const AssetManager::LoadMeshAsset(std::filesystem::path const & RelativeFil
             {
                 AssetTable.MeshAssets.emplace_back();
                 AssetTable.MeshFileNames.emplace_back();
-                AssetTable.ReadyMeshFlags.push_back(false);
+                AssetTable.MeshLoadedFlags.push_back(false);
 
                 NewAssetHandle = (static_cast<uint32>(AssetTypes::Mesh) << 16u) | static_cast<uint16>(AssetTable.MeshAssets.size());
             }
@@ -372,7 +344,7 @@ bool const AssetManager::GetMeshAsset(uint32 const AssetHandle, AssetManager::Me
 
     PBR_ASSERT(AssetIndex < AssetTable.MeshAssets.size());
 
-    if (!AssetTable.ReadyMeshFlags [AssetIndex])
+    if (!AssetTable.MeshLoadedFlags [AssetIndex])
     {
         auto const FoundPendingAsset = AssetTable.PendingAssets.find(AssetHandle);
         if (FoundPendingAsset == AssetTable.PendingAssets.cend())
@@ -390,7 +362,7 @@ bool const AssetManager::GetMeshAsset(uint32 const AssetHandle, AssetManager::Me
                 std::scoped_lock Lock = std::scoped_lock(LoadedAssets.MeshQueueMutex);
 
                 AssetTable.MeshAssets [AssetIndex] = std::move(LoadedAssets.Meshes [MailboxIndex]);
-                AssetTable.ReadyMeshFlags [AssetIndex] = true;
+                AssetTable.MeshLoadedFlags [AssetIndex] = true;
 
                 LoadedAssets.FreeMeshIndices.push(MailboxIndex);
             }
