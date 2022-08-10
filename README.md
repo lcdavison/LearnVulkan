@@ -7,7 +7,6 @@
 Learning how to use the Vulkan API by implementing a PBR scene.
 
 ## Building
----
 
 **CMake Version 3.20 or greater is required**
 
@@ -18,7 +17,7 @@ To generate the project run one of the following:
 The solution file can then be found in `.\Build`
 
 ## Boat Model
----
+
 Currently the project is hard coded to render the boat model from the following:
 https://www.turbosquid.com/3d-models/boat-pbr-model-1522670
 
