@@ -12,6 +12,12 @@
 
 using namespace Platform;
 
+struct ShaderStatus
+{
+    bool bCompiled : 1;
+    bool bPendingCompilation : 1;
+};
+
 struct ShaderData
 {
     uint64 ByteCodeSizeInBytes;
@@ -20,15 +26,15 @@ struct ShaderData
 
 struct ShaderCollection
 {
-    std::unordered_map<std::string, uint16> ShaderIndices;
+    std::unordered_map<std::string, uint16> ShaderPathToIndex = {};
 
-    std::unordered_map<uint16, std::future<ShaderData>> PendingShaderMap;
+    std::unordered_map<uint16, std::future<ShaderData>> PendingShaders = {};
 
-    std::vector<VkShaderModule> ShaderModules;
-    std::vector<std::unique_ptr<unsigned int []>> ByteCodes;
-    std::vector<uint64> ByteCodeSizesInBytes;
+    std::vector<std::unique_ptr<unsigned int[]>> ShaderDatas = {};
+    std::vector<VkShaderModule> ShaderModules = {};
+    std::vector<uint64> ShaderDataSizesInBytes = {};
 
-    std::vector<bool> ReadyShaders;
+    std::vector<ShaderStatus> ShaderStatusFlags = {};
 
     uint16 ShaderCount;
 };
@@ -143,27 +149,19 @@ static ShaderData CompileShader(std::filesystem::path const FilePath)
 
 static bool const WaitForShaderToLoad(uint16 const ShaderIndex)
 {
-    if (!Shaders.ReadyShaders [ShaderIndex])
-    {
-        ShaderData CompilerOutput = Shaders.PendingShaderMap [ShaderIndex].get();
+    ShaderData CompilerOutput = Shaders.PendingShaders [ShaderIndex].get();
 
-        Shaders.ByteCodes [ShaderIndex].reset(CompilerOutput.ByteCode);
-        Shaders.ByteCodeSizesInBytes [ShaderIndex] = CompilerOutput.ByteCodeSizeInBytes;
+    Shaders.ShaderDatas [ShaderIndex].reset(CompilerOutput.ByteCode);
+    Shaders.ShaderDataSizesInBytes [ShaderIndex] = CompilerOutput.ByteCodeSizeInBytes;
 
-        Shaders.PendingShaderMap.erase(ShaderIndex);
+    Shaders.PendingShaders.erase(ShaderIndex);
 
-        Shaders.ReadyShaders [ShaderIndex] = CompilerOutput.ByteCode != nullptr;
-    }
-
-    return Shaders.ReadyShaders [ShaderIndex];
+    return CompilerOutput.ByteCode != nullptr;
 }
 
 bool const ShaderLibrary::Initialise()
 {
     bool bResult = ShaderCompiler::Initialise();
-
-    Shaders.ByteCodes.reserve(16u);
-    Shaders.ByteCodeSizesInBytes.reserve(16u);
 
     ShaderCompilationThread::Start();
 
@@ -177,33 +175,33 @@ void ShaderLibrary::Destroy()
     ShaderCompiler::Destroy();
 }
 
-bool const ShaderLibrary::LoadShader(std::filesystem::path const FilePath, uint16 & OutputShaderIndex)
+bool const ShaderLibrary::LoadShader(std::filesystem::path const FilePath, uint16 & OutputShaderHandle)
 {
     bool bResult = false;
-    uint16 NewShaderIndex = {};
+    uint16 NewShaderHandle = {};
 
     std::filesystem::path const ShaderFilePath = kShaderDirectoryPath / FilePath;
     std::string const ShaderFileName = FilePath.filename().string();
 
-    /* Lets not duplicate any shader data */
-    auto FoundShaderIndex = Shaders.ShaderIndices.find(ShaderFileName);
+    auto FoundShaderIndex = Shaders.ShaderPathToIndex.find(ShaderFileName);
 
-    if (FoundShaderIndex != Shaders.ShaderIndices.end())
+    if (FoundShaderIndex != Shaders.ShaderPathToIndex.end())
     {
-        NewShaderIndex = FoundShaderIndex->second;
+        NewShaderHandle = FoundShaderIndex->second + 1u;
     }
     else
     {
         if (std::filesystem::exists(ShaderFilePath))
         {
-            NewShaderIndex = { Shaders.ShaderCount };
-            Shaders.ShaderCount++;
-
-            Shaders.ByteCodes.emplace_back();
-            Shaders.ByteCodeSizesInBytes.emplace_back();
-            Shaders.ReadyShaders.emplace_back(false);
+            Shaders.ShaderDatas.emplace_back();
+            Shaders.ShaderDataSizesInBytes.emplace_back();
+            Shaders.ShaderStatusFlags.emplace_back();
             Shaders.ShaderModules.emplace_back(VK_NULL_HANDLE);
-            Shaders.ShaderIndices [ShaderFileName] = NewShaderIndex;
+
+            NewShaderHandle = static_cast<uint16>(Shaders.ShaderModules.size());
+
+            uint16 const NewShaderIndex = { NewShaderHandle - 1u };
+            Shaders.ShaderPathToIndex [ShaderFileName] = NewShaderIndex;
 
             ShaderCompilationThread::CompileTask NewTask = ShaderCompilationThread::CompileTask(
                 [](ShaderCompilationThread::CompileTaskParameters const & Parameters)
@@ -211,12 +209,13 @@ bool const ShaderLibrary::LoadShader(std::filesystem::path const FilePath, uint1
                     return ::CompileShader(Parameters.ShaderFilePath);
                 });
 
-            Shaders.PendingShaderMap [NewShaderIndex] = NewTask.get_future();
+            Shaders.PendingShaders [NewShaderIndex] = NewTask.get_future();
+            Shaders.ShaderStatusFlags [NewShaderIndex].bPendingCompilation = true;
 
             {
                 std::scoped_lock QueueLock = std::scoped_lock(ShaderCompilationThread::WorkQueueMutex);
 
-                ShaderCompilationThread::TaskParameterQueue.emplace(ShaderCompilationThread::CompileTaskParameters { std::move(ShaderFilePath) });
+                ShaderCompilationThread::TaskParameterQueue.emplace(std::move(ShaderCompilationThread::CompileTaskParameters { std::move(ShaderFilePath) }));
                 ShaderCompilationThread::TaskQueue.emplace(std::move(NewTask));
             }
 
@@ -226,35 +225,60 @@ bool const ShaderLibrary::LoadShader(std::filesystem::path const FilePath, uint1
         }
     }
 
-    OutputShaderIndex = NewShaderIndex;
+    OutputShaderHandle = NewShaderHandle;
 
     return bResult;
 }
 
-bool const ShaderLibrary::CreateShaderModule(Vulkan::Device::DeviceState const & DeviceState, uint16 const ShaderIndex, VkShaderModule & OutputShaderModule)
+bool const ShaderLibrary::CreateShaderModule(Vulkan::Device::DeviceState const & DeviceState, uint16 const ShaderHandle, VkShaderModule & OutputShaderModule)
 {
-    VkShaderModule & ShaderModule = Shaders.ShaderModules [ShaderIndex];
-
-    if (ShaderModule == VK_NULL_HANDLE)
+    if (ShaderHandle == 0u)
     {
-        ::WaitForShaderToLoad(ShaderIndex);
-
-        PBR_ASSERT(Shaders.ByteCodes [ShaderIndex] != nullptr)
-
-        VkShaderModuleCreateInfo CreateInfo = {};
-        CreateInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-        CreateInfo.codeSize = Shaders.ByteCodeSizesInBytes [ShaderIndex];
-        CreateInfo.pCode = Shaders.ByteCodes [ShaderIndex].get();
-
-        VERIFY_VKRESULT(vkCreateShaderModule(DeviceState.Device, &CreateInfo, nullptr, &ShaderModule));
-
-        /* We don't really need the bytecode after this */
-        Shaders.ByteCodes [ShaderIndex].reset();
+        Logging::Log(Logging::LogTypes::Error, PBR_TEXT("Cannot create shader module for NULL shader."));
+        return false;
     }
 
-    OutputShaderModule = ShaderModule;
+    bool bResult = true;
 
-    return ShaderModule != VK_NULL_HANDLE;
+    uint16 const ShaderIndex = ShaderHandle - 1u;
+
+    ShaderStatus const & Status = Shaders.ShaderStatusFlags [ShaderIndex];
+
+    if (Status.bPendingCompilation)
+    {
+        if (!::WaitForShaderToLoad(ShaderIndex))
+        {
+            /* TODO: Log shader name */
+            Logging::Log(Logging::LogTypes::Error, PBR_TEXT("Failed to compile shader"));
+            bResult = false;
+        }
+        else
+        {
+            VkShaderModuleCreateInfo const CreateInfo =
+            {
+                VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+                nullptr,
+                0u,
+                Shaders.ShaderDataSizesInBytes [ShaderIndex],
+                Shaders.ShaderDatas [ShaderIndex].get(),
+            };
+
+            VERIFY_VKRESULT(vkCreateShaderModule(DeviceState.Device, &CreateInfo, nullptr, &Shaders.ShaderModules [ShaderIndex]));
+         
+            /* We don't really need the bytecode after this */
+            Shaders.ShaderDatas [ShaderIndex].reset();
+
+            Shaders.ShaderStatusFlags [ShaderIndex].bCompiled = true;
+            Shaders.ShaderStatusFlags [ShaderIndex].bPendingCompilation = false;
+        }
+    }
+
+    if (Status.bCompiled)
+    {
+        OutputShaderModule = Shaders.ShaderModules [ShaderIndex];
+    }
+
+    return bResult;
 }
 
 void ShaderLibrary::DestroyShaderModules(Vulkan::Device::DeviceState const & DeviceState)
