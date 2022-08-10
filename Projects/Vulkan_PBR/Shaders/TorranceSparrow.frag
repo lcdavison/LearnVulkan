@@ -57,13 +57,13 @@ float EvaluateBeckmannDistribution(vec3 MicroNormalWS, vec3 MacroNormalWS, float
     float RootMeanSlope = sqrt(2.0f) * Roughness;
 
     float CosineOfMicrofacetAngleSN = dot(MicroNormalWS, MacroNormalWS);
-    CosineOfMicrofacetAngleSN *= CosineOfMicrofacetAngleSN;
+    float CosineOfMicrofacetAngleSNSquared = CosineOfMicrofacetAngleSN * CosineOfMicrofacetAngleSN;
 
-    float TangentOfMicrofacetAngleSquared = (1.0f - CosineOfMicrofacetAngleSN) / CosineOfMicrofacetAngleSN;
+    float TangentOfMicrofacetAngleSquared = (CosineOfMicrofacetAngleSNSquared - 1.0f) / CosineOfMicrofacetAngleSNSquared;
 
     float InverseRootMeanSquaredSlope = 1.0f / (RootMeanSlope * RootMeanSlope);
 
-    return (CosineOfMicrofacetAngleSN * exp(-TangentOfMicrofacetAngleSquared * InverseRootMeanSquaredSlope) * InverseRootMeanSquaredSlope) / (kPi * CosineOfMicrofacetAngleSN * CosineOfMicrofacetAngleSN);
+    return (max(CosineOfMicrofacetAngleSN, 0.0f) / (kPi * CosineOfMicrofacetAngleSNSquared * CosineOfMicrofacetAngleSNSquared)) * exp(TangentOfMicrofacetAngleSquared * InverseRootMeanSquaredSlope) * InverseRootMeanSquaredSlope;
 }
 
 float EvaluateGeometricFactor(float CosineOfDirectionSN, float Roughness)
@@ -77,7 +77,6 @@ float EvaluateGeometricFactor(float CosineOfDirectionSN, float Roughness)
 
 vec3 EvaluateTorranceSparrowBRDF(vec3 SpecularReflectance, vec3 MacroNormal, vec3 MicroNormal, vec3 LightDirection, float CosineOfLightAngleSN, vec3 ViewDirection, float FresnelReflectance, float Roughness)
 {
-   
     float CosineOfViewAngleSN = max(dot(MacroNormal, ViewDirection), 0.0f);
     float CosineOfViewAngleFN = max(dot(MicroNormal, ViewDirection), 0.0f);
 
@@ -87,7 +86,7 @@ vec3 EvaluateTorranceSparrowBRDF(vec3 SpecularReflectance, vec3 MacroNormal, vec
     float GeometricFactor = (CosineOfLightAngleFN * CosineOfViewAngleFN) 
                           / (1.0f + EvaluateGeometricFactor(CosineOfLightAngleSN, Roughness) + EvaluateGeometricFactor(CosineOfViewAngleSN, Roughness));
 
-    return SpecularReflectance * BeckmannDistribution * GeometricFactor * FresnelReflectance / (4.0f * CosineOfLightAngleSN * CosineOfViewAngleSN);
+    return SpecularReflectance * BeckmannDistribution * GeometricFactor * FresnelReflectance / (4.0f * abs(dot(MacroNormal, LightDirection)) * abs(dot(MacroNormal, ViewDirection)));
 }
 
 void main()
@@ -111,7 +110,7 @@ void main()
 
     vec3 DiffuseReflectance = pow(texture(sampler2D(DiffuseTexture, AnisotropicSampler), FragmentUV.xy).rgb, vec3(2.2f));
     float AmbientOcclusion = texture(sampler2D(AOTexture, LinearSampler), FragmentUV.xy).r;
-    vec3 LinearRGB = DiffuseReflectance * 0.01f * AmbientOcclusion;
+    vec3 LinearRGB = EvaluateDiffuseBRDF(DiffuseReflectance) * AmbientOcclusion;
 
     if (CosineOfLightAngleSN >= 0.001f)
     {
@@ -124,13 +123,13 @@ void main()
         float CosineOfViewAngleFN = max(dot(MicroNormalWS, ViewDirectionWS), 0.0f);
         float CosineOfLightAngleFN = max(dot(MicroNormalWS, LightDirectionWS), 0.0f);
 
-        float FresnelReflectance = EvaluateFresnelReflectance(CosineOfViewAngleFN);
-        float FresnelLightDirection = EvaluateFresnelReflectance(CosineOfLightAngleFN);
+        float FresnelLightAngle = EvaluateFresnelReflectance(CosineOfLightAngleFN);
+        float FresnelViewAngle = EvaluateFresnelReflectance(CosineOfViewAngleFN);
 
-        vec3 DiffuseBRDF = (1.0f - FresnelReflectance) * (1.0f - FresnelLightDirection) * EvaluateDiffuseBRDF(DiffuseReflectance);
-        vec3 SpecularBRDF = EvaluateTorranceSparrowBRDF(SpecularReflectance, MacroNormalWS, MicroNormalWS, LightDirectionWS, CosineOfLightAngleSN, ViewDirectionWS, FresnelReflectance, Roughness * Roughness);
+        vec3 DiffuseBRDF = (1.0f - FresnelLightAngle) * (1.0f - FresnelViewAngle) * EvaluateDiffuseBRDF(DiffuseReflectance);
+        vec3 SpecularBRDF = EvaluateTorranceSparrowBRDF(SpecularReflectance, MacroNormalWS, MicroNormalWS, LightDirectionWS, CosineOfLightAngleSN, ViewDirectionWS, FresnelLightAngle, Roughness * Roughness);
 
-        LinearRGB = LightRadiance * CosineOfLightAngleSN * (DiffuseBRDF + SpecularBRDF);
+        LinearRGB += LightRadiance * CosineOfLightAngleFN * (DiffuseBRDF + SpecularBRDF);
     }
 
     FragmentColour = vec4(LinearRGB, 1.0f);
