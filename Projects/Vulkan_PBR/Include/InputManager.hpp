@@ -17,7 +17,7 @@ namespace Input
         std::array<KeyStates, 256u> PreviousKeyboardState = {};
         std::array<KeyStates, 256u> CurrentKeyboardState = {};
 
-        float MouseSensitivity = { 4.0f };
+        float MouseSensitivity = { 3.5f };
 
         int32 PreviousMouseX = {};
         int32 PreviousMouseY = {};
@@ -26,7 +26,7 @@ namespace Input
         int32 CurrentMouseY = {};
     };
 
-    extern void UpdateInputState();
+    extern void UpdateInputState(uint32 const DPI);
 
     extern InputState State;
 
