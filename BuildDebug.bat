@@ -3,7 +3,7 @@
 ECHO Generate Project
 
 REM Generate Project
-cmake -S . -B ./Build
+CALL GenerateVS2022.bat
 
 ECHO Build Project: DEBUG
 
