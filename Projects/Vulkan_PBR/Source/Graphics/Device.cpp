@@ -221,22 +221,6 @@ static bool const GetQueueFamilyIndex(VkPhysicalDevice Device, VkQueueFlags Requ
     return bResult;
 }
 
-static void CreateDescriptorPool(Vulkan::Device::DeviceState & State)
-{
-    std::vector PoolSizes = std::vector<VkDescriptorPoolSize>
-    {
-        VkDescriptorPoolSize { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 4u },
-    };
-
-    VkDescriptorPoolCreateInfo CreateInfo = {};
-    CreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-    CreateInfo.poolSizeCount = static_cast<uint32>(PoolSizes.size());
-    CreateInfo.pPoolSizes = PoolSizes.data();
-    CreateInfo.maxSets = 8u;
-
-    VERIFY_VKRESULT(vkCreateDescriptorPool(State.Device, &CreateInfo, nullptr, &State.DescriptorPool));
-}
-
 bool const Vulkan::Device::CreateDevice(Vulkan::Instance::InstanceState const & InstanceState, Vulkan::Device::DeviceState & OutputState)
 {
     /* Use this for atomicity, we don't want to partially fill OutputState */
@@ -289,8 +273,6 @@ bool const Vulkan::Device::CreateDevice(Vulkan::Instance::InstanceState const & 
                     VERIFY_VKRESULT(vkCreateCommandPool(IntermediateState.Device, &CreateInfo, nullptr, &IntermediateState.CommandPool));
                 }
 
-                ::CreateDescriptorPool(IntermediateState);
-
                 OutputState = IntermediateState;
                 bResult = true;
             }
@@ -303,12 +285,6 @@ bool const Vulkan::Device::CreateDevice(Vulkan::Instance::InstanceState const & 
 void Vulkan::Device::DestroyDevice(Vulkan::Device::DeviceState & State)
 {
     VERIFY_VKRESULT(vkDeviceWaitIdle(State.Device));
-
-    if (State.DescriptorPool)
-    {
-        vkDestroyDescriptorPool(State.Device, State.DescriptorPool, nullptr);
-        State.DescriptorPool = VK_NULL_HANDLE;
-    }
 
     if (State.CommandPool)
     {

@@ -88,7 +88,6 @@ namespace Vulkan::Device
 
         /* Can put this here to begin with, but for multithreading each thread should use its own Pool*/
         VkCommandPool CommandPool;
-        VkDescriptorPool DescriptorPool;
     };
 
     extern bool const CreateDevice(Vulkan::Instance::InstanceState const & InstanceState, DeviceState & OutputDeviceState);
