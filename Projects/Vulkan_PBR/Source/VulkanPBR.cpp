@@ -6,10 +6,17 @@
 
 #include "AssetManager.hpp"
 #include "Scene.hpp"
+
 #include "Components/StaticMeshComponent.hpp"
+#include "Components/TransformComponent.hpp"
+#include "Components/MaterialComponent.hpp"
+
+#include "Assets/Texture.hpp"
+#include "Assets/Material.hpp"
 
 #include <Windows.h>
 #include <Windowsx.h>
+#include <dwmapi.h>
 #include <thread>
 
 #include "InputManager.hpp"
@@ -17,6 +24,8 @@
 extern Application::ApplicationState Application::State = {};
 
 static Scene::SceneData PBRScene = {};
+
+static UINT DPI = {};
 
 static LRESULT CALLBACK WindowProcedure(HWND Window, UINT Message, WPARAM WParam, LPARAM LParam)
 {
@@ -69,6 +78,53 @@ static LRESULT CALLBACK WindowProcedure(HWND Window, UINT Message, WPARAM WParam
     return ::DefWindowProc(Window, Message, WParam, LParam);
 }
 
+static bool const SetupScene()
+{
+    static std::filesystem::path const kAssetDirectoryPath = std::filesystem::current_path() / "Assets";
+
+    uint32 BoatHandle = {};
+    bool bFoundBoat = AssetManager::LoadMeshAsset("Fishing Boat/Boat.obj", BoatHandle);
+
+    if (bFoundBoat)
+    {
+        std::array<uint32, 5u> TextureHandles = {};
+
+        Assets::Texture::ImportTexture(kAssetDirectoryPath / "Fishing Boat/textures/boat_diffuse.bmp", "Boat Diffuse", TextureHandles[0u]);
+        Assets::Texture::ImportTexture(kAssetDirectoryPath / "Fishing Boat/textures/boat_ao.bmp", "Boat AO", TextureHandles [1u]);
+        Assets::Texture::ImportTexture(kAssetDirectoryPath / "Fishing Boat/textures/boat_normal.bmp", "Boat Normal", TextureHandles [2u]);
+        Assets::Texture::ImportTexture(kAssetDirectoryPath / "Fishing Boat/textures/boat_gloss.bmp", "Boat Gloss", TextureHandles [3u]);
+        Assets::Texture::ImportTexture(kAssetDirectoryPath / "Fishing Boat/textures/boat_specular.bmp", "Boat Specular", TextureHandles [4u]);
+
+        Assets::Material::MaterialData const MaterialDesc =
+        {
+            TextureHandles [0u], TextureHandles [2u],
+            TextureHandles [4u], TextureHandles [3u],
+            TextureHandles [1u],
+        };
+
+        uint32 BoatMaterial = {};
+        Assets::Material::CreateMaterial(MaterialDesc, "Boat Material", BoatMaterial);
+
+        Scene::ActorData const BoatActorData = { "Boat" };
+
+        uint32 BoatActorHandle = {};
+        Scene::CreateActor(PBRScene, BoatActorData, BoatActorHandle);
+
+        Components::StaticMesh::CreateComponent(BoatActorHandle, BoatHandle);
+        Components::Transform::CreateComponent(BoatActorHandle, PBRScene);
+        Components::Material::CreateComponent(PBRScene, BoatActorHandle, BoatMaterial);
+
+        Math::Vector3 const Position = Math::Vector3 { 0.0f, 100.0f, -50.0f };
+        float const Scale = 1.0f;
+        Components::Transform::SetTransform(BoatActorHandle, &Position, nullptr, &Scale);
+
+        /* Temporary */
+        PBRScene.ComponentMasks [BoatActorHandle - 1u] |= static_cast<uint32>(Scene::ComponentMasks::StaticMesh);
+    }
+
+    return bFoundBoat;
+}
+
 static bool const Initialise()
 {
     bool bResult = false;
@@ -94,7 +150,7 @@ static bool const Initialise()
     {
         Application::State.WindowHandle = ::CreateWindow(Application::kWindowClassName,
                                                          Application::kWindowName,
-                                                         WS_OVERLAPPEDWINDOW,
+                                                         WS_OVERLAPPED | WS_POPUP,
                                                          CW_USEDEFAULT, CW_USEDEFAULT,
                                                          Application::kDefaultWindowWidth, Application::kDefaultWindowHeight,
                                                          nullptr, nullptr,
@@ -119,37 +175,18 @@ static bool const Initialise()
         bResult = ShaderLibrary::Initialise();
         AssetManager::Initialise();
 
-        uint32 BoatHandle = {};
-        bool bFoundBoat = AssetManager::LoadMeshAsset("Fishing Boat/Boat.obj", BoatHandle);
+        bool bSetupScene = ::SetupScene();
 
-        if (!bFoundBoat)
+        if (bSetupScene)
         {
-            Logging::Log(Logging::LogTypes::Error, PBR_TEXT("Failed to load boat model."));
+            DPI = ::GetDpiForWindow(reinterpret_cast<HWND>(Application::State.WindowHandle));
 
-            //AssetManager::LoadMeshAsset("Cube", CubeHandle);
-
-            Scene::ActorData CubeActorData = { "Cube" };
-
-            uint32 CubeActorHandle = {};
-            Scene::CreateActor(PBRScene, CubeActorData, CubeActorHandle);
-            //Components::StaticMesh::CreateComponent(CubeActorHandle, CubeHandle);
-
-            PBRScene.ComponentMasks [CubeActorHandle - 1u] |= static_cast<uint32>(Scene::ComponentMasks::StaticMesh);
+            bResult = ForwardRenderer::Initialise(ApplicationInfo);
         }
         else
         {
-            Scene::ActorData BoatActorData = { "Boat" };
-
-            uint32 BoatActorHandle = {};
-            Scene::CreateActor(PBRScene, BoatActorData, BoatActorHandle);
-
-            Components::StaticMesh::CreateComponent(BoatActorHandle, BoatHandle);
-
-            /* Temporary */
-            PBRScene.ComponentMasks [BoatActorHandle - 1u] |= static_cast<uint32>(Scene::ComponentMasks::StaticMesh);
+            Logging::Log(Logging::LogTypes::Error, PBR_TEXT("Failed to setup scene. Please make sure all assets are available."));
         }
-
-        bResult = ForwardRenderer::Initialise(ApplicationInfo);
     }
 
     return bResult;
@@ -181,9 +218,11 @@ static bool const ProcessWindowMessages()
             bResult = false;
             break;
         }
-
-        ::TranslateMessage(&CurrentMessage);
-        ::DispatchMessage(&CurrentMessage);
+        else
+        {
+            ::TranslateMessage(&CurrentMessage);
+            ::DispatchMessage(&CurrentMessage);
+        }
     }
 
     return bResult;
@@ -196,7 +235,7 @@ static bool const Run()
     std::chrono::high_resolution_clock::time_point PreviousFrameBeginTime = { std::chrono::high_resolution_clock::now() };
 
     uint64 AccumulatedFrameTimeInMicroSeconds = {};
-    uint32 const FrameDeltaTimeInMicroSeconds = { 1000000u / 60u };
+    constexpr uint32 kFixedUpdateTimeInMicroSeconds = { 1000000u / 60u };
 
     for (;;)
     {
@@ -206,7 +245,7 @@ static bool const Run()
 
         PreviousFrameBeginTime = CurrentFrameBeginTime;
 
-        Input::UpdateInputState();
+        Input::UpdateInputState(DPI);
 
         if (::ProcessWindowMessages())
         {
@@ -214,25 +253,24 @@ static bool const Run()
             {
                 /* Could do some actor culling and stuff here */
 
-                if (AccumulatedFrameTimeInMicroSeconds >= FrameDeltaTimeInMicroSeconds)
+                if (AccumulatedFrameTimeInMicroSeconds >= kFixedUpdateTimeInMicroSeconds)
                 {
-                    constexpr float DeltaTimeInSeconds = static_cast<float>(FrameDeltaTimeInMicroSeconds) / 1000000.0f;
+                    constexpr float kFixedUpdateTimeInSeconds = static_cast<float>(kFixedUpdateTimeInMicroSeconds) / 1000000.0f;
+                    float const kVariableUpdateTimeInSeconds = static_cast<float>(FrameDuration) / 1000000.0f;
 
                     Camera::UpdateOrientation(PBRScene.MainCamera,
-                                              -1.0f * (Input::State.CurrentMouseY - Input::State.PreviousMouseY) * Input::State.MouseSensitivity * DeltaTimeInSeconds,
-                                              -1.0f * (Input::State.CurrentMouseX - Input::State.PreviousMouseX) * Input::State.MouseSensitivity * DeltaTimeInSeconds);
+                                              -1.0f * (Input::State.CurrentMouseY - Input::State.PreviousMouseY) * Input::State.MouseSensitivity * kVariableUpdateTimeInSeconds,
+                                              -1.0f * (Input::State.CurrentMouseX - Input::State.PreviousMouseX) * Input::State.MouseSensitivity * kVariableUpdateTimeInSeconds);
 
                     /* Branchless WASD */
-                    constexpr float kMovementSpeed = 8.0f * DeltaTimeInSeconds;
-                    float const ForwardSpeed = { kMovementSpeed * (Input::IsKeyDown(0x53) * -1.0f + Input::IsKeyDown(0x57)) };
-                    float const StrafeSpeed = { kMovementSpeed * (Input::IsKeyDown(0x41) * -1.0f + Input::IsKeyDown(0x44)) };
+                    constexpr float kMovementSpeed = 32.0f * kFixedUpdateTimeInSeconds;
+                    float const kForwardSpeed = { kMovementSpeed * (Input::IsKeyDown(0x53) * -1.0f + Input::IsKeyDown(0x57)) };
+                    float const kStrafeSpeed = { kMovementSpeed * (Input::IsKeyDown(0x41) * -1.0f + Input::IsKeyDown(0x44)) };
 
-                    Camera::UpdatePosition(PBRScene.MainCamera, ForwardSpeed, StrafeSpeed);
+                    Camera::UpdatePosition(PBRScene.MainCamera, kForwardSpeed, kStrafeSpeed);
 
-                    AccumulatedFrameTimeInMicroSeconds -= FrameDeltaTimeInMicroSeconds;
+                    AccumulatedFrameTimeInMicroSeconds -= kFixedUpdateTimeInMicroSeconds;
                 }
-
-                ForwardRenderer::CreateNewActorResources(PBRScene);
 
                 ForwardRenderer::Render(PBRScene);
 
@@ -240,6 +278,9 @@ static bool const Run()
                 {
                     PBRScene.NewActorHandles.clear();
                 }
+
+                /* Not really necessary for fullscreen, but this helps little bit with microstutter in windowed/borderless */
+                ::DwmFlush();
             }
             else
             {
