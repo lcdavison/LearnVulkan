@@ -11,6 +11,8 @@ namespace Math
 
     extern constexpr Matrix4x4 const ScaleMatrix(Vector3 const & Scale);
 
+    extern constexpr Matrix4x4 const ScaleMatrix(float const Scale);
+
     extern Matrix4x4 const RotateZAxis(float const AngleInDegrees);
 
     extern Matrix4x4 const RotateAxisAngle(Vector3 const & Axis, float const AngleInDegrees);

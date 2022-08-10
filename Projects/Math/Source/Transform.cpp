@@ -41,23 +41,35 @@ Math::Vector4 const Math::operator * (Math::Matrix4x4 const & Matrix, Math::Vect
 
 constexpr Math::Matrix4x4 const Math::TranslationMatrix(Vector3 const & Direction)
 {
-    Math::Matrix4x4 Matrix = Math::Matrix4x4::Identity();
-    Matrix.Data [(3u << 2u) + 0u] = Direction.X;
-    Matrix.Data [(3u << 2u) + 1u] = Direction.Y;
-    Matrix.Data [(3u << 2u) + 2u] = Direction.Z;
-
-    return Matrix;
+    return Math::Matrix4x4
+    {
+        1.0f, 0.0f, 0.0f, 0.0f,
+        0.0f, 1.0f, 0.0f, 0.0f,
+        0.0f, 0.0f, 1.0f, 0.0f,
+        Direction.X, Direction.Y, Direction.Z, 1.0f,
+    };
 }
 
 constexpr Math::Matrix4x4 const Math::ScaleMatrix(Vector3 const & Scale)
 {
-    Math::Matrix4x4 Matrix = {};
-    Matrix [Math::Matrix4x4::Index { 0u, 0u }] = Scale.X;
-    Matrix [Math::Matrix4x4::Index { 1u, 1u }] = Scale.Y;
-    Matrix [Math::Matrix4x4::Index { 2u, 2u }] = Scale.Z;
-    Matrix [Math::Matrix4x4::Index { 3u, 3u }] = 1.0f;
+    return Math::Matrix4x4
+    {
+        Scale.X, 0.0f, 0.0f, 0.0f,
+        0.0f, Scale.Y, 0.0f, 0.0f,
+        0.0f, 0.0f, Scale.Z, 0.0f,
+        0.0f, 0.0f, 0.0f, 1.0f,
+    };
+}
 
-    return Matrix;
+constexpr Math::Matrix4x4 const Math::ScaleMatrix(float const Scale)
+{
+    return Math::Matrix4x4
+    {
+        Scale, 0.0f, 0.0f, 0.0f,
+        0.0f, Scale, 0.0f, 0.0f,
+        0.0f, 0.0f, Scale, 0.0f,
+        0.0f, 0.0f, 0.0f, 1.0f,
+    };
 }
 
 Math::Matrix4x4 const Math::RotateZAxis(float const AngleInDegrees)
