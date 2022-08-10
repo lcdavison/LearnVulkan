@@ -146,13 +146,16 @@ static bool const Initialise()
     WindowClass.hIcon = ::LoadIcon(nullptr, IDI_APPLICATION);
     WindowClass.hbrBackground = static_cast<HBRUSH>(::GetStockObject(WHITE_BRUSH));
 
+    Application::State.CurrentWindowWidth = static_cast<uint32>(::GetSystemMetrics(SM_CXSCREEN));
+    Application::State.CurrentWindowHeight = static_cast<uint32>(::GetSystemMetrics(SM_CYSCREEN));
+
     if (::RegisterClassEx(&WindowClass))
     {
         Application::State.WindowHandle = ::CreateWindow(Application::kWindowClassName,
                                                          Application::kWindowName,
                                                          WS_OVERLAPPED | WS_POPUP,
                                                          CW_USEDEFAULT, CW_USEDEFAULT,
-                                                         Application::kDefaultWindowWidth, Application::kDefaultWindowHeight,
+                                                         Application::State.CurrentWindowWidth, Application::State.CurrentWindowHeight,
                                                          nullptr, nullptr,
                                                          CurrentInstance, nullptr);
 

@@ -24,8 +24,5 @@ namespace Application
 
     static uint32 const kApplicationVersionNo = 0u;
 
-    static uint32 const kDefaultWindowWidth = 1280u;
-    static uint32 const kDefaultWindowHeight = 720u;
-
     extern ApplicationState State;
 }
