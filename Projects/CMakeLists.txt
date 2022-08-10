@@ -9,12 +9,14 @@ if(SUPPORTS_SSE2)
     message(STATUS "Host Supports SSE2")
 endif()
 
+add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/BMP_Loader")
 add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/OBJ_Loader")
 add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/Math")
 add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/Vulkan_Wrapper")
 add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/Vulkan_PBR")
 
 set_target_properties(
+    BMPLoader
     OBJLoader
     MathLib
     VulkanWrapper
