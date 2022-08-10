@@ -16,7 +16,12 @@ list(
     "Include/Graphics/Memory.hpp"
     "Include/Graphics/Viewport.hpp"
     "Include/Graphics/ShaderLibrary.hpp"
+    "Include/Graphics/Descriptors.hpp"
     "Include/Components/StaticMeshComponent.hpp"
+    "Include/Components/TransformComponent.hpp"
+    "Include/Components/MaterialComponent.hpp"
+    "Include/Assets/Texture.hpp"
+    "Include/Assets/Material.hpp"
     "Include/ShaderCompiler/ShaderCompiler.hpp"
     "Include/Platform/Windows.hpp"
     "Include/Common.hpp"
@@ -39,7 +44,12 @@ list(
     "Source/Graphics/Memory.cpp"
     "Source/Graphics/Viewport.cpp"
     "Source/Graphics/ShaderLibrary.cpp"
+    "Source/Graphics/Descriptors.cpp"
     "Source/Components/StaticMeshComponent.cpp"
+    "Source/Components/TransformComponent.cpp"
+    "Source/Components/MaterialComponent.cpp"
+    "Source/Assets/Texture.cpp"
+    "Source/Assets/Material.cpp"
     "Source/ShaderCompiler/ShaderCompiler.cpp"
     "Source/Platform/Windows.cpp"
     "Source/Logging.cpp"
@@ -92,6 +102,8 @@ target_link_libraries(
     VulkanWrapper
     MathLib
     OBJLoader
+    BMPLoader
+    dwmapi
 )
 
 # This is for debugging the .exe since we have required resources here
