@@ -80,6 +80,7 @@ namespace Vulkan::Device
 {
     struct DeviceState
     {
+        VkPhysicalDeviceFeatures PhysicalDeviceFeatures = {};
         VkPhysicalDevice PhysicalDevice;
         VkDevice Device;
 

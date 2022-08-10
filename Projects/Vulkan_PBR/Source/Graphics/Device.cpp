@@ -145,7 +145,7 @@ static bool const GetPhysicalDeviceList(VkInstance Instance, std::vector<VkPhysi
     return bResult;
 }
 
-static bool const GetPhysicalDevice(VkInstance Instance, std::function<bool(VkPhysicalDeviceProperties const &)> PhysicalDeviceRequirementPredicate, VkPhysicalDevice & OutputPhysicalDevice)
+static bool const GetPhysicalDevice(VkInstance Instance, std::function<bool(VkPhysicalDeviceFeatures const &, VkPhysicalDeviceProperties const &)> PhysicalDeviceRequirementPredicate, VkPhysicalDevice & OutputPhysicalDevice)
 {
     bool bResult = false;
 
@@ -160,7 +160,7 @@ static bool const GetPhysicalDevice(VkInstance Instance, std::function<bool(VkPh
             VkPhysicalDeviceFeatures DeviceFeatures = {};
             vkGetPhysicalDeviceFeatures(CurrentPhysicalDevice, &DeviceFeatures);
 
-            if (PhysicalDeviceRequirementPredicate(DeviceProperties))
+            if (PhysicalDeviceRequirementPredicate(DeviceFeatures, DeviceProperties))
             {
 #if defined(_DEBUG)
                 std::basic_string Output = "Selected Device: ";
@@ -226,10 +226,12 @@ bool const Vulkan::Device::CreateDevice(Vulkan::Instance::InstanceState const & 
     /* Use this for atomicity, we don't want to partially fill OutputState */
     DeviceState IntermediateState = {};
 
+    IntermediateState.PhysicalDeviceFeatures.samplerAnisotropy = VK_TRUE;
+
     bool bResult = ::GetPhysicalDevice(InstanceState.Instance,
-                                       [](VkPhysicalDeviceProperties const & Properties)
+                                       [](VkPhysicalDeviceFeatures const & Features, VkPhysicalDeviceProperties const & Properties)
                                        {
-                                           return Properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU;
+                                           return Properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU && Features.samplerAnisotropy == VK_TRUE;
                                        },
                                        IntermediateState.PhysicalDevice);
 
@@ -253,8 +255,7 @@ bool const Vulkan::Device::CreateDevice(Vulkan::Instance::InstanceState const & 
                 CreateInfo.pQueueCreateInfos = &QueueCreateInfo;
                 CreateInfo.enabledExtensionCount = static_cast<uint32>(kRequiredExtensionNames.size());
                 CreateInfo.ppEnabledExtensionNames = kRequiredExtensionNames.data();
-                /* Need to figure out what features need to be enabled */
-                //CreateInfo.pEnabledFeatures;
+                CreateInfo.pEnabledFeatures = &IntermediateState.PhysicalDeviceFeatures;
 
                 VERIFY_VKRESULT(vkCreateDevice(IntermediateState.PhysicalDevice, &CreateInfo, nullptr, &IntermediateState.Device));
             }
