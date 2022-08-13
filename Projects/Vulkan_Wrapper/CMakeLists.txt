@@ -30,6 +30,11 @@ target_include_directories(
     PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/Include"
 )
 
+target_link_libraries(
+    VulkanWrapper
+    Vulkan-Headers
+)
+
 target_sources(
     VulkanWrapper
     PRIVATE ${HeaderFiles}
