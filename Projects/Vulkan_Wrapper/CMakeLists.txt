@@ -22,7 +22,7 @@ add_library(VulkanWrapper SHARED)
 target_include_directories(
     VulkanWrapper
     SYSTEM
-    PRIVATE "${LearnVulkan_SOURCE_DIR}/External/vulkan/Include"
+    PRIVATE $<TARGET_PROPERTY:Vulkan-Headers,INTERFACE_INCLUDE_DIRECTORIES>
 )
 
 target_include_directories(
