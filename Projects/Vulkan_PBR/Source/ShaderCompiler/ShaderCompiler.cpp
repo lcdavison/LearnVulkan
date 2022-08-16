@@ -230,12 +230,6 @@ static GLSLangResourceInfo const kDefaultResourceInfo =
     }
 };
 
-static std::unordered_map<std::string, GLSLangStage> const ShaderStageMap =
-{
-    std::make_pair(".vert", GLSLANG_STAGE_VERTEX),
-    std::make_pair(".frag", GLSLANG_STAGE_FRAGMENT),
-};
-
 bool const ShaderCompiler::Initialise()
 {
     return glslang_initialize_process() != 0l;
@@ -246,10 +240,42 @@ void ShaderCompiler::Destroy()
     glslang_finalize_process();
 }
 
+constexpr uint32 MakeShaderKey(char const * ShaderFileExtension)
+{
+    return (static_cast<uint32>(ShaderFileExtension [1u]) << 0u)
+        | (static_cast<uint32>(ShaderFileExtension [2u]) << 8u)
+        | (static_cast<uint32>(ShaderFileExtension [3u]) << 16u)
+        | (static_cast<uint32>(ShaderFileExtension [4u]) << 24u);
+}
+
 GLSLangStage GetShaderStage(std::filesystem::path const & ShaderFilePath)
 {
-    std::filesystem::path const ShaderFileExtension = ShaderFilePath.extension();
-    return ShaderStageMap.at(ShaderFileExtension.string());
+    constexpr uint32 kVertexKey = ::MakeShaderKey(".vert");
+    constexpr uint32 kFragmentKey = ::MakeShaderKey(".frag");
+    constexpr uint32 kComputeKey = ::MakeShaderKey(".comp");
+
+    std::string const kFileExtension = ShaderFilePath.extension().string();
+    uint32 const kShaderStageKey = ::MakeShaderKey(kFileExtension.c_str());
+
+    GLSLangStage ShaderStage = {};
+
+    switch (kShaderStageKey)
+    {
+        case kVertexKey:
+            ShaderStage = GLSLANG_STAGE_VERTEX;
+            break;
+        case kFragmentKey:
+            ShaderStage = GLSLANG_STAGE_FRAGMENT;
+            break;
+        case kComputeKey:
+            ShaderStage = GLSLANG_STAGE_COMPUTE;
+            break;
+        default:
+            ShaderStage = GLSLANG_STAGE_COUNT;
+            break;
+    }
+
+    return ShaderStage;
 }
 
 bool const ShaderCompiler::CompileShader(std::filesystem::path const & ShaderFilePath, unsigned int *& OutputByteCode, uint64 & OutputByteCodeSizeInBytes, std::basic_string<Windows::TCHAR> & OutputErrorMessage)
@@ -260,35 +286,44 @@ bool const ShaderCompiler::CompileShader(std::filesystem::path const & ShaderFil
     {
         std::fstream ShaderFileStream = std::fstream(ShaderFilePath, std::fstream::in | std::fstream::binary);
 
-        uint64 const FileSizeInBytes = std::filesystem::file_size(ShaderFilePath);
+        uint64 const kFileSizeInBytes = std::filesystem::file_size(ShaderFilePath);
 
-        std::string FileContent = std::string(FileSizeInBytes, '\0');
-        if (ShaderFileStream.read(FileContent.data(), FileSizeInBytes))
+        std::string FileContent = std::string(kFileSizeInBytes, '\0');
+        if (ShaderFileStream.read(FileContent.data(), kFileSizeInBytes))
         {
             GLSLangShader * Shader = {};
             GLSLangProgram * Program = {};
 
             do
             {
-                GLSLangStage const ShaderStage = ::GetShaderStage(ShaderFilePath);
+                GLSLangStage const kShaderStage = ::GetShaderStage(ShaderFilePath);
+                if (kShaderStage == GLSLANG_STAGE_COUNT)
+                {
+                    OutputErrorMessage = "Unknown file extension for shader.";
+                    break;
+                }
 
-                GLSLangInput Input = {};
-                Input.language = GLSLANG_SOURCE_GLSL;
-                Input.client = GLSLANG_CLIENT_VULKAN;
-                Input.client_version = GLSLANG_TARGET_VULKAN_1_3;
-                Input.target_language = GLSLANG_TARGET_SPV;
-                Input.target_language_version = GLSLANG_TARGET_SPV_1_3;
-                Input.resource = &kDefaultResourceInfo;
-                Input.messages = GLSLANG_MSG_DEFAULT_BIT;
-                Input.default_profile = GLSLANG_NO_PROFILE;
-                Input.forward_compatible = 0l;
-                Input.stage = ShaderStage;
-                Input.code = FileContent.data();
+                GLSLangInput const kShaderInput =
+                {
+                    GLSLANG_SOURCE_GLSL,
+                    kShaderStage,
+                    GLSLANG_CLIENT_VULKAN,
+                    GLSLANG_TARGET_VULKAN_1_3,
+                    GLSLANG_TARGET_SPV,
+                    GLSLANG_TARGET_SPV_1_3,
+                    FileContent.data(),
+                    0l,
+                    GLSLANG_NO_PROFILE,
+                    0l,
+                    0l,
+                    static_cast<glslang_messages_t>(GLSLANG_MSG_DEFAULT_BIT | GLSLANG_MSG_VULKAN_RULES_BIT),
+                    &kDefaultResourceInfo,
+                };
 
-                Shader = glslang_shader_create(&Input);
+                Shader = glslang_shader_create(&kShaderInput);
 
                 /* This returns int, but this is implicitly cast from a bool */
-                if (!glslang_shader_preprocess(Shader, &Input))
+                if (!glslang_shader_preprocess(Shader, &kShaderInput))
                 {
                     std::basic_stringstream ErrorOutput = std::basic_stringstream<Windows::TCHAR>();
                     ErrorOutput << "Info Log:\n" << glslang_shader_get_info_log(Shader) << "\n";
@@ -298,7 +333,7 @@ bool const ShaderCompiler::CompileShader(std::filesystem::path const & ShaderFil
                     break;
                 }
 
-                if (!glslang_shader_parse(Shader, &Input))
+                if (!glslang_shader_parse(Shader, &kShaderInput))
                 {
                     std::basic_stringstream ErrorOutput = std::basic_stringstream<Windows::TCHAR>();
                     ErrorOutput << "Info Log:\n" << glslang_shader_get_info_log(Shader);
@@ -321,10 +356,10 @@ bool const ShaderCompiler::CompileShader(std::filesystem::path const & ShaderFil
                     break;
                 }
 
-                glslang_program_SPIRV_generate(Program, ShaderStage);
+                glslang_program_SPIRV_generate(Program, kShaderStage);
 
-                uint64 const ByteCodeSizeInWords = glslang_program_SPIRV_get_size(Program);
-                unsigned int * ByteCode = new unsigned int [ByteCodeSizeInWords];
+                uint64 const kByteCodeSizeInWords = glslang_program_SPIRV_get_size(Program);
+                unsigned int * const ByteCode = new unsigned int [kByteCodeSizeInWords];
 
                 glslang_program_SPIRV_get(Program, ByteCode);
 
@@ -339,7 +374,7 @@ bool const ShaderCompiler::CompileShader(std::filesystem::path const & ShaderFil
                     break;
                 }
 
-                OutputByteCodeSizeInBytes = ByteCodeSizeInWords * sizeof(unsigned int);
+                OutputByteCodeSizeInBytes = kByteCodeSizeInWords * sizeof(unsigned int);
                 OutputByteCode = ByteCode;
                 bResult = true;
             }
