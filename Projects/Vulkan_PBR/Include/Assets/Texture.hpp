@@ -31,7 +31,7 @@ namespace Assets::Texture
     extern bool const GetTextureData(uint32 const AssetHandle, TextureData & OutputTextureData);
 
     /* Run through all the new textures and create the resources + buffer the transfer */
-    extern bool const InitialiseNewTextureGPUResources(VkCommandBuffer CommandBuffer, Vulkan::Device::DeviceState const & DeviceState, VkFence const TransferFence);
+    extern bool const InitialiseGPUResources(VkCommandBuffer CommandBuffer, Vulkan::Device::DeviceState const & DeviceState, VkFence const TransferFence);
 
     /* Loads an existing texture asset from a file. This will pretty much just be loaded straight into memory */
     //extern bool const LoadTexture(std::filesystem::path const & FilePath, uint32 & OutputAssetHandle);
