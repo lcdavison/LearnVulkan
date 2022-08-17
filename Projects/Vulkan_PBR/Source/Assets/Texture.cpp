@@ -180,7 +180,7 @@ bool const Assets::Texture::GetTextureData(uint32 const AssetHandle, Assets::Tex
     return true;
 }
 
-bool const Assets::Texture::InitialiseNewTextureGPUResources(VkCommandBuffer CommandBuffer, Vulkan::Device::DeviceState const & DeviceState, VkFence const TransferFence)
+bool const Assets::Texture::InitialiseGPUResources(VkCommandBuffer CommandBuffer, Vulkan::Device::DeviceState const & DeviceState, VkFence const TransferFence)
 {
     while (NewTextureHandles.size() > 0u)
     {
