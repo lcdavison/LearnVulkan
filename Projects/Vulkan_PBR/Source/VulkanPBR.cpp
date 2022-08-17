@@ -11,6 +11,7 @@
 #include "Components/TransformComponent.hpp"
 #include "Components/MaterialComponent.hpp"
 
+#include "Assets/StaticMesh.hpp"
 #include "Assets/Texture.hpp"
 #include "Assets/Material.hpp"
 
@@ -83,7 +84,7 @@ static bool const SetupScene()
     static std::filesystem::path const kAssetDirectoryPath = std::filesystem::current_path() / "Assets";
 
     uint32 BoatHandle = {};
-    bool bFoundBoat = AssetManager::LoadMeshAsset("Fishing Boat/Boat.obj", BoatHandle);
+    bool bFoundBoat = Assets::StaticMesh::ImportStaticMesh(kAssetDirectoryPath / "Fishing Boat/Boat.obj", "Boat", BoatHandle);
 
     if (bFoundBoat)
     {
@@ -110,16 +111,13 @@ static bool const SetupScene()
         uint32 BoatActorHandle = {};
         Scene::CreateActor(PBRScene, BoatActorData, BoatActorHandle);
 
-        Components::StaticMesh::CreateComponent(BoatActorHandle, BoatHandle);
+        Components::StaticMesh::CreateComponent(PBRScene, BoatActorHandle, BoatHandle);
         Components::Transform::CreateComponent(BoatActorHandle, PBRScene);
         Components::Material::CreateComponent(PBRScene, BoatActorHandle, BoatMaterial);
 
         Math::Vector3 const Position = Math::Vector3 { 0.0f, 100.0f, -50.0f };
         float const Scale = 1.0f;
         Components::Transform::SetTransform(BoatActorHandle, &Position, nullptr, &Scale);
-
-        /* Temporary */
-        PBRScene.ComponentMasks [BoatActorHandle - 1u] |= static_cast<uint32>(Scene::ComponentMasks::StaticMesh);
     }
 
     return bFoundBoat;
