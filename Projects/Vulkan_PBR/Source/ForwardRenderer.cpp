@@ -12,6 +12,7 @@
 #include "Components/TransformComponent.hpp"
 #include "Components/MaterialComponent.hpp"
 
+#include "Assets/StaticMesh.hpp"
 #include "Assets/Texture.hpp"
 #include "Assets/Material.hpp"
 
@@ -124,9 +125,7 @@ static void CreateFrameState()
 {
     FrameState.CurrentFrameStateIndex = 0u;
 
-    uint8 constexpr kCommandBufferCount = { kFrameStateCount * 2u };
-
-    FrameState.CommandBuffers.resize(kCommandBufferCount); // Pre-Render Command Buffer and Render Command Buffer
+    FrameState.CommandBuffers.resize(kFrameStateCount); // Pre-Render Command Buffer and Render Command Buffer
     FrameState.FrameBuffers.resize(kFrameStateCount);
     FrameState.SceneColourImages.resize(kFrameStateCount);
     FrameState.SceneColourImageViews.resize(kFrameStateCount);
@@ -138,7 +137,7 @@ static void CreateFrameState()
     FrameState.LinearAllocators.resize(kFrameStateCount);
     FrameState.DescriptorAllocators.resize(kFrameStateCount);
 
-    Vulkan::Device::CreateCommandBuffers(DeviceState, VK_COMMAND_BUFFER_LEVEL_PRIMARY, kCommandBufferCount, FrameState.CommandBuffers);
+    Vulkan::Device::CreateCommandBuffers(DeviceState, VK_COMMAND_BUFFER_LEVEL_PRIMARY, kFrameStateCount, FrameState.CommandBuffers);
 
     for (uint8 CurrentImageIndex = {};
          CurrentImageIndex < kFrameStateCount;
@@ -357,21 +356,15 @@ static bool const CreateTorranceSparrowPipeline()
         VkPipelineDepthStencilStateCreateInfo const DepthStencilState = Vulkan::DepthStencilState(VK_TRUE, VK_TRUE, VK_COMPARE_OP_LESS);
         VkPipelineMultisampleStateCreateInfo const MultiSampleState = Vulkan::MultiSampleState();
 
-        VkPipelineViewportStateCreateInfo PipelineViewportState = {};
-        PipelineViewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
-        PipelineViewportState.viewportCount = 1u;
-        PipelineViewportState.scissorCount = 1u;
+        VkPipelineViewportStateCreateInfo const PipelineViewportState = Vulkan::ViewportState(1u, nullptr, 1u, nullptr);
 
-        std::array<VkDynamicState, 2u> DynamicStates =
+        std::array<VkDynamicState, 2u> const DynamicStates =
         {
             VK_DYNAMIC_STATE_VIEWPORT,
             VK_DYNAMIC_STATE_SCISSOR,
         };
 
-        VkPipelineDynamicStateCreateInfo DynamicState = {};
-        DynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-        DynamicState.dynamicStateCount = static_cast<uint32>(DynamicStates.size());
-        DynamicState.pDynamicStates = DynamicStates.data();
+        VkPipelineDynamicStateCreateInfo const DynamicState = Vulkan::DynamicState(static_cast<uint32>(DynamicStates.size()), DynamicStates.data());
 
         VkGraphicsPipelineCreateInfo const CreateInfo = Vulkan::GraphicsPipelineState(RenderPipelineLayout, MainRenderPass, 0u,
                                                                                       static_cast<uint32>(ShaderStages.size()), ShaderStages.data(),
@@ -465,7 +458,6 @@ static bool const CreateAndFillUniformBuffers(Scene::SceneData const & Scene, st
             ::memcpy_s(FrameUniformBufferAllocation.MappedAddress, FrameUniformBufferAllocation.SizeInBytes, &PerFrameData, sizeof(PerFrameData));
         }
     }
-    
 
     if (Scene.ActorCount > 0u)
     {
@@ -551,7 +543,14 @@ static void ResetCurrentFrameState()
 {
     LinearBufferAllocator::Reset(FrameState.LinearAllocators [FrameState.CurrentFrameStateIndex]);
 
+    //Vulkan::Descriptors::ResetDescriptorAllocator(DeviceState, FrameState.DescriptorAllocators [FrameState.CurrentFrameStateIndex]);
+
     vkResetFences(DeviceState.Device, 1u, &FrameState.Fences [FrameState.CurrentFrameStateIndex]);
+
+    VERIFY_VKRESULT(vkResetCommandBuffer(FrameState.CommandBuffers [FrameState.CurrentFrameStateIndex], 0u));
+
+    VkCommandBufferBeginInfo const BeginInfo = Vulkan::CommandBufferBegin();
+    VERIFY_VKRESULT(vkBeginCommandBuffer(FrameState.CommandBuffers [FrameState.CurrentFrameStateIndex], &BeginInfo));
 }
 
 static void ResizeViewport()
@@ -608,30 +607,18 @@ static bool const PreRender(Scene::SceneData const & Scene)
 
     ::ResetCurrentFrameState();
 
+    VkCommandBuffer & CommandBuffer = FrameState.CommandBuffers [FrameState.CurrentFrameStateIndex];
+
+    /* TODO: This should just check whether we have any new assets to upload */
     if (Scene.NewActorHandles.size() > 0u)
     {
-        VkCommandBufferBeginInfo BeginInfo = Vulkan::CommandBufferBegin();
-        VkCommandBuffer & CommandBuffer = FrameState.CommandBuffers [kFrameStateCount + FrameState.CurrentFrameStateIndex];
-
-        VERIFY_VKRESULT(vkResetCommandBuffer(CommandBuffer, 0u));
-        VERIFY_VKRESULT(vkBeginCommandBuffer(CommandBuffer, &BeginInfo));
-
-        for (uint32 const ActorHandle : Scene.NewActorHandles)
-        {
-            if (Scene::DoesActorHaveComponents(Scene, ActorHandle, static_cast<uint32>(Scene::ComponentMasks::StaticMesh)))
-            {
-                Components::StaticMesh::CreateGPUResources(ActorHandle, DeviceState);
-                Components::StaticMesh::TransferToGPU(ActorHandle, CommandBuffer, DeviceState, FrameState.Fences [FrameState.CurrentFrameStateIndex]);
-            }
-        }
-
-        Assets::Texture::InitialiseNewTextureGPUResources(CommandBuffer, DeviceState, FrameState.Fences [FrameState.CurrentFrameStateIndex]);
-
-        vkEndCommandBuffer(CommandBuffer);
-
-        VkSubmitInfo const SubmitInfo = Vulkan::SubmitInfo(1u, &CommandBuffer);
-        VERIFY_VKRESULT(vkQueueSubmit(DeviceState.GraphicsQueue, 1u, &SubmitInfo, VK_NULL_HANDLE));
+        Assets::StaticMesh::InitialiseGPUResources(CommandBuffer, DeviceState, FrameState.Fences [FrameState.CurrentFrameStateIndex]);
+        Assets::Texture::InitialiseGPUResources(CommandBuffer, DeviceState, FrameState.Fences [FrameState.CurrentFrameStateIndex]);
     }
+
+    std::vector<LinearBufferAllocator::Allocation> UniformBufferAllocations = {};
+    ::CreateAndFillUniformBuffers(Scene, UniformBufferAllocations);
+    ::UpdateFrameUniformBufferDescriptor(UniformBufferAllocations);
 
     return true;
 }
@@ -752,18 +739,7 @@ void ForwardRenderer::Render(Scene::SceneData const & Scene)
         return;
     }
 
-    VkCommandBuffer & CurrentCommandBuffer = FrameState.CommandBuffers [FrameState.CurrentFrameStateIndex];
-
-    VERIFY_VKRESULT(vkResetCommandBuffer(CurrentCommandBuffer, 0u));
-
-    {
-        VkCommandBufferBeginInfo BeginInfo = Vulkan::CommandBufferBegin();
-        VERIFY_VKRESULT(vkBeginCommandBuffer(CurrentCommandBuffer, &BeginInfo));
-    }
-
-    std::vector<LinearBufferAllocator::Allocation> UniformBufferAllocations = {};
-    ::CreateAndFillUniformBuffers(Scene, UniformBufferAllocations);
-    ::UpdateFrameUniformBufferDescriptor(UniformBufferAllocations);
+    VkCommandBuffer & CommandBuffer = FrameState.CommandBuffers [FrameState.CurrentFrameStateIndex];
 
     {
         std::array<VkClearValue, 3u> AttachmentClearValues =
@@ -778,15 +754,15 @@ void ForwardRenderer::Render(Scene::SceneData const & Scene)
 
         VkRenderPassBeginInfo const BeginInfo = Vulkan::RenderPassBegin(MainRenderPass, CurrentFrameBuffer, VkRect2D { VkOffset2D { 0u, 0u }, ViewportState.ImageExtents }, static_cast<uint32>(AttachmentClearValues.size()), AttachmentClearValues.data());
 
-        vkCmdBeginRenderPass(CurrentCommandBuffer, &BeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+        vkCmdBeginRenderPass(CommandBuffer, &BeginInfo, VK_SUBPASS_CONTENTS_INLINE);
     }
 
-    vkCmdSetViewport(CurrentCommandBuffer, 0u, 1u, &ViewportState.DynamicViewport);
-    vkCmdSetScissor(CurrentCommandBuffer, 0u, 1u, &ViewportState.DynamicScissorRect);
+    vkCmdSetViewport(CommandBuffer, 0u, 1u, &ViewportState.DynamicViewport);
+    vkCmdSetScissor(CommandBuffer, 0u, 1u, &ViewportState.DynamicScissorRect);
 
-    vkCmdBindPipeline(CurrentCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, RenderPipeline);
+    vkCmdBindPipeline(CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, RenderPipeline);
 
-    vkCmdBindDescriptorSets(CurrentCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, RenderPipelineLayout, 0u, 1u, &FrameState.DescriptorSets [FrameState.CurrentFrameStateIndex << 1u], 0u, nullptr);
+    vkCmdBindDescriptorSets(CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, RenderPipelineLayout, 0u, 1u, &FrameState.DescriptorSets [FrameState.CurrentFrameStateIndex << 1u], 0u, nullptr);
 
     for (uint32 CurrentActorHandle = { 1u };
          CurrentActorHandle <= Scene.ActorCount;
@@ -797,59 +773,59 @@ void ForwardRenderer::Render(Scene::SceneData const & Scene)
             /* TODO: Render with material */
             /* TODO: Per draw descriptor set */
 
-            Components::StaticMesh::StaticMeshData CurrentMeshData = {};
-            bool bHasResources = Components::StaticMesh::GetStaticMeshResources(CurrentActorHandle, CurrentMeshData);
+            Components::StaticMesh::ComponentData MeshComponentData = {};
+            bool bHasData = Components::StaticMesh::GetComponentData(Scene, CurrentActorHandle, MeshComponentData);
 
-            Components::Material::ComponentData MaterialData = {};
-            bHasResources &= Components::Material::GetComponentData(Scene, CurrentActorHandle, MaterialData);
+            Assets::StaticMesh::AssetData MeshData = {};
+            bHasData &= Assets::StaticMesh::GetAssetData(MeshComponentData.AssetHandle, MeshData);
 
-            if (bHasResources)
+            /*Components::Material::ComponentData MaterialData = {};
+            bHasResources &= Components::Material::GetComponentData(Scene, CurrentActorHandle, MaterialData);*/
+
+            if (bHasData)
             {
-                Vulkan::Resource::Buffer VertexBuffer = {};
-                Vulkan::Resource::Buffer NormalBuffer = {};
-                Vulkan::Resource::Buffer UVBuffer = {};
-                Vulkan::Resource::Buffer IndexBuffer = {};
+                std::array<Vulkan::Resource::Buffer, 4u> MeshBuffers = {};
 
-                Vulkan::Resource::GetBuffer(CurrentMeshData.VertexBuffer, VertexBuffer);
-                Vulkan::Resource::GetBuffer(CurrentMeshData.NormalBuffer, NormalBuffer);
-                Vulkan::Resource::GetBuffer(CurrentMeshData.UVBuffer, UVBuffer);
-                Vulkan::Resource::GetBuffer(CurrentMeshData.IndexBuffer, IndexBuffer);
+                Vulkan::Resource::GetBuffer(MeshData.VertexBufferHandle, MeshBuffers [0u]);
+                Vulkan::Resource::GetBuffer(MeshData.NormalBufferHandle, MeshBuffers [1u]);
+                Vulkan::Resource::GetBuffer(MeshData.UVBufferHandle, MeshBuffers [2u]);
+                Vulkan::Resource::GetBuffer(MeshData.IndexBufferHandle, MeshBuffers [3u]);
 
-                vkCmdBindIndexBuffer(CurrentCommandBuffer, IndexBuffer.Resource, 0u, VK_INDEX_TYPE_UINT32);
+                vkCmdBindIndexBuffer(CommandBuffer, MeshBuffers [3u].Resource, 0u, VK_INDEX_TYPE_UINT32);
 
                 {
                     std::array<VkBuffer, 3u> const VertexBuffers =
                     {
-                        VertexBuffer.Resource,
-                        NormalBuffer.Resource,
-                        UVBuffer.Resource,
+                        MeshBuffers [0u].Resource,
+                        MeshBuffers [1u].Resource,
+                        MeshBuffers [2u].Resource,
                     };
 
                     std::array const BufferOffsets = std::array<VkDeviceSize, VertexBuffers.size()>();
 
-                    vkCmdBindVertexBuffers(CurrentCommandBuffer, 0u, static_cast<uint32>(VertexBuffers.size()), VertexBuffers.data(), BufferOffsets.data());
+                    vkCmdBindVertexBuffers(CommandBuffer, 0u, static_cast<uint32>(VertexBuffers.size()), VertexBuffers.data(), BufferOffsets.data());
                 }
 
-                vkCmdDrawIndexed(CurrentCommandBuffer, CurrentMeshData.IndexCount, 1u, 0u, 0u, 0u);
+                vkCmdDrawIndexed(CommandBuffer, MeshData.IndexCount, 1u, 0u, 0u, 0u);
             }
         }
     }
 
-    vkCmdNextSubpass(CurrentCommandBuffer, VK_SUBPASS_CONTENTS_INLINE);
+    vkCmdNextSubpass(CommandBuffer, VK_SUBPASS_CONTENTS_INLINE);
 
-    vkCmdBindPipeline(CurrentCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, OutputPipelineState);
-    vkCmdBindDescriptorSets(CurrentCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, OutputPipelineLayout, 0u, 1u, &FrameState.DescriptorSets [(FrameState.CurrentFrameStateIndex << 1u) + 1u], 0u, nullptr);
+    vkCmdBindPipeline(CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, OutputPipelineState);
+    vkCmdBindDescriptorSets(CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, OutputPipelineLayout, 0u, 1u, &FrameState.DescriptorSets [(FrameState.CurrentFrameStateIndex << 1u) + 1u], 0u, nullptr);
 
-    vkCmdDraw(CurrentCommandBuffer, 3u, 1u, 0u, 0u);
+    vkCmdDraw(CommandBuffer, 3u, 1u, 0u, 0u);
 
-    vkCmdEndRenderPass(CurrentCommandBuffer);
+    vkCmdEndRenderPass(CommandBuffer);
 
-    vkEndCommandBuffer(CurrentCommandBuffer);
+    VERIFY_VKRESULT(vkEndCommandBuffer(CommandBuffer));
 
     {
         VkPipelineStageFlags const PipelineWaitStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 
-        VkSubmitInfo const SubmitInfo = Vulkan::SubmitInfo(1u, &CurrentCommandBuffer,
+        VkSubmitInfo const SubmitInfo = Vulkan::SubmitInfo(1u, &CommandBuffer,
                                                            1u, &FrameState.Semaphores [kFrameStateCount + FrameState.CurrentFrameStateIndex], // Signal
                                                            1u, &FrameState.Semaphores [FrameState.CurrentFrameStateIndex], // Wait
                                                            &PipelineWaitStage);
