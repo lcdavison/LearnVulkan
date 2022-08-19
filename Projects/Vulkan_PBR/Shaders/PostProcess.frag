@@ -41,7 +41,7 @@ void main()
     vec3 LinearXYZ = RGBToXYZ * LinearRGB;
     vec2 Chromaticity = vec2(LinearXYZ.xy) / (LinearXYZ.x + LinearXYZ.y + LinearXYZ.z);
 
-    float ToneMappedLuminance = 1.0f - exp(-LinearXYZ.y * 0.4f);
+    float ToneMappedLuminance = 1.0f - exp(-LinearXYZ.y * 0.5f);
     //float ToneMappedLuminance = LinearXYZ.y / (LinearXYZ.y + 1.0f);
 
     LinearXYZ.x = ToneMappedLuminance * (Chromaticity.x / Chromaticity.y);
