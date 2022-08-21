@@ -146,7 +146,7 @@ static void CreateFrameState()
         Vulkan::ImageDescriptor ImageDescriptor =
         {
             VK_IMAGE_TYPE_2D,
-            VK_FORMAT_R32G32B32A32_SFLOAT,
+            VK_FORMAT_R16G16B16A16_SFLOAT,
             ViewportState.ImageExtents.width,
             ViewportState.ImageExtents.height,
             1u,
@@ -169,7 +169,7 @@ static void CreateFrameState()
         Vulkan::ImageViewDescriptor ImageViewDesc =
         {
             VK_IMAGE_VIEW_TYPE_2D,
-            VK_FORMAT_R32G32B32A32_SFLOAT,
+            VK_FORMAT_R16G16B16A16_SFLOAT,
             VK_IMAGE_ASPECT_COLOR_BIT,
             0u, 1u,
             0u, 1u,
@@ -245,7 +245,7 @@ static bool const CreateMainRenderPass()
 
     std::array<VkAttachmentDescription, 3u> const Attachments =
     {
-        Vulkan::Attachment(VK_FORMAT_R32G32B32A32_SFLOAT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE, VK_SAMPLE_COUNT_1_BIT),
+        Vulkan::Attachment(VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE, VK_SAMPLE_COUNT_1_BIT),
         Vulkan::Attachment(VK_FORMAT_D24_UNORM_S8_UINT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE, VK_SAMPLE_COUNT_1_BIT),
         Vulkan::Attachment(VK_FORMAT_B8G8R8A8_UNORM, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE, VK_SAMPLE_COUNT_1_BIT),
     };
