@@ -4,13 +4,13 @@ layout (input_attachment_index = 0u, set = 0u, binding = 0u) uniform subpassInpu
 
 layout (location = 0u) out vec4 OutputColour;
 
-mat3x3 RGBToXYZ = mat3x3(0.49000f, 0.31000f, 0.20000f,
-                         0.17697f, 0.81240f, 0.01063f,
-                         0.00000f, 0.01000f, 0.99000f);
+mat3x3 SRGBToXYZ = mat3x3(0.412391f, 0.357584f, 0.180481f,
+                          0.212639f, 0.715169f, 0.072192f,
+                          0.019331f, 0.119195f, 0.950532f);
 
-mat3x3 XYZToRGB = mat3x3( 2.36461385f, -0.89654057f, -0.46807328f,
-                         -0.51516621f,  1.42640810f,  0.08875810f,
-                          0.00520370f, -0.01440816f,  1.00920446f);
+mat3x3 XYZToSRGB = mat3x3( 3.240970f, -1.537383f, -0.498611f,
+                          -0.969244f,  1.875968f,  0.041555f,
+                           0.055630f, -0.203977f,  1.056972f);
 
 const float kGammaCorrectionExponent = 1.0f / 2.4f;
 
@@ -38,7 +38,7 @@ void main()
 {
     vec3 LinearRGB = subpassLoad(SceneColour).rgb;
 
-    vec3 LinearXYZ = RGBToXYZ * LinearRGB;
+    vec3 LinearXYZ = SRGBToXYZ * LinearRGB;
     vec2 Chromaticity = vec2(LinearXYZ.xy) / (LinearXYZ.x + LinearXYZ.y + LinearXYZ.z);
 
     float ToneMappedLuminance = 1.0f - exp(-LinearXYZ.y * 0.5f);
@@ -48,7 +48,7 @@ void main()
     LinearXYZ.y = ToneMappedLuminance;
     LinearXYZ.z = ToneMappedLuminance * (1.0f - Chromaticity.x - Chromaticity.y) / Chromaticity.y;
 
-    LinearRGB = XYZToRGB * LinearXYZ;
+    LinearRGB = XYZToSRGB * LinearXYZ;
 
     vec3 OutputRGB = LinearRGBToSRGB(LinearRGB);
 
