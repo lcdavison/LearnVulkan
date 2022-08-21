@@ -67,11 +67,9 @@ float EvaluateGeometricFactor(float CosineOfDirectionSN, float Roughness)
            : 0.0f;
 }
 
-vec3 EvaluateTorranceSparrowBRDF(MaterialInputs Material, vec3 MicroNormalWS, vec3 LightDirectionWS, vec3 ViewDirectionWS, float CosineOfLightAngleSN, vec3 FresnelReflectance)
+vec3 EvaluateTorranceSparrowBRDF(MaterialInputs Material, vec3 MicroNormalWS, vec3 LightDirectionWS, vec3 ViewDirectionWS, float CosineOfLightAngleSN, float CosineOfViewAngleFN, vec3 FresnelReflectance)
 {
-    float CosineOfViewAngleSN = abs(Material.MacroNormalWSAndCosineOfViewAngleSN.w);
-    float CosineOfViewAngleFN = max(dot(MicroNormalWS, ViewDirectionWS), 0.0f);
-
+    float CosineOfViewAngleSN = abs(Material.MacroNormalWSAndCosineOfViewAngleSN.w) + 0.0001f;
     float CosineOfLightAngleFN = max(dot(MicroNormalWS, LightDirectionWS), 0.0f);
 
     float BeckmannDistribution = EvaluateBeckmannDistribution(MicroNormalWS, Material.MacroNormalWSAndCosineOfViewAngleSN.xyz, Material.SpecularReflectanceAndRoughness.w);
@@ -79,7 +77,7 @@ vec3 EvaluateTorranceSparrowBRDF(MaterialInputs Material, vec3 MicroNormalWS, ve
                           / (1.0f + EvaluateGeometricFactor(CosineOfLightAngleSN, Material.SpecularReflectanceAndRoughness.w) 
                                   + EvaluateGeometricFactor(CosineOfViewAngleSN, Material.SpecularReflectanceAndRoughness.w));
 
-    return GeometricFactor * BeckmannDistribution * FresnelReflectance / (4.0f * abs(dot(Material.MacroNormalWSAndCosineOfViewAngleSN.xyz, LightDirectionWS)) * CosineOfViewAngleSN);
+    return GeometricFactor * BeckmannDistribution * FresnelReflectance / (4.0f * abs(CosineOfLightAngleSN) * CosineOfViewAngleSN);
 }
 
 vec3 EvaluateLighting(vec3 LinearRGB, vec3 LightDirectionWS, vec3 ViewDirectionWS, vec3 LightRadiance, MaterialInputs Material)
@@ -93,12 +91,16 @@ vec3 EvaluateLighting(vec3 LinearRGB, vec3 LightDirectionWS, vec3 ViewDirectionW
         float CosineOfViewAngleFN = abs(dot(MicroNormalWS, ViewDirectionWS));
         float CosineOfLightAngleFN = max(dot(MicroNormalWS, LightDirectionWS), 0.0f);
 
-        vec3 FresnelLightAngle = EvaluateFresnelReflectance(CosineOfLightAngleFN, Material.SpecularReflectanceAndRoughness.xyz);
-        vec3 FresnelViewAngle = EvaluateFresnelReflectance(CosineOfViewAngleFN, Material.SpecularReflectanceAndRoughness.xyz);
-        vec3 DiffuseBRDFConstant = 21.0f * (1.0f - Material.SpecularReflectanceAndRoughness.xyz) / (20.0f * 3.1415926f);
+        vec3 FresnelReflectance = EvaluateFresnelReflectance(CosineOfViewAngleFN, Material.SpecularReflectanceAndRoughness.xyz);
 
-        vec3 DiffuseBRDF = DiffuseBRDFConstant * (1.0f - FresnelLightAngle) * (1.0f - FresnelViewAngle) * EvaluateDiffuseBRDF(Material.DiffuseReflectanceAndAmbientOcclusion.xyz);
-        vec3 SpecularBRDF = EvaluateTorranceSparrowBRDF(Material, MicroNormalWS, LightDirectionWS, ViewDirectionWS, CosineOfLightAngleSN, FresnelLightAngle);
+        vec3 DiffuseCoefficients [2u] =
+        {
+            21.0f * (1.0f - Material.SpecularReflectanceAndRoughness.xyz) / (20.0f * 3.1415926f),
+            (1.0f - FresnelReflectance),
+        };
+
+        vec3 DiffuseBRDF = DiffuseCoefficients [0u] * DiffuseCoefficients [1u] * DiffuseCoefficients [1u] * EvaluateDiffuseBRDF(Material.DiffuseReflectanceAndAmbientOcclusion.xyz);
+        vec3 SpecularBRDF = EvaluateTorranceSparrowBRDF(Material, MicroNormalWS, LightDirectionWS, ViewDirectionWS, CosineOfLightAngleSN, CosineOfViewAngleFN, FresnelReflectance);
 
         LinearRGB += LightRadiance * CosineOfLightAngleSN * (DiffuseBRDF + SpecularBRDF);
     }
@@ -111,7 +113,7 @@ void main()
     vec3 ViewDirectionWS = normalize(ViewPositionWS - FragmentPositionWS);
 
     MaterialInputs Material;
-    Material.SpecularReflectanceAndRoughness.xyz = max(min(SRGBToLinearRGBApproximate(texture(sampler2D(SpecularTexture, AnisotropicSampler), FragmentUV.xy).rgb), 1.0f), 0.0f);
+    Material.SpecularReflectanceAndRoughness.xyz = SRGBToLinearRGBApproximate(texture(sampler2D(SpecularTexture, AnisotropicSampler), FragmentUV.xy).rgb);
     Material.SpecularReflectanceAndRoughness.w = 1.0f - texture(sampler2D(GlossTexture, LinearSampler), FragmentUV.xy).r;
     //Material.SpecularReflectanceAndRoughness.w *= Material.SpecularReflectanceAndRoughness.w;
     Material.SpecularReflectanceAndRoughness.w = max(Material.SpecularReflectanceAndRoughness.w, 0.04f);
@@ -122,16 +124,19 @@ void main()
     Material.MacroNormalWSAndCosineOfViewAngleSN.xyz = normalize(FragmentNormalWS);
     Material.MacroNormalWSAndCosineOfViewAngleSN.w = dot(Material.MacroNormalWSAndCosineOfViewAngleSN.xyz, ViewDirectionWS);
 
+    const float kPointLightRadius = 16.0f;
+    const vec3 kPointLightRadiance = vec3(1000.0f);
     const vec3 kPointLightPositionWS = vec3(25.0f, 100.0f, 200.0f);
     vec3 PointLightDirectionWS = kPointLightPositionWS - FragmentPositionWS;
-    vec3 PointLightRadiance = 2500.0f * vec3(1.0f, 1.0f, 1.0f) * 64.0f / dot(PointLightDirectionWS, PointLightDirectionWS);
+    vec3 PointLightRadiance = kPointLightRadiance * kPointLightRadius / dot(PointLightDirectionWS, PointLightDirectionWS);
     PointLightDirectionWS = normalize(PointLightDirectionWS);
 
     const vec3 kSunDirectionWS = normalize(-1.0f * vec3(-1.0f, 1.0f, -1.0f));
+    const vec3 kSunRadiance = vec3(4.0f);
 
     vec3 LinearRGB = 0.1f * EvaluateDiffuseBRDF(Material.DiffuseReflectanceAndAmbientOcclusion.xyz);
     LinearRGB = EvaluateLighting(LinearRGB, PointLightDirectionWS, ViewDirectionWS, PointLightRadiance, Material);
-    LinearRGB = EvaluateLighting(LinearRGB, kSunDirectionWS, ViewDirectionWS, vec3(8.0f), Material);
+    LinearRGB = EvaluateLighting(LinearRGB, kSunDirectionWS, ViewDirectionWS, kSunRadiance, Material);
     LinearRGB *= Material.DiffuseReflectanceAndAmbientOcclusion.w;
 
     FragmentColour = vec4(LinearRGB, 1.0f);
