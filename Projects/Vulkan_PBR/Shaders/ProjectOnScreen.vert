@@ -17,11 +17,11 @@ layout (location = 0) in vec3 Position;
 layout (location = 1) in vec3 Normal;
 layout (location = 2) in vec3 UV;
 
-layout (location = 0) out vec3 FragmentColour;
-layout (location = 1) out vec3 FragmentNormal;
-layout (location = 2) out vec3 FragmentWorldPosition;
+layout (location = 0) out vec3 FragmentPositionWS;
+layout (location = 1) out vec3 FragmentPositionVS;
+layout (location = 2) out vec3 FragmentNormal;
 layout (location = 3) out vec3 FragmentUV;
-layout (location = 4) out vec3 ViewPositionWorldSpace;
+layout (location = 4) out vec3 ViewPositionWS;
 
 const vec3 DiffuseAlbedo = vec3(0.1f, 0.1f, 0.8f);
 
@@ -34,13 +34,13 @@ void main()
 {
     mat4x4 Transformation = ModelToWorldMatrix * UpAxisConversion;
 
-    vec4 WorldPosition = Transformation * vec4(Position.xyz, 1.0f);
+    vec4 PositionWS = Transformation * vec4(Position.xyz, 1.0f);
+    vec4 PositionVS = WorldToViewMatrix * PositionWS;
+    gl_Position = ViewToClipMatrix * PositionVS;
 
-    gl_Position = ViewToClipMatrix * (WorldToViewMatrix) * WorldPosition;
-
-    FragmentColour = DiffuseAlbedo;
+    FragmentPositionWS = PositionWS.xyz;
+    FragmentPositionVS = PositionVS.xyz;
     FragmentNormal = (vec4(Normal.xyz, 0.0f) * inverse(Transformation)).xyz;
-    FragmentWorldPosition = WorldPosition.xyz;
     FragmentUV = UV;
-    ViewPositionWorldSpace = (inverse(WorldToViewMatrix) [3u]).xyz;
+    ViewPositionWS = (inverse(WorldToViewMatrix) [3u]).xyz;
 }
