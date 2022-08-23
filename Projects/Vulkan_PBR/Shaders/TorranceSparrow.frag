@@ -32,10 +32,18 @@ vec3 SRGBToLinearRGBApproximate(vec3 SRGB)
     return pow(SRGB, vec3(2.2f));
 }
 
-vec3 EvaluateDiffuseBRDF(vec3 Albedo)
+vec3 EvaluateDiffuseBRDF(MaterialInputs Material, float CosineOfLightAngleSN)
 {
-    const float kInversePI = 1.0f / 3.1415926f;
-    return Albedo * kInversePI;
+    float CosineOfViewAngleSN = max(Material.MacroNormalWSAndCosineOfViewAngleSN.w, 0.0f);
+
+    float DiffuseCoefficients [3u] =
+    {
+        28.0f / (23.0f * 3.1415926f),
+        (1.0f - pow(1.0f - CosineOfLightAngleSN * 0.5f, 5.0f)),
+        (1.0f - pow(1.0f - CosineOfViewAngleSN * 0.5f, 5.0f)),
+    };
+
+    return DiffuseCoefficients [0u] * DiffuseCoefficients [1u] * DiffuseCoefficients [2u] * (1.0f - Material.SpecularReflectanceAndRoughness.xyz) * Material.DiffuseReflectanceAndAmbientOcclusion.xyz;
 }
 
 vec3 EvaluateFresnelReflectance(float CosineOfViewAndNormal, vec3 SpecularReflectanceNormalIncidence)
@@ -93,13 +101,7 @@ vec3 EvaluateLighting(vec3 LinearRGB, vec3 LightDirectionWS, vec3 ViewDirectionW
 
         vec3 FresnelReflectance = EvaluateFresnelReflectance(CosineOfViewAngleFN, Material.SpecularReflectanceAndRoughness.xyz);
 
-        vec3 DiffuseCoefficients [2u] =
-        {
-            21.0f * (1.0f - Material.SpecularReflectanceAndRoughness.xyz) / (20.0f * 3.1415926f),
-            (1.0f - FresnelReflectance),
-        };
-
-        vec3 DiffuseBRDF = DiffuseCoefficients [0u] * DiffuseCoefficients [1u] * DiffuseCoefficients [1u] * EvaluateDiffuseBRDF(Material.DiffuseReflectanceAndAmbientOcclusion.xyz);
+        vec3 DiffuseBRDF = EvaluateDiffuseBRDF(Material, CosineOfLightAngleSN);
         vec3 SpecularBRDF = EvaluateTorranceSparrowBRDF(Material, MicroNormalWS, LightDirectionWS, ViewDirectionWS, CosineOfLightAngleSN, CosineOfViewAngleFN, FresnelReflectance);
 
         LinearRGB += LightRadiance * CosineOfLightAngleSN * (DiffuseBRDF + SpecularBRDF);
@@ -134,7 +136,7 @@ void main()
     const vec3 kSunDirectionWS = normalize(-1.0f * vec3(-1.0f, 1.0f, -1.0f));
     const vec3 kSunRadiance = vec3(4.0f);
 
-    vec3 LinearRGB = 0.1f * EvaluateDiffuseBRDF(Material.DiffuseReflectanceAndAmbientOcclusion.xyz);
+    vec3 LinearRGB = 0.1f * Material.DiffuseReflectanceAndAmbientOcclusion.xyz / 3.1415926f;
     LinearRGB = EvaluateLighting(LinearRGB, PointLightDirectionWS, ViewDirectionWS, PointLightRadiance, Material);
     LinearRGB = EvaluateLighting(LinearRGB, kSunDirectionWS, ViewDirectionWS, kSunRadiance, Material);
     LinearRGB *= Material.DiffuseReflectanceAndAmbientOcclusion.w;
