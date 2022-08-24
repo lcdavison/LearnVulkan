@@ -32,18 +32,9 @@ vec3 SRGBToLinearRGBApproximate(vec3 SRGB)
     return pow(SRGB, vec3(2.2f));
 }
 
-vec3 EvaluateDiffuseBRDF(MaterialInputs Material, float CosineOfLightAngleSN)
+vec3 EvaluateDiffuseBRDF(MaterialInputs Material)
 {
-    float CosineOfViewAngleSN = max(Material.MacroNormalWSAndCosineOfViewAngleSN.w, 0.0f);
-
-    float DiffuseCoefficients [3u] =
-    {
-        28.0f / (23.0f * 3.1415926f),
-        (1.0f - pow(1.0f - CosineOfLightAngleSN * 0.5f, 5.0f)),
-        (1.0f - pow(1.0f - CosineOfViewAngleSN * 0.5f, 5.0f)),
-    };
-
-    return DiffuseCoefficients [0u] * DiffuseCoefficients [1u] * DiffuseCoefficients [2u] * (1.0f - Material.SpecularReflectanceAndRoughness.xyz) * Material.DiffuseReflectanceAndAmbientOcclusion.xyz;
+    return Material.DiffuseReflectanceAndAmbientOcclusion.xyz / 3.1415926f;
 }
 
 vec3 EvaluateFresnelReflectance(float CosineOfViewAndNormal, vec3 SpecularReflectanceNormalIncidence)
@@ -101,7 +92,7 @@ vec3 EvaluateLighting(vec3 LinearRGB, vec3 LightDirectionWS, vec3 ViewDirectionW
 
         vec3 FresnelReflectance = EvaluateFresnelReflectance(CosineOfViewAngleFN, Material.SpecularReflectanceAndRoughness.xyz);
 
-        vec3 DiffuseBRDF = EvaluateDiffuseBRDF(Material, CosineOfLightAngleSN);
+        vec3 DiffuseBRDF = EvaluateDiffuseBRDF(Material);
         vec3 SpecularBRDF = EvaluateTorranceSparrowBRDF(Material, MicroNormalWS, LightDirectionWS, ViewDirectionWS, CosineOfLightAngleSN, CosineOfViewAngleFN, FresnelReflectance);
 
         LinearRGB += LightRadiance * CosineOfLightAngleSN * (DiffuseBRDF + SpecularBRDF);
