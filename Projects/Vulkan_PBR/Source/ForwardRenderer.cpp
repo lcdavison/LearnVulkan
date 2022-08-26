@@ -523,20 +523,16 @@ static void UpdateFrameUniformBufferDescriptor(std::vector<LinearBufferAllocator
     ImageViewsAndSamplers [ImageViewsAndSamplers.size() - 2u].sampler = AnisotropicImageSampler;
     ImageViewsAndSamplers [ImageViewsAndSamplers.size() - 1u].sampler = LinearImageSampler;
 
-    std::array<VkWriteDescriptorSet, 9u> const DescriptorWrites =
+    std::array<VkWriteDescriptorSet, 5u> const kDescriptors =
     {
         Vulkan::WriteDescriptorSet(FrameState.DescriptorSets [FrameState.CurrentFrameStateIndex << 1u], VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 0u, 1u, &UniformBufferDescs [0u], nullptr),
         Vulkan::WriteDescriptorSet(FrameState.DescriptorSets [FrameState.CurrentFrameStateIndex << 1u], VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1u, 1u, &UniformBufferDescs [1u], nullptr),
-        Vulkan::WriteDescriptorSet(FrameState.DescriptorSets [FrameState.CurrentFrameStateIndex << 1u], VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 2u, 1u, nullptr, &ImageViewsAndSamplers [0u]),
-        Vulkan::WriteDescriptorSet(FrameState.DescriptorSets [FrameState.CurrentFrameStateIndex << 1u], VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 3u, 1u, nullptr, &ImageViewsAndSamplers [1u]),
-        Vulkan::WriteDescriptorSet(FrameState.DescriptorSets [FrameState.CurrentFrameStateIndex << 1u], VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 4u, 1u, nullptr, &ImageViewsAndSamplers [2u]),
-        Vulkan::WriteDescriptorSet(FrameState.DescriptorSets [FrameState.CurrentFrameStateIndex << 1u], VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 5u, 1u, nullptr, &ImageViewsAndSamplers [2u]),
-        Vulkan::WriteDescriptorSet(FrameState.DescriptorSets [FrameState.CurrentFrameStateIndex << 1u], VK_DESCRIPTOR_TYPE_SAMPLER, 6u, 1u, nullptr, &ImageViewsAndSamplers [ImageViewsAndSamplers.size() - 2u]),
-        Vulkan::WriteDescriptorSet(FrameState.DescriptorSets [FrameState.CurrentFrameStateIndex << 1u], VK_DESCRIPTOR_TYPE_SAMPLER, 7u, 1u, nullptr, &ImageViewsAndSamplers [ImageViewsAndSamplers.size() - 1u]),
+        Vulkan::WriteDescriptorSet(FrameState.DescriptorSets [FrameState.CurrentFrameStateIndex << 1u], VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 2u, 5u, nullptr, ImageViewsAndSamplers.data()),
+        Vulkan::WriteDescriptorSet(FrameState.DescriptorSets [FrameState.CurrentFrameStateIndex << 1u], VK_DESCRIPTOR_TYPE_SAMPLER, 7u, 2u, nullptr, &ImageViewsAndSamplers [ImageViewsAndSamplers.size() - 2u]),
         Vulkan::WriteDescriptorSet(FrameState.DescriptorSets [(FrameState.CurrentFrameStateIndex << 1u) + 1u], VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 0u, 1u, nullptr, &InputAttachmentDesc),
     };
 
-    vkUpdateDescriptorSets(DeviceState.Device, static_cast<uint32>(DescriptorWrites.size()), DescriptorWrites.data(), 0u, nullptr);
+    vkUpdateDescriptorSets(DeviceState.Device, static_cast<uint32>(kDescriptors.size()), kDescriptors.data(), 0u, nullptr);
 }
 
 static void ResetCurrentFrameState()
