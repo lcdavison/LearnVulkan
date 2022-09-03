@@ -142,39 +142,48 @@ Math::Matrix4x4 const Math::Matrix4x4::Inverse(Matrix4x4 const & Matrix)
 {
     /* This can be derived using Grassmann algebra, making use of (A ^ B ^ C ^ D) as the 4D Hypervolume (Determinant) */
 
-    Vector3 const & Column0 = reinterpret_cast<Vector3 const &>(Matrix [Math::Matrix4x4::Index { 0u, 0u }]);
-    Vector3 const & Column1 = reinterpret_cast<Vector3 const &>(Matrix [Math::Matrix4x4::Index { 0u, 1u }]);
-    Vector3 const & Column2 = reinterpret_cast<Vector3 const &>(Matrix [Math::Matrix4x4::Index { 0u, 2u }]);
-    Vector3 const & Column3 = reinterpret_cast<Vector3 const &>(Matrix [Math::Matrix4x4::Index { 0u, 3u }]);
+    std::array<Math::Vector3 const *, 4u> const kColumns =
+    {
+        reinterpret_cast<Vector3 const *>(&Matrix.Data [0u << 2u]),
+        reinterpret_cast<Vector3 const *>(&Matrix.Data [1u << 2u]),
+        reinterpret_cast<Vector3 const *>(&Matrix.Data [2u << 2u]),
+        reinterpret_cast<Vector3 const *>(&Matrix.Data [3u << 2u]),
+    };
 
-    Math::Vector3 Col0CrossCol1 = Column0 ^ Column1;
-    Math::Vector3 Col2CrossCol3 = Column2 ^ Column3;
-    Math::Vector3 Col0MinusCol1 = (Column0 * Matrix [Math::Matrix4x4::Index { 3u, 1u }]) - (Column1 * Matrix [Math::Matrix4x4::Index { 3u, 0u }]);
-    Math::Vector3 Col2MinusCol3 = (Column2 * Matrix [Math::Matrix4x4::Index { 3u, 3u }]) - (Column3 * Matrix [Math::Matrix4x4::Index { 3u, 2u }]);
+    std::array<Math::Vector3, 4u> ColumnFactors =
+    {
+        *(kColumns [0u]) ^ *(kColumns [1u]),
+        *(kColumns [2u]) ^ *(kColumns [3u]),
+        (*(kColumns [0u]) * Matrix [Math::Matrix4x4::Index { 3u, 1u }]) - (*(kColumns [1u]) * Matrix [Math::Matrix4x4::Index { 3u, 0u }]),
+        (*(kColumns [2u]) * Matrix [Math::Matrix4x4::Index { 3u, 3u }]) - (*(kColumns [3u]) * Matrix [Math::Matrix4x4::Index { 3u, 2u }]),
+    };
 
-    float const Determinant = (Col0CrossCol1 * Col2MinusCol3) + (Col2CrossCol3 * Col0MinusCol1);
+    float const kDeterminant = (ColumnFactors [0u] * ColumnFactors [3u]) + (ColumnFactors [1u] * ColumnFactors [2u]);
     /* Need to handle this properly */
-    if (Determinant == 0.0f)
+    if (kDeterminant == 0.0f)
     {
         return Math::Matrix4x4 {};
     }
 
-    float const InverseDeterminant = 1.0f / Determinant;
-    Col0CrossCol1 = Col0CrossCol1 * InverseDeterminant;
-    Col2CrossCol3 = Col2CrossCol3 * InverseDeterminant;
-    Col0MinusCol1 = Col0MinusCol1 * InverseDeterminant;
-    Col2MinusCol3 = Col2MinusCol3 * InverseDeterminant;
+    float const kInverseDeterminant = 1.0f / kDeterminant;
+    ColumnFactors [0u] = ColumnFactors [0u] * kInverseDeterminant;
+    ColumnFactors [1u] = ColumnFactors [1u] * kInverseDeterminant;
+    ColumnFactors [2u] = ColumnFactors [2u] * kInverseDeterminant;
+    ColumnFactors [3u] = ColumnFactors [3u] * kInverseDeterminant;
 
-    Vector3 const OutputRow0 = (Column1 ^ Col2MinusCol3) + Col2CrossCol3 * Matrix [Math::Matrix4x4::Index { 3u, 1u }];
-    Vector3 const OutputRow1 = (Col2MinusCol3 ^ Column0) - Col2CrossCol3 * Matrix [Math::Matrix4x4::Index { 3u, 0u }];
-    Vector3 const OutputRow2 = (Column3 ^ Col0MinusCol1) + Col0CrossCol1 * Matrix [Math::Matrix4x4::Index { 3u, 3u }];
-    Vector3 const OutputRow3 = (Col0MinusCol1 ^ Column2) - Col0CrossCol1 * Matrix [Math::Matrix4x4::Index { 3u, 2u }];
+    std::array<Math::Vector3, 4u> const kOutputRows =
+    {
+        (*(kColumns [1u]) ^ ColumnFactors [3u]) + ColumnFactors [1u] * Matrix [Math::Matrix4x4::Index { 3u, 1u }],
+        (ColumnFactors [3u] ^ *(kColumns [0u])) - ColumnFactors [1u] * Matrix [Math::Matrix4x4::Index { 3u, 0u }],
+        (*(kColumns [3u]) ^ ColumnFactors [2u]) + ColumnFactors [0u] * Matrix [Math::Matrix4x4::Index { 3u, 3u }],
+        (ColumnFactors [2u] ^ *(kColumns [2u])) - ColumnFactors [0u] * Matrix [Math::Matrix4x4::Index { 3u, 2u }],
+    };
 
     return Math::Matrix4x4
     {
-        OutputRow0.X, OutputRow1.X, OutputRow2.X, OutputRow3.X,
-        OutputRow0.Y, OutputRow1.Y, OutputRow2.Y, OutputRow3.Y,
-        OutputRow0.Z, OutputRow1.Z, OutputRow2.Z, OutputRow3.Z,
-        -(Column1 * Col2CrossCol3), Column0 * Col2CrossCol3, -(Column3 * Col0CrossCol1), Column2 * Col0CrossCol1,
+        kOutputRows [0u].X, kOutputRows [1u].X, kOutputRows [2u].X, kOutputRows [3u].X,
+        kOutputRows [0u].Y, kOutputRows [1u].Y, kOutputRows [2u].Y, kOutputRows [3u].Y,
+        kOutputRows [0u].Z, kOutputRows [1u].Z, kOutputRows [2u].Z, kOutputRows [3u].Z,
+        -(*(kColumns [1u]) * ColumnFactors [1u]), *(kColumns [0u]) * ColumnFactors [1u], -(*(kColumns [3u]) * ColumnFactors [0u]), *(kColumns [2u]) * ColumnFactors [0u],
     };
 }
