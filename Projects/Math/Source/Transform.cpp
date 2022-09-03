@@ -120,11 +120,11 @@ Math::Matrix4x4 const Math::PerspectiveMatrix(float const HorizontalFieldOfViewI
     /* Project View Space Y */
     Matrix [Math::Matrix4x4::Index { 1u, 1u }] = ProjectionPlaneDistance;
 
-    /* Remap View Space Z between [0, 1] */
-    float const RemapMultiplier = FarPlaneDistance / (FarPlaneDistance - NearPlaneDistance);
+    /* Remap View Space Z between [1, 0] */
+    float const RemapMultiplier = 1.0f / (NearPlaneDistance - FarPlaneDistance);
 
     Matrix [Math::Matrix4x4::Index { 2u, 2u }] = RemapMultiplier;
-    Matrix [Math::Matrix4x4::Index { 2u, 3u }] = -NearPlaneDistance * RemapMultiplier;
+    Matrix [Math::Matrix4x4::Index { 2u, 3u }] = -FarPlaneDistance * RemapMultiplier;
 
     /* Carry View Space Z for Perspective Divide */
     Matrix [Math::Matrix4x4::Index { 3u, 2u }] = 1.0f;

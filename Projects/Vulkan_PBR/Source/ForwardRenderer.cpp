@@ -353,7 +353,7 @@ static bool const CreateTorranceSparrowPipeline()
         VkPipelineColorBlendAttachmentState const ColourAttachmentState = Vulkan::ColourAttachmentBlendState();
         VkPipelineColorBlendStateCreateInfo const ColourBlendState = Vulkan::ColourBlendState(1u, &ColourAttachmentState);
 
-        VkPipelineDepthStencilStateCreateInfo const DepthStencilState = Vulkan::DepthStencilState(VK_TRUE, VK_TRUE, VK_COMPARE_OP_LESS);
+        VkPipelineDepthStencilStateCreateInfo const DepthStencilState = Vulkan::DepthStencilState(VK_TRUE, VK_TRUE, VK_COMPARE_OP_GREATER);
         VkPipelineMultisampleStateCreateInfo const MultiSampleState = Vulkan::MultiSampleState();
 
         VkPipelineViewportStateCreateInfo const PipelineViewportState = Vulkan::ViewportState(1u, nullptr, 1u, nullptr);
@@ -738,17 +738,17 @@ void ForwardRenderer::Render(Scene::SceneData const & Scene)
     VkCommandBuffer & CommandBuffer = FrameState.CommandBuffers [FrameState.CurrentFrameStateIndex];
 
     {
-        std::array<VkClearValue, 3u> AttachmentClearValues =
+        std::array<VkClearValue, 3u> const kAttachmentClearValues =
         {
             VkClearValue { 0.0f, 0.4f, 0.7f, 1.0f },
-            VkClearValue { 1.0f, 0u },
+            VkClearValue { 0.0f, 0u },
             VkClearValue { 0.0f, 0.0f, 0.0f, 1.0f },
         };
 
         VkFramebuffer CurrentFrameBuffer = {};
         Vulkan::Resource::GetFrameBuffer(FrameState.FrameBuffers [FrameState.CurrentFrameStateIndex], CurrentFrameBuffer);
 
-        VkRenderPassBeginInfo const BeginInfo = Vulkan::RenderPassBegin(MainRenderPass, CurrentFrameBuffer, VkRect2D { VkOffset2D { 0u, 0u }, ViewportState.ImageExtents }, static_cast<uint32>(AttachmentClearValues.size()), AttachmentClearValues.data());
+        VkRenderPassBeginInfo const BeginInfo = Vulkan::RenderPassBegin(MainRenderPass, CurrentFrameBuffer, VkRect2D { VkOffset2D { 0u, 0u }, ViewportState.ImageExtents }, static_cast<uint32>(kAttachmentClearValues.size()), kAttachmentClearValues.data());
 
         vkCmdBeginRenderPass(CommandBuffer, &BeginInfo, VK_SUBPASS_CONTENTS_INLINE);
     }
