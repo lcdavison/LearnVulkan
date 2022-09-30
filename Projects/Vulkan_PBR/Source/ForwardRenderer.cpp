@@ -604,16 +604,12 @@ static bool const PreRender(Scene::SceneData const & Scene)
 
     VkCommandBuffer & CommandBuffer = FrameState.CommandBuffers [FrameState.CurrentFrameStateIndex];
 
-    /* TODO: This should just check whether we have any new assets to upload */
-    if (Scene.NewActorHandles.size() > 0u)
-    {
-        Assets::StaticMesh::InitialiseGPUResources(CommandBuffer, DeviceState, FrameState.Fences [FrameState.CurrentFrameStateIndex]);
-        Assets::Texture::InitialiseGPUResources(CommandBuffer, DeviceState, FrameState.Fences [FrameState.CurrentFrameStateIndex]);
-    }
 
     std::vector<LinearBufferAllocator::Allocation> UniformBufferAllocations = {};
     ::CreateAndFillUniformBuffers(Scene, UniformBufferAllocations);
     ::UpdateFrameUniformBufferDescriptor(UniformBufferAllocations);
+    Assets::StaticMesh::InitialiseGPUResources(CommandBuffer, DeviceState, FrameState.Fences [FrameState.CurrentFrameStateIndex]);
+    Assets::Texture::InitialiseGPUResources(CommandBuffer, DeviceState, FrameState.Fences [FrameState.CurrentFrameStateIndex]);
 
     return true;
 }
