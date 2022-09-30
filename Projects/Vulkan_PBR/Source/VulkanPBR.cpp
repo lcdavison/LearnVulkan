@@ -275,10 +275,6 @@ static bool const Run()
 
                 ForwardRenderer::Render(PBRScene);
 
-                if (PBRScene.NewActorHandles.size() > 0u)
-                {
-                    PBRScene.NewActorHandles.clear();
-                }
 
                 /* Not really necessary for fullscreen, but this helps little bit with microstutter in windowed/borderless */
                 ::DwmFlush();

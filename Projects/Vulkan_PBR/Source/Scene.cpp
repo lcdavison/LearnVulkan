@@ -20,7 +20,6 @@ bool const Scene::CreateActor(Scene::SceneData & Scene, Scene::ActorData const &
         Scene.FreeActorHandles.pop();
     }
 
-    Scene.NewActorHandles.push_back(NewActorHandle);
     Scene.ActorNameToHandleMap [ActorData.DebugName] = NewActorHandle;
 
     OutputActorHandle = NewActorHandle;

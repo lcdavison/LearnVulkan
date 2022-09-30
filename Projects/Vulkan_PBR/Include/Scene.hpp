@@ -31,7 +31,6 @@ namespace Scene
         std::queue<uint32> FreeActorHandles = {};
 
         std::vector<uint32> ComponentMasks = {};
-        std::vector<uint32> NewActorHandles = {};
 
         Camera::CameraState MainCamera = {};
 
