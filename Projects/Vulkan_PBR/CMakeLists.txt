@@ -9,7 +9,13 @@ set(USE_UNICODE OFF)
 
 list(
     APPEND HeaderFiles
-    "Include/VulkanPBR.hpp"
+    "Include/Assets/Texture.hpp"
+    "Include/Assets/Material.hpp"
+    "Include/Assets/StaticMesh.hpp"
+    "Include/Components/StaticMeshComponent.hpp"
+    "Include/Components/TransformComponent.hpp"
+    "Include/Components/MaterialComponent.hpp"
+    "Include/Graphics/Allocators.hpp"
     "Include/Graphics/VulkanModule.hpp"
     "Include/Graphics/Instance.hpp"
     "Include/Graphics/Device.hpp"
@@ -17,50 +23,43 @@ list(
     "Include/Graphics/Viewport.hpp"
     "Include/Graphics/ShaderLibrary.hpp"
     "Include/Graphics/Descriptors.hpp"
-    "Include/Components/StaticMeshComponent.hpp"
-    "Include/Components/TransformComponent.hpp"
-    "Include/Components/MaterialComponent.hpp"
-    "Include/Assets/Texture.hpp"
-    "Include/Assets/Material.hpp"
-    "Include/Assets/StaticMesh.hpp"
-    "Include/ShaderCompiler/ShaderCompiler.hpp"
+    "Include/Input/InputManager.hpp"
     "Include/Platform/Windows.hpp"
+    "Include/ShaderCompiler/ShaderCompiler.hpp"
+    "Include/Utilities/String.hpp"
     "Include/Common.hpp"
-    "Include/Logging.hpp"
-    "Include/ForwardRenderer.hpp"
-    "Include/AssetManager.hpp"
-    "Include/Allocation.hpp"
-    "Include/Scene.hpp"
-    "Include/String.hpp"
-    "Include/InputManager.hpp"
+    "Include/CommonTypes.hpp"
     "Include/Camera.hpp"
-)
-
+    "Include/ForwardRenderer.hpp"
+    "Include/Logging.hpp"
+    "Include/Scene.hpp"
+    "Include/VulkanPBR.hpp"
+    )
+    
 list(
     APPEND SourceFiles
-    "Source/VulkanPBR.cpp"
+    "Source/Assets/Texture.cpp"
+    "Source/Assets/Material.cpp"
+    "Source/Assets/StaticMesh.cpp"
+    "Source/Components/StaticMeshComponent.cpp"
+    "Source/Components/TransformComponent.cpp"
+    "Source/Components/MaterialComponent.cpp"
     "Source/Graphics/VulkanModule.cpp"
+    "Source/Graphics/Allocators.cpp"
     "Source/Graphics/Instance.cpp"
     "Source/Graphics/Device.cpp"
     "Source/Graphics/Memory.cpp"
     "Source/Graphics/Viewport.cpp"
     "Source/Graphics/ShaderLibrary.cpp"
     "Source/Graphics/Descriptors.cpp"
-    "Source/Components/StaticMeshComponent.cpp"
-    "Source/Components/TransformComponent.cpp"
-    "Source/Components/MaterialComponent.cpp"
-    "Source/Assets/Texture.cpp"
-    "Source/Assets/Material.cpp"
-    "Source/Assets/StaticMesh.cpp"
-    "Source/ShaderCompiler/ShaderCompiler.cpp"
+    "Source/Input/InputManager.cpp"
     "Source/Platform/Windows.cpp"
-    "Source/Logging.cpp"
-    "Source/ForwardRenderer.cpp"
-    "Source/AssetManager.cpp"
-    "Source/Allocation.cpp"
-    "Source/Scene.cpp"
-    "Source/InputManager.cpp"
+    "Source/ShaderCompiler/ShaderCompiler.cpp"
     "Source/Camera.cpp"
+    "Source/ForwardRenderer.cpp"
+    "Source/Logging.cpp"
+    "Source/Scene.cpp"
+    "Source/VulkanPBR.cpp"
 )
 
 add_executable(VulkanPBR WIN32)
@@ -68,7 +67,7 @@ add_executable(VulkanPBR WIN32)
 target_include_directories(
     VulkanPBR
     SYSTEM
-    PRIVATE "${LearnVulkan_SOURCE_DIR}/External/vulkan/Include"
+    PRIVATE "${CMAKE_SOURCE_DIR}/External/vulkan/Include"
 )
 
 target_include_directories(
@@ -93,8 +92,7 @@ target_compile_definitions(
 target_compile_options(
     VulkanPBR
     PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/W4 /WX>
-    PRIVATE $<$<CONFIG:DEBUG>:/Ob0>
-    PRIVATE $<$<CONFIG:RELEASE>:/Ot /Ob2>
+    PRIVATE $<$<CONFIG:Release>:/Ot /Ob2>
 )
 
 target_link_libraries(

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "AssetManager.hpp"
+#include "CommonTypes.hpp"
 
 #include "Camera.hpp"
 

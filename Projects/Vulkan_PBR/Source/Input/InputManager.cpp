@@ -1,4 +1,4 @@
-#include "InputManager.hpp"
+#include "Input/InputManager.hpp"
 
 #include "Common.hpp"
 

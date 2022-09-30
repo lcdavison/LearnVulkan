@@ -2,7 +2,7 @@
 
 #include "Platform/Windows.hpp"
 
-#include "String.hpp"
+#include "Utilities/String.hpp"
 
 namespace Logging
 {

@@ -4,7 +4,6 @@
 #include "Graphics/ShaderLibrary.hpp"
 #include "ForwardRenderer.hpp"
 
-#include "AssetManager.hpp"
 #include "Scene.hpp"
 
 #include "Components/StaticMeshComponent.hpp"
@@ -20,7 +19,7 @@
 #include <dwmapi.h>
 #include <thread>
 
-#include "InputManager.hpp"
+#include "Input/InputManager.hpp"
 
 extern Application::ApplicationState Application::State = {};
 
@@ -174,7 +173,6 @@ static bool const Initialise()
         ApplicationInfo.apiVersion = VK_MAKE_API_VERSION(0, 1, 3, 0);
 
         bResult = ShaderLibrary::Initialise();
-        AssetManager::Initialise();
 
         bool bSetupScene = ::SetupScene();
 
@@ -195,7 +193,6 @@ static bool const Initialise()
 
 static bool const Destroy()
 {
-    AssetManager::Destroy();
 
     ShaderLibrary::Destroy();
 

@@ -17,7 +17,7 @@ namespace Input
         std::array<KeyStates, 256u> PreviousKeyboardState = {};
         std::array<KeyStates, 256u> CurrentKeyboardState = {};
 
-        float MouseSensitivity = { 3.5f };
+        float MouseSensitivity = { 8.0f };
 
         int32 PreviousMouseX = {};
         int32 PreviousMouseY = {};
