@@ -3,15 +3,17 @@
 layout (location = 0) in vec3 FragmentPositionWS;
 layout (location = 1) in vec3 FragmentPositionVS;
 layout (location = 2) in vec3 FragmentNormalWS;
-layout (location = 3) in vec3 FragmentUV;
-layout (location = 4) in vec3 ViewPositionWS;
+layout (location = 3) in vec4 FragmentTangentWS;
+layout (location = 4) in vec3 FragmentUV;
+layout (location = 5) in vec3 ViewPositionWS;
 
-layout (set = 0, binding = 2) uniform texture2D DiffuseTexture;
-layout (set = 0, binding = 3) uniform texture2D AOTexture;
-layout (set = 0, binding = 4) uniform texture2D SpecularTexture;
-layout (set = 0, binding = 5) uniform texture2D GlossTexture;
-layout (set = 0, binding = 6) uniform sampler AnisotropicSampler;
-layout (set = 0, binding = 7) uniform sampler LinearSampler;
+layout (set = 1, binding = 1) uniform texture2D DiffuseTexture;
+layout (set = 1, binding = 2) uniform texture2D SpecularTexture;
+layout (set = 1, binding = 3) uniform texture2D NormalTexture;
+layout (set = 1, binding = 4) uniform texture2D GlossTexture;
+layout (set = 1, binding = 5) uniform texture2D AOTexture;
+layout (set = 1, binding = 6) uniform sampler AnisotropicSampler;
+layout (set = 1, binding = 7) uniform sampler LinearSampler;
 
 layout (location = 0) out vec4 FragmentColour;
 
@@ -87,13 +89,26 @@ vec3 EvaluateLighting(vec3 LinearRGB, vec3 LightDirectionWS, vec3 ViewDirectionW
 
         vec3 FresnelReflectance = EvaluateFresnelReflectance(CosineOfViewAngleFN, Material.SpecularReflectanceAndRoughness.xyz);
 
-        vec3 DiffuseBRDF = Material.DiffuseReflectanceAndAmbientOcclusion.xyz; // Assume diffuse reflectance is pre-multiplied with 1/pi
+        vec3 DiffuseBRDF = Material.DiffuseReflectanceAndAmbientOcclusion.xyz;
         vec3 SpecularBRDF = EvaluateTorranceSparrowBRDF(Material, MicroNormalWS, LightDirectionWS, ViewDirectionWS, CosineOfLightAngleSN, CosineOfViewAngleFN, FresnelReflectance);
 
         LinearRGB += LightRadiance * CosineOfLightAngleSN * (DiffuseBRDF + SpecularBRDF);
     }
 
     return LinearRGB;
+}
+
+vec3 EvaluateNormal()
+{
+    vec3 NormalWS = normalize(FragmentNormalWS);
+
+    // Make sure that the tangent is perpendicular
+    vec3 TangentWS = normalize(FragmentTangentWS.xyz - dot(FragmentTangentWS.xyz, NormalWS) * NormalWS);
+
+    vec3 BitangentWS = FragmentTangentWS.w * cross(NormalWS, TangentWS);
+
+    vec3 SampledNormal = texture(sampler2D(NormalTexture, LinearSampler), FragmentUV.xy).xyz * 2.0f - vec3(1.0f);
+    return normalize(SampledNormal.x * TangentWS + SampledNormal.y * BitangentWS + SampledNormal.z * NormalWS);
 }
 
 void main()
@@ -108,7 +123,7 @@ void main()
     Material.DiffuseReflectanceAndAmbientOcclusion.xyz = SRGBToLinearRGBApproximate(texture(sampler2D(DiffuseTexture, AnisotropicSampler), FragmentUV.xy).rgb);
     Material.DiffuseReflectanceAndAmbientOcclusion.w = texture(sampler2D(AOTexture, LinearSampler), FragmentUV.xy).r;
 
-    Material.MacroNormalWSAndCosineOfViewAngleSN.xyz = normalize(FragmentNormalWS);
+    Material.MacroNormalWSAndCosineOfViewAngleSN.xyz = EvaluateNormal();
     Material.MacroNormalWSAndCosineOfViewAngleSN.w = dot(Material.MacroNormalWSAndCosineOfViewAngleSN.xyz, ViewDirectionWS);
 
     const float kPointLightRadius = 2.0f;
@@ -118,10 +133,10 @@ void main()
     vec3 PointLightRadiance = kPointLightRadiance * kPointLightRadius / (dot(PointLightDirectionWS, PointLightDirectionWS) + 0.001f);
     PointLightDirectionWS = normalize(PointLightDirectionWS);
 
-    const vec3 kSunDirectionWS = normalize(-1.0f * vec3(-1.0f, 0.0f, -1.0f));
+    const vec3 kSunDirectionWS = normalize(-1.0f * vec3(-1.0f, 1.0f, -1.0f));
     const vec3 kSunRadiance = vec3(4.0f);
 
-    vec3 LinearRGB = vec3(0.0f);
+    vec3 LinearRGB = vec3(Material.DiffuseReflectanceAndAmbientOcclusion.xyz * 0.1f);
     LinearRGB = EvaluateLighting(LinearRGB, PointLightDirectionWS, ViewDirectionWS, PointLightRadiance, Material);
     LinearRGB = EvaluateLighting(LinearRGB, kSunDirectionWS, ViewDirectionWS, kSunRadiance, Material);
     LinearRGB *= Material.DiffuseReflectanceAndAmbientOcclusion.w;

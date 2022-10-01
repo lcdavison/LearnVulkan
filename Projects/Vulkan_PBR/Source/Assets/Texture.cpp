@@ -38,7 +38,7 @@ static void CreateTextureResources(uint32 const TextureIndex, Vulkan::Device::De
     Vulkan::ImageDescriptor const TextureDesc =
     {
         VK_IMAGE_TYPE_2D,
-        VK_FORMAT_B8G8R8A8_UNORM,
+        VK_FORMAT_R8G8B8A8_UNORM,
         WidthInPixels, HeightInPixels, 1u,
         1u, 1u,
         VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_TILING_OPTIMAL,
@@ -193,10 +193,11 @@ bool const Assets::Texture::InitialiseGPUResources(VkCommandBuffer CommandBuffer
         Vulkan::ImageViewDescriptor const ViewDesc =
         {
             VK_IMAGE_VIEW_TYPE_2D,
-            VK_FORMAT_B8G8R8A8_UNORM,
+            VK_FORMAT_R8G8B8A8_UNORM,
             VK_IMAGE_ASPECT_COLOR_BIT,
             0u, 1u,
             0u, 1u,
+            true,
         };
 
         Vulkan::Device::CreateImageView(DeviceState, Textures.ImageHandles [TextureIndex], ViewDesc, Textures.ViewHandles [TextureIndex]);

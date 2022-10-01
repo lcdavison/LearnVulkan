@@ -47,6 +47,7 @@ namespace Vulkan
         uint32 ArrayLayerCount = {};
         uint32 FirstMipLevelIndex = {};
         uint32 MipLevelCount = {};
+        bool bReverseComponents = {};
     };
 }
 

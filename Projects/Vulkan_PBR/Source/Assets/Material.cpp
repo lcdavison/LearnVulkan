@@ -34,3 +34,21 @@ bool const Assets::Material::CreateMaterial(Assets::Material::MaterialData const
 
     return true;
 }
+
+bool const Assets::Material::GetAssetData(uint32 const AssetHandle, Assets::Material::MaterialData & OutputAssetData)
+{
+    if (AssetHandle == 0u)
+    {
+        Logging::Log(Logging::LogTypes::Error, PBR_TEXT("Failed to get material data for NULL handle."));
+        return false;
+    }
+
+    uint32 const kAssetIndex = { AssetHandle - 1u };
+    OutputAssetData.AlbedoTexture = Materials.AlbedoTextures [kAssetIndex];
+    OutputAssetData.NormalTexture = Materials.NormalTextures [kAssetIndex];
+    OutputAssetData.SpecularTexture = Materials.SpecularTextures [kAssetIndex];
+    OutputAssetData.RoughnessTexture = Materials.RoughnessTextures [kAssetIndex];
+    OutputAssetData.AmbientOcclusionTexture = Materials.AmbientOcclusionTextures [kAssetIndex];
+
+    return true;
+}

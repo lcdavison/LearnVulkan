@@ -23,4 +23,6 @@ namespace Assets::Material
     };
 
     extern bool const CreateMaterial(MaterialData const & MaterialDesc, std::string AssetName, uint32 & OutputMaterialHandle);
+
+    extern bool const GetAssetData(uint32 const AssetHandle, MaterialData & OutputAssetData);
 }

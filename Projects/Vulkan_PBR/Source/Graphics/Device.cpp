@@ -583,7 +583,10 @@ void Vulkan::Device::CreateImageView(Vulkan::Device::DeviceState const & State, 
     Vulkan::Resource::Image Image = {};
     Vulkan::Resource::GetImage(ImageHandle, Image);
 
-    VkComponentMapping const ComponentMapping = Vulkan::ComponentMapping();
+    VkComponentMapping const ComponentMapping = Descriptor.bReverseComponents 
+        ? Vulkan::ComponentMapping(VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_G, VK_COMPONENT_SWIZZLE_R) 
+        : Vulkan::ComponentMapping();
+
     VkImageSubresourceRange const SubResourceRange = Vulkan::ImageSubResourceRange(Descriptor.AspectFlags, Descriptor.MipLevelCount, Descriptor.ArrayLayerCount);
 
     VkImageViewCreateInfo const CreateInfo = Vulkan::ImageView(Image.Resource, Descriptor.ViewType, Descriptor.Format, ComponentMapping, SubResourceRange);

@@ -145,7 +145,7 @@ bool const Vulkan::Viewport::CreateViewport(Vulkan::Instance::InstanceState cons
     if (::HasRequiredImageUsage(SurfaceCapabilities) &&
         ::SupportsRequiredSurfaceFormat(InstanceState, DeviceState, IntermediateState.SurfaceFormat))
     {
-        VkSwapchainCreateInfoKHR SwapChainCreateInfo = Vulkan::SwapChain(VK_NULL_HANDLE, InstanceState.Surface, IntermediateState.ImageExtents, IntermediateState.SurfaceFormat.format, IntermediateState.SurfaceFormat.colorSpace, kRequiredImageUsageFlags, SurfaceCapabilities.minImageCount);
+        VkSwapchainCreateInfoKHR SwapChainCreateInfo = Vulkan::SwapChain(VK_NULL_HANDLE, InstanceState.Surface, IntermediateState.ImageExtents, IntermediateState.SurfaceFormat.format, IntermediateState.SurfaceFormat.colorSpace, kRequiredImageUsageFlags, SurfaceCapabilities.minImageCount, 1u, VK_PRESENT_MODE_MAILBOX_KHR);
 
         VERIFY_VKRESULT(vkCreateSwapchainKHR(DeviceState.Device, &SwapChainCreateInfo, nullptr, &IntermediateState.SwapChain));
 
@@ -199,7 +199,7 @@ bool const Vulkan::Viewport::ResizeViewport(Vulkan::Instance::InstanceState cons
 
         /* Need to find out whether we should keep track of the old swapchains and destroy them ourselves */
         /* Reading the spec images that aren't in use should get cleand up */
-        VkSwapchainCreateInfoKHR SwapChainCreateInfo = Vulkan::SwapChain(State.SwapChain, InstanceState.Surface, IntermediateState.ImageExtents, IntermediateState.SurfaceFormat.format, IntermediateState.SurfaceFormat.colorSpace, kRequiredImageUsageFlags, SurfaceCapabilities.minImageCount);
+        VkSwapchainCreateInfoKHR SwapChainCreateInfo = Vulkan::SwapChain(State.SwapChain, InstanceState.Surface, IntermediateState.ImageExtents, IntermediateState.SurfaceFormat.format, IntermediateState.SurfaceFormat.colorSpace, kRequiredImageUsageFlags, SurfaceCapabilities.minImageCount, 1u, VK_PRESENT_MODE_MAILBOX_KHR);
 
         VERIFY_VKRESULT(vkCreateSwapchainKHR(DeviceState.Device, &SwapChainCreateInfo, nullptr, &IntermediateState.SwapChain));
 

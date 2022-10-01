@@ -45,8 +45,13 @@ void Camera::UpdateOrientation(Camera::CameraState & Camera, float const ChangeI
     }
 
     Camera.RightAxis = Math::Vector3 { RightAxis.X, RightAxis.Y, RightAxis.Z };
+    Camera.RightAxis = Math::Vector3::Normalize(Camera.RightAxis);
+
     Camera.UpAxis = Math::Vector3 { UpAxis.X, UpAxis.Y, UpAxis.Z };
+    Camera.UpAxis = Math::Vector3::Normalize(Camera.UpAxis);
+
     Camera.ForwardAxis = Math::Vector3 { ForwardAxis.X, ForwardAxis.Y, ForwardAxis.Z };
+    Camera.ForwardAxis = Math::Vector3::Normalize(Camera.ForwardAxis);
 }
 
 void Camera::UpdatePosition(Camera::CameraState & Camera, float const ForwardSpeed, float const StrafeSpeed)

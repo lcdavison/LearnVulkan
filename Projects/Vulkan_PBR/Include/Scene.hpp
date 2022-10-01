@@ -21,7 +21,6 @@ namespace Scene
     {
         Transform = 0x1,
         StaticMesh = Transform << 1u,
-        Material = StaticMesh << 1u,
     };
 
     struct SceneData

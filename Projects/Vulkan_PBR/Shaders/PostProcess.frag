@@ -1,6 +1,6 @@
 #version 450 core
 
-layout (input_attachment_index = 0u, set = 0u, binding = 0u) uniform subpassInput SceneColour;
+layout (input_attachment_index = 0u, set = 0u, binding = 1u) uniform subpassInput SceneColour;
 
 layout (location = 0u) out vec4 OutputColour;
 

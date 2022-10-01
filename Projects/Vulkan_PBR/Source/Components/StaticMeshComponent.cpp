@@ -3,6 +3,8 @@
 #include "Scene.hpp"
 
 #include <array>
+#include <unordered_map>
+#include <vector>
 
 using namespace Components;
 
@@ -12,6 +14,7 @@ namespace Components::StaticMesh::Private
     {
         std::unordered_map<uint32, uint32> ActorIDToMeshIndex = {};
 
+        std::vector<uint32> ParentActorHandles = {};
         std::vector<uint32> MeshHandles = {};
         std::vector<uint32> MaterialHandles = {};
     };
@@ -55,6 +58,7 @@ bool const StaticMesh::CreateComponent(Scene::SceneData & Scene, uint32 const Ac
     uint32 const NewMeshIndex = static_cast<uint32>(StaticMeshes.MeshHandles.size());
     StaticMeshes.ActorIDToMeshIndex [ActorHandle] = NewMeshIndex;
 
+    StaticMeshes.ParentActorHandles.push_back(ActorHandle);
     StaticMeshes.MeshHandles.push_back(StaticMeshHandle);
     StaticMeshes.MaterialHandles.push_back(MaterialHandle);
 
@@ -81,6 +85,7 @@ bool const StaticMesh::GetComponentData(Scene::SceneData const & Scene, uint32 c
     }
 
     uint32 const kComponentIndex = StaticMeshes.ActorIDToMeshIndex [kActorIndex];
+    OutputComponentData.ParentActorHandle = StaticMeshes.ParentActorHandles [kComponentIndex];
     OutputComponentData.MeshHandle = StaticMeshes.MeshHandles [kComponentIndex];
     OutputComponentData.MaterialHandle = StaticMeshes.MaterialHandles [kComponentIndex];
 

@@ -25,6 +25,7 @@ list(
     "Include/Input/InputManager.hpp"
     "Include/Platform/Windows.hpp"
     "Include/ShaderCompiler/ShaderCompiler.hpp"
+    "Include/Utilities/Iterator.hpp"
     "Include/Utilities/String.hpp"
     "Include/Common.hpp"
     "Include/CommonTypes.hpp"
@@ -33,7 +34,7 @@ list(
     "Include/Logging.hpp"
     "Include/Scene.hpp"
     "Include/VulkanPBR.hpp"
-    )
+)
     
 list(
     APPEND SourceFiles

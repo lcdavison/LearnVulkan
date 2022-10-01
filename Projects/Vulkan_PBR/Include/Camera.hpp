@@ -7,6 +7,8 @@ namespace Camera
 {
     struct CameraState
     {
+        Math::Matrix4x4 ProjectionMatrix = Math::Matrix4x4::Identity();
+
         Math::Vector3 Position = Math::Vector3::Zero();
         Math::Vector3 ForwardAxis = Math::Vector3 { 0.0f, 1.0f, 0.0f };
         Math::Vector3 RightAxis = Math::Vector3 { 1.0f, 0.0f, 0.0f };

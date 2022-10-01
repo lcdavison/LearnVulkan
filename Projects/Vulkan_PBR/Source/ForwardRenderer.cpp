@@ -1,35 +1,117 @@
 #include "ForwardRenderer.hpp"
 
+#include "Assets/Material.hpp"
+#include "Assets/StaticMesh.hpp"
+#include "Assets/Texture.hpp"
+#include "Camera.hpp"
+#include "Components/StaticMeshComponent.hpp"
+#include "Components/TransformComponent.hpp"
 #include "Graphics/VulkanModule.hpp"
-
 #include "Graphics/Instance.hpp"
 #include "Graphics/Device.hpp"
 #include "Graphics/Viewport.hpp"
 #include "Graphics/ShaderLibrary.hpp"
 #include "Graphics/Descriptors.hpp"
-
-#include "Components/StaticMeshComponent.hpp"
-#include "Components/TransformComponent.hpp"
-
-#include "Assets/StaticMesh.hpp"
-#include "Assets/Texture.hpp"
-#include "Assets/Material.hpp"
-
 #include "Graphics/Memory.hpp"
 #include "Graphics/Allocators.hpp"
+#include "Scene.hpp"
+#include "VulkanPBR.hpp"
 
+#include <CPUProfiler/CPUProfiler.hpp>
 #include <Math/Matrix.hpp>
 #include <Math/Transform.hpp>
 #include <Math/Utilities.hpp>
 
-#include "VulkanPBR.hpp"
-
-#include "Scene.hpp"
-
 #include <array>
 
-#include "Camera.hpp"
+/*
+* . Texture format storage on texture import
+* . Only update the camera matrices if they are dirty
+* . Light components - have a read-only lighting buffer for rendering objects
+* . Spot light shadow rendering
+* . Reorganise rendering code
+* . Sky box - may need to implement another image importer
+* . Asset serialisation
+* . Reorganise rendering code
+* . Tiled forward rendering
+* . Planar grid for water plane
+* . Cached pipeline state
+* . Sort out graphics memory allocators
+* . ACES colour pipeline
+* . Disney Diffuse BRDF Implementation
+* . Generic async loading
+* . Do a big refactor of everything
+* . Sort out teardown if initialisation failed
+* . Create a scene graph
+* . Have less frequently updated uniform buffers resident in fast Device-Local memory.
+* . Global Illumination 
+* . Shader cooking, so we can load precompiled shaders
+* . Setup renderer layers
+* . Debug UI layer
+* . Binary formats for assets
+* . Binary scene file
+*/
 
+/*
+*   CPU Profiler
+*   - finish CSV library
+*   - finish scope-based profiler implementation
+*   - integrate CPU profiler
+*/
+
+/*
+*   Scope-based profiler
+*   - Use macros to place and name the scopes
+*   - Make use of RAII to handle pushing and popping of scopes onto a function stack - hierarchy using stack so we can trace the function calls (when handling multiple threads, this will need to be per thread)
+*   - Measures scope timings in nanoseconds
+*   - Should provide information about the thread that ran the function
+* 
+*   Memory Usage Profiling
+*/
+
+/*
+*   Retained mode draw calls, group meshes by material so that draw calls so state changes can be minimised.
+*   Make use of instancing when multiple draw calls for the same mesh are made.
+*/
+
+/* 
+    Everything appears to be synchronised (though I have probably missed something), however there is a weird block artefact that appears occasionally when moving the camera.
+    Not sure if i've done something wrong, or whehter it is a DWM issue. Weirdly still getting the issue when flushing the GPU, so leads me to believe it's DWM, though I could be wrong.
+*/
+
+/* TODO: This should manage render targets */
+/* TODO: List of passes and an adjacency list with edges between passes */
+/* TODO: Before abstracting out render passes sort out the PBR stuff */
+
+/* TODO: Create a resource cache for things like framebuffers, fences, semaphores, etc... */
+
+/* TODO: Better command list management at some point, would like to get this thing multithreaded */
+
+/* 
+    Asset Manager should manage "Assets" we need to have separate importers to handle the conditioning of .OBJ files into "Mesh Assets" for example.
+    Would be good to have this as a part of a toolchain that gets executed before running the program.
+*/
+
+/*
+*   Create some form of render state to hold the current pipeline state, vertex buffers, viewport etc.
+*   We can use this to sort out a binding system later
+*/
+
+/* 
+    Materials
+    . Investigate some simple material systems
+    . Possibly just have a simple component at the moment for handling PBR materials with texture slots
+*/
+
+/*
+*   Render Passes:
+* - Sky Pass (TODO)
+* - Shadow Pass (TODO)
+* - Forward Lighting Pass
+* - Output Pass
+*/
+
+/* TODO: Add View Position to this */
 struct PerFrameUniformBufferData
 {
     Math::Matrix4x4 WorldToViewMatrix;
@@ -50,8 +132,6 @@ struct FrameStateCollection
     std::vector<VkSemaphore> Semaphores = {};
     std::vector<VkFence> Fences = {};
 
-    std::vector<VkDescriptorSet> DescriptorSets = {};
-
     std::vector<uint32> FrameBuffers = {};
 
     std::vector<uint32> SceneColourImages = {};
@@ -68,7 +148,7 @@ struct FrameStateCollection
 };
 
 static std::string const kDefaultShaderEntryPointName = "main";
-static uint8 const kFrameStateCount = { 2u };
+static uint8 const kFrameStateCount = { 3u };
 
 static Vulkan::Instance::InstanceState InstanceState = {};
 static Vulkan::Device::DeviceState DeviceState = {};
@@ -77,17 +157,27 @@ static FrameStateCollection FrameState = {};
 
 static VkRenderPass MainRenderPass = {};
 
-static VkPipelineLayout RenderPipelineLayout = {};
-static VkPipeline RenderPipeline = {};
+/*
+*   0 = Render Pipeline
+*   1 = Output Pipeline
+*/
+std::array<VkPipelineLayout, 2u> PipelineLayouts = {};
+std::array<VkPipeline, 2u> Pipelines = {};
 
-static VkPipelineLayout OutputPipelineLayout = {};
-static VkPipeline OutputPipelineState = {};
+/*
+*   0 = Projection VS
+*   1 = Full Screen Triangle VS
+*/
+std::array<uint16, 2u> VertexShaderHandles = {};
 
-static uint16 ProjectVerticesVSHandle = {};
-static uint16 TorranceSparrowFSHandle = {};
+/*
+*   0 = Torrance Sparrow FS
+*   1 = Post Process FS
+*/
+std::array<uint16, 2u> FragmentShaderHandles = {};
 
-static uint16 FullScreenTriangleVSHandle = {};
-static uint16 PostProcessFSHandle = {};
+std::array<VkShaderModule, 2u> VertexShaderModules = {};
+std::array<VkShaderModule, 2u> FragmentShaderModules = {};
 
 static VkShaderModule ProjectVerticesVSShaderModule = {};
 static VkShaderModule TorranceSparrowFSShaderModule = {};
@@ -95,13 +185,17 @@ static VkShaderModule TorranceSparrowFSShaderModule = {};
 static VkShaderModule FullScreenTriangleVSShaderModule = {};
 static VkShaderModule PostProcessFSShaderModule = {};
 
-static uint16 RenderDescriptorSetLayoutHandle = {};
-static uint16 OutputDescriptorSetLayoutHandle = {};
+/*
+*   0 = Per Frame Layout
+*   1 = Per Draw Layout
+*/
+static std::array<uint16, 2u> DescriptorSetLayoutHandles = {};
 
-static std::array<uint32, 4u> TextureHandles = {};
-
-static VkSampler LinearImageSampler = {};
-static VkSampler AnisotropicImageSampler = {};
+/*
+*   0 = Linear Sampler
+*   1 = Anisotropic Sampler
+*/
+static std::array<VkSampler, 2u> ImageSamplers = {};
 
 /*
     For reference.
@@ -121,8 +215,6 @@ static VkSampler AnisotropicImageSampler = {};
 
 static void CreateFrameState()
 {
-    FrameState.CurrentFrameStateIndex = 0u;
-
     FrameState.CommandBuffers.resize(kFrameStateCount); // Pre-Render Command Buffer and Render Command Buffer
     FrameState.FrameBuffers.resize(kFrameStateCount);
     FrameState.SceneColourImages.resize(kFrameStateCount);
@@ -131,15 +223,14 @@ static void CreateFrameState()
     FrameState.DepthStencilImageViews.resize(kFrameStateCount);
     FrameState.Semaphores.resize(kFrameStateCount * 2u);    // Each frame uses 2 semaphores
     FrameState.Fences.resize(kFrameStateCount);
-    FrameState.DescriptorSets.resize(kFrameStateCount * 2u); // Each pipeline uses a different set
     FrameState.LinearAllocators.resize(kFrameStateCount);
     FrameState.DescriptorAllocators.resize(kFrameStateCount);
 
     Vulkan::Device::CreateCommandBuffers(DeviceState, VK_COMMAND_BUFFER_LEVEL_PRIMARY, kFrameStateCount, FrameState.CommandBuffers);
 
-    for (uint8 CurrentImageIndex = {};
-         CurrentImageIndex < kFrameStateCount;
-         CurrentImageIndex++)
+    for (uint8 CurrentFrameStateIndex = {};
+         CurrentFrameStateIndex < kFrameStateCount;
+         CurrentFrameStateIndex++)
     {
         Vulkan::ImageDescriptor ImageDescriptor =
         {
@@ -154,15 +245,15 @@ static void CreateFrameState()
             VK_IMAGE_TILING_OPTIMAL,
             VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT,
             0u,
-            false
+            false,
         };
 
-        Vulkan::Device::CreateImage(DeviceState, ImageDescriptor, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, FrameState.SceneColourImages [CurrentImageIndex]);
+        Vulkan::Device::CreateImage(DeviceState, ImageDescriptor, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, FrameState.SceneColourImages [CurrentFrameStateIndex]);
 
         ImageDescriptor.Format = VK_FORMAT_D24_UNORM_S8_UINT;
         ImageDescriptor.UsageFlags = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
 
-        Vulkan::Device::CreateImage(DeviceState, ImageDescriptor, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, FrameState.DepthStencilImages [CurrentImageIndex]);
+        Vulkan::Device::CreateImage(DeviceState, ImageDescriptor, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, FrameState.DepthStencilImages [CurrentFrameStateIndex]);
 
         Vulkan::ImageViewDescriptor ImageViewDesc =
         {
@@ -171,44 +262,26 @@ static void CreateFrameState()
             VK_IMAGE_ASPECT_COLOR_BIT,
             0u, 1u,
             0u, 1u,
+            false,
         };
 
-        Vulkan::Device::CreateImageView(DeviceState, FrameState.SceneColourImages [CurrentImageIndex], ImageViewDesc, FrameState.SceneColourImageViews [CurrentImageIndex]);
+        Vulkan::Device::CreateImageView(DeviceState, FrameState.SceneColourImages [CurrentFrameStateIndex], ImageViewDesc, FrameState.SceneColourImageViews [CurrentFrameStateIndex]);
 
         ImageViewDesc.Format = VK_FORMAT_D24_UNORM_S8_UINT;
         ImageViewDesc.AspectFlags = VK_IMAGE_ASPECT_DEPTH_BIT;
 
-        Vulkan::Device::CreateImageView(DeviceState, FrameState.DepthStencilImages [CurrentImageIndex], ImageViewDesc, FrameState.DepthStencilImageViews [CurrentImageIndex]);
-    }
+        Vulkan::Device::CreateImageView(DeviceState, FrameState.DepthStencilImages [CurrentFrameStateIndex], ImageViewDesc, FrameState.DepthStencilImageViews [CurrentFrameStateIndex]);
 
-    for (VkSemaphore & Semaphore : FrameState.Semaphores)
-    {
-        Vulkan::Device::CreateSemaphore(DeviceState, 0u, Semaphore);
-    }
+        Vulkan::Device::CreateSemaphore(DeviceState, 0u, FrameState.Semaphores [(CurrentFrameStateIndex << 1u) + 0u]);
+        Vulkan::Device::CreateSemaphore(DeviceState, 0u, FrameState.Semaphores [(CurrentFrameStateIndex << 1u) + 1u]);
 
-    for (VkFence & Fence : FrameState.Fences)
-    {
-        Vulkan::Device::CreateFence(DeviceState, VK_FENCE_CREATE_SIGNALED_BIT, Fence);
-    }
+        Vulkan::Device::CreateFence(DeviceState, VK_FENCE_CREATE_SIGNALED_BIT, FrameState.Fences [CurrentFrameStateIndex]);
 
-    for (LinearBufferAllocator::AllocatorState & AllocatorState : FrameState.LinearAllocators)
-    {
-        LinearBufferAllocator::CreateAllocator(DeviceState, 1024u, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, AllocatorState);
-    }
+        LinearBufferAllocator::CreateAllocator(DeviceState, 1024u, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, FrameState.LinearAllocators [CurrentFrameStateIndex]);
 
-    {
-        uint8 CurrentStateIndex = {};
-        for (uint16 & AllocatorHandle : FrameState.DescriptorAllocators)
-        {
-            Vulkan::Descriptors::CreateDescriptorAllocator(DeviceState,
-                                                           Vulkan::Descriptors::DescriptorTypes::Uniform | Vulkan::Descriptors::DescriptorTypes::SampledImage | Vulkan::Descriptors::DescriptorTypes::Sampler,
-                                                           AllocatorHandle);
-
-            Vulkan::Descriptors::AllocateDescriptorSet(DeviceState, AllocatorHandle, RenderDescriptorSetLayoutHandle, FrameState.DescriptorSets [(CurrentStateIndex << 1u) + 0u]);
-            Vulkan::Descriptors::AllocateDescriptorSet(DeviceState, AllocatorHandle, OutputDescriptorSetLayoutHandle, FrameState.DescriptorSets [(CurrentStateIndex << 1u) + 1u]);
-
-            CurrentStateIndex++;
-        }
+        Vulkan::Descriptors::CreateDescriptorAllocator(DeviceState,
+                                                       Vulkan::Descriptors::DescriptorTypes::Uniform | Vulkan::Descriptors::DescriptorTypes::SampledImage | Vulkan::Descriptors::DescriptorTypes::Sampler,
+                                                       FrameState.DescriptorAllocators [CurrentFrameStateIndex]);
     }
 }
 
@@ -283,21 +356,25 @@ static bool const CreateMainRenderPass()
 
 static bool const CreateDescriptorSetLayout()
 {
-    std::vector<VkDescriptorSetLayoutBinding> const DescriptorBindings =
+    std::array<VkDescriptorSetLayoutBinding, 10u> const kDescriptorBindings =
     {
+        // Per Frame
         Vulkan::DescriptorSetBinding(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1u, 0u, VK_SHADER_STAGE_VERTEX_BIT),
-        Vulkan::DescriptorSetBinding(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1u, 1u, VK_SHADER_STAGE_VERTEX_BIT),
+        Vulkan::DescriptorSetBinding(VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1u, 1u, VK_SHADER_STAGE_FRAGMENT_BIT),
+
+        // Per Draw
+        Vulkan::DescriptorSetBinding(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1u, 0u, VK_SHADER_STAGE_VERTEX_BIT),
+        Vulkan::DescriptorSetBinding(VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1u, 1u, VK_SHADER_STAGE_FRAGMENT_BIT),
         Vulkan::DescriptorSetBinding(VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1u, 2u, VK_SHADER_STAGE_FRAGMENT_BIT),
         Vulkan::DescriptorSetBinding(VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1u, 3u, VK_SHADER_STAGE_FRAGMENT_BIT),
         Vulkan::DescriptorSetBinding(VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1u, 4u, VK_SHADER_STAGE_FRAGMENT_BIT),
         Vulkan::DescriptorSetBinding(VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1u, 5u, VK_SHADER_STAGE_FRAGMENT_BIT),
         Vulkan::DescriptorSetBinding(VK_DESCRIPTOR_TYPE_SAMPLER, 1u, 6u, VK_SHADER_STAGE_FRAGMENT_BIT),
         Vulkan::DescriptorSetBinding(VK_DESCRIPTOR_TYPE_SAMPLER, 1u, 7u, VK_SHADER_STAGE_FRAGMENT_BIT),
-        Vulkan::DescriptorSetBinding(VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1u, 0u, VK_SHADER_STAGE_FRAGMENT_BIT),
     };
 
-    Vulkan::Descriptors::CreateDescriptorSetLayout(DeviceState, 8u, DescriptorBindings.data(), RenderDescriptorSetLayoutHandle);
-    Vulkan::Descriptors::CreateDescriptorSetLayout(DeviceState, 1u, DescriptorBindings.data() + 8u, OutputDescriptorSetLayoutHandle);
+    Vulkan::Descriptors::CreateDescriptorSetLayout(DeviceState, 2u, kDescriptorBindings.data(), DescriptorSetLayoutHandles [0u]);
+    Vulkan::Descriptors::CreateDescriptorSetLayout(DeviceState, 8u, kDescriptorBindings.data() + 2u, DescriptorSetLayoutHandles [1u]);
 
     return true;
 }
@@ -305,18 +382,20 @@ static bool const CreateDescriptorSetLayout()
 static bool const CreateTorranceSparrowPipeline()
 {
     {
-        VkDescriptorSetLayout SetLayout = {};
-        Vulkan::Descriptors::GetDescriptorSetLayout(RenderDescriptorSetLayoutHandle, SetLayout);
+        std::array<VkDescriptorSetLayout, 2u> DescriptorSetLayouts = {};
+        Vulkan::Descriptors::GetDescriptorSetLayout(DescriptorSetLayoutHandles [0u], DescriptorSetLayouts [0u]);
+        Vulkan::Descriptors::GetDescriptorSetLayout(DescriptorSetLayoutHandles [1u], DescriptorSetLayouts [1u]);
 
-        VkPipelineLayoutCreateInfo const CreateInfo = Vulkan::PipelineLayout(1u, &SetLayout);
-        VERIFY_VKRESULT(vkCreatePipelineLayout(DeviceState.Device, &CreateInfo, nullptr, &RenderPipelineLayout));
+        VkPipelineLayoutCreateInfo const CreateInfo = Vulkan::PipelineLayout(static_cast<uint32>(DescriptorSetLayouts.size()), DescriptorSetLayouts.data());
+        VERIFY_VKRESULT(vkCreatePipelineLayout(DeviceState.Device, &CreateInfo, nullptr, &PipelineLayouts [0u]));
     }
 
-    ShaderLibrary::CreateShaderModule(DeviceState, ProjectVerticesVSHandle, ProjectVerticesVSShaderModule);
-    ShaderLibrary::CreateShaderModule(DeviceState, TorranceSparrowFSHandle, TorranceSparrowFSShaderModule);
+    ShaderLibrary::CreateShaderModule(DeviceState, VertexShaderHandles [0u], ProjectVerticesVSShaderModule);
+    ShaderLibrary::CreateShaderModule(DeviceState, FragmentShaderHandles [0u], TorranceSparrowFSShaderModule);
 
     if (ProjectVerticesVSShaderModule == VK_NULL_HANDLE || TorranceSparrowFSShaderModule == VK_NULL_HANDLE)
     {
+        /* ERROR */
         return false;
     }
 
@@ -327,22 +406,24 @@ static bool const CreateTorranceSparrowPipeline()
     };
 
     {
-        std::array<VkVertexInputBindingDescription, 3u> VertexInputBindings =
+        std::array<VkVertexInputBindingDescription, 4u> const kVertexInputBindings =
         {
             Vulkan::VertexInputBinding(0u, sizeof(Math::Vector3)),
             Vulkan::VertexInputBinding(1u, sizeof(Math::Vector3)),
-            Vulkan::VertexInputBinding(2u, sizeof(Math::Vector3)),
+            Vulkan::VertexInputBinding(2u, sizeof(Math::Vector4)),
+            Vulkan::VertexInputBinding(3u, sizeof(Math::Vector3)),
         };
 
-        std::array<VkVertexInputAttributeDescription, 3u> VertexAttributes =
+        std::array<VkVertexInputAttributeDescription, 4u> const kVertexAttributes =
         {
             Vulkan::VertexInputAttribute(0u, 0u, 0u),
             Vulkan::VertexInputAttribute(1u, 1u, 0u),
             Vulkan::VertexInputAttribute(2u, 2u, 0u),
+            Vulkan::VertexInputAttribute(3u, 3u, 0u),
         };
 
-        VkPipelineVertexInputStateCreateInfo const VertexInputState = Vulkan::VertexInputState(static_cast<uint32>(VertexInputBindings.size()), VertexInputBindings.data(),
-                                                                                               static_cast<uint32>(VertexAttributes.size()), VertexAttributes.data());
+        VkPipelineVertexInputStateCreateInfo const VertexInputState = Vulkan::VertexInputState(static_cast<uint32>(kVertexInputBindings.size()), kVertexInputBindings.data(),
+                                                                                               static_cast<uint32>(kVertexAttributes.size()), kVertexAttributes.data());
 
         VkPipelineInputAssemblyStateCreateInfo const InputAssemblerState = Vulkan::InputAssemblyState();
 
@@ -364,12 +445,12 @@ static bool const CreateTorranceSparrowPipeline()
 
         VkPipelineDynamicStateCreateInfo const DynamicState = Vulkan::DynamicState(static_cast<uint32>(DynamicStates.size()), DynamicStates.data());
 
-        VkGraphicsPipelineCreateInfo const CreateInfo = Vulkan::GraphicsPipelineState(RenderPipelineLayout, MainRenderPass, 0u,
+        VkGraphicsPipelineCreateInfo const CreateInfo = Vulkan::GraphicsPipelineState(PipelineLayouts [0u], MainRenderPass, 0u,
                                                                                       static_cast<uint32>(ShaderStages.size()), ShaderStages.data(),
                                                                                       &VertexInputState, &InputAssemblerState, &PipelineViewportState,
                                                                                       &RasterizationState, &ColourBlendState, &DepthStencilState, &DynamicState, &MultiSampleState);
 
-        VERIFY_VKRESULT(vkCreateGraphicsPipelines(DeviceState.Device, VK_NULL_HANDLE, 1u, &CreateInfo, nullptr, &RenderPipeline));
+        VERIFY_VKRESULT(vkCreateGraphicsPipelines(DeviceState.Device, VK_NULL_HANDLE, 1u, &CreateInfo, nullptr, &Pipelines [0u]));
     }
 
     return true;
@@ -378,15 +459,15 @@ static bool const CreateTorranceSparrowPipeline()
 static bool const CreateOutputPipeline()
 {
     {
-        VkDescriptorSetLayout SetLayout = {};
-        Vulkan::Descriptors::GetDescriptorSetLayout(OutputDescriptorSetLayoutHandle, SetLayout);
+        VkDescriptorSetLayout DescriptorSetLayout = {};
+        Vulkan::Descriptors::GetDescriptorSetLayout(DescriptorSetLayoutHandles [0u], DescriptorSetLayout);
 
-        VkPipelineLayoutCreateInfo const PipelineLayout = Vulkan::PipelineLayout(1u, &SetLayout);
-        VERIFY_VKRESULT(vkCreatePipelineLayout(DeviceState.Device, &PipelineLayout, nullptr, &OutputPipelineLayout));
+        VkPipelineLayoutCreateInfo const PipelineLayout = Vulkan::PipelineLayout(1u, &DescriptorSetLayout);
+        VERIFY_VKRESULT(vkCreatePipelineLayout(DeviceState.Device, &PipelineLayout, nullptr, &PipelineLayouts [1u]));
     }
 
-    bool const bLoaded = ShaderLibrary::CreateShaderModule(DeviceState, FullScreenTriangleVSHandle, FullScreenTriangleVSShaderModule) 
-        && ShaderLibrary::CreateShaderModule(DeviceState, PostProcessFSHandle, PostProcessFSShaderModule);
+    bool const bLoaded = ShaderLibrary::CreateShaderModule(DeviceState, VertexShaderHandles [1u], FullScreenTriangleVSShaderModule)
+        && ShaderLibrary::CreateShaderModule(DeviceState, FragmentShaderHandles [1u], PostProcessFSShaderModule);
 
     if (!bLoaded)
     {
@@ -421,19 +502,21 @@ static bool const CreateOutputPipeline()
 
     VkPipelineDynamicStateCreateInfo const DynamicState = Vulkan::DynamicState(static_cast<uint32>(DynamicStateFlags.size()), DynamicStateFlags.data());
 
-    VkGraphicsPipelineCreateInfo const PipelineCreateInfo = Vulkan::GraphicsPipelineState(OutputPipelineLayout, MainRenderPass, 1u,
+    VkGraphicsPipelineCreateInfo const PipelineCreateInfo = Vulkan::GraphicsPipelineState(PipelineLayouts [1u], MainRenderPass, 1u,
                                                                                           static_cast<uint32>(ShaderStages.size()), ShaderStages.data(),
                                                                                           &VertexInputState, &InputAssemblerState, &Viewport,
                                                                                           &RasterizationState, &ColourBlendState, &DepthStencilState,
                                                                                           &DynamicState, &MultiSampleState);
 
-    VERIFY_VKRESULT(vkCreateGraphicsPipelines(DeviceState.Device, VK_NULL_HANDLE, 1u, &PipelineCreateInfo, nullptr, &OutputPipelineState));
+    VERIFY_VKRESULT(vkCreateGraphicsPipelines(DeviceState.Device, VK_NULL_HANDLE, 1u, &PipelineCreateInfo, nullptr, &Pipelines [1u]));
 
     return true;
 }
 
 static bool const CreateAndFillUniformBuffers(Scene::SceneData const & Scene, std::vector<LinearBufferAllocator::Allocation> & OutputUniformBufferAllocations)
 {
+    EVENT_SCOPE();
+
     bool bResult = false;
 
     {
@@ -442,12 +525,10 @@ static bool const CreateAndFillUniformBuffers(Scene::SceneData const & Scene, st
 
         if (bResult)
         {
-            float const AspectRatio = static_cast<float>(ViewportState.ImageExtents.width) / static_cast<float>(ViewportState.ImageExtents.height);
-
             PerFrameUniformBufferData PerFrameData =
             {
                 Math::Matrix4x4::Identity(),
-                Math::PerspectiveMatrix(Math::ConvertDegreesToRadians(90.0f), AspectRatio, 0.01f, 1000.0f),
+                Scene.MainCamera.ProjectionMatrix,
             };
 
             Camera::GetViewMatrix(Scene.MainCamera, PerFrameData.WorldToViewMatrix);
@@ -457,87 +538,105 @@ static bool const CreateAndFillUniformBuffers(Scene::SceneData const & Scene, st
         }
     }
 
-    if (Scene.ActorCount > 0u)
+    PerDrawUniformBufferData IntermediateUniformBufferData = {};
+
+    uint32 const kActorCount = { static_cast<uint32>(Scene.ComponentMasks.size()) };
+    LinearBufferAllocator::Allocation & UniformBufferAllocation = OutputUniformBufferAllocations.emplace_back();
+    bResult &= LinearBufferAllocator::Allocate(FrameState.LinearAllocators [FrameState.CurrentFrameStateIndex], sizeof(PerDrawUniformBufferData) * kActorCount, UniformBufferAllocation);
+
+    uint32 CurrentOutputIndex = {};
+    for (Components::StaticMesh::Types::Iterator CurrentMesh = Components::StaticMesh::Types::Iterator::Begin();
+         CurrentMesh != Components::StaticMesh::Types::Iterator::End();
+         ++CurrentMesh)
     {
-        LinearBufferAllocator::Allocation & ActorUniformBufferAllocation = { OutputUniformBufferAllocations.emplace_back() };
-        bResult = LinearBufferAllocator::Allocate(FrameState.LinearAllocators [FrameState.CurrentFrameStateIndex], sizeof(PerDrawUniformBufferData) * Scene.ActorCount, ActorUniformBufferAllocation);
+        Components::StaticMesh::Types::ComponentData const kComponentData = *CurrentMesh;
 
-        if (bResult)
-        {
-            std::vector PerDrawDatas = std::vector<PerDrawUniformBufferData>(Scene.ActorCount);
+        Components::Transform::GetTransformationMatrix(kComponentData.ParentActorHandle, IntermediateUniformBufferData.ModelToWorldMatrix);
 
-            for (uint32 CurrentActorHandle = { 1u };
-                 CurrentActorHandle <= Scene.ActorCount;
-                 CurrentActorHandle++)
-            {
-                Components::Transform::GetTransformationMatrix(CurrentActorHandle, PerDrawDatas [CurrentActorHandle - 1u].ModelToWorldMatrix);
-            }
+        // need to handle the case there isn't a valid transform
+        //if (!bHasTransform)
+        //{
+        //    // just use some default transform, but should also log this
+        //}
 
-            ::memcpy_s(ActorUniformBufferAllocation.MappedAddress, ActorUniformBufferAllocation.SizeInBytes, PerDrawDatas.data(), sizeof(PerDrawDatas [0u]) * PerDrawDatas.size());
-        }
+        PerDrawUniformBufferData * OutputAddress = static_cast<PerDrawUniformBufferData *>(UniformBufferAllocation.MappedAddress) + CurrentOutputIndex;
+
+        std::memcpy(OutputAddress, &IntermediateUniformBufferData, sizeof(IntermediateUniformBufferData));
+
+        CurrentOutputIndex++;
     }
 
     return bResult;
 }
 
-static void UpdateFrameUniformBufferDescriptor(std::vector<LinearBufferAllocator::Allocation> const & UniformBufferAllocations)
+static void UpdatePerFrameDescriptorSet(uint16 const kPerFrameDescriptorSetHandle, LinearBufferAllocator::Allocation const & kPerFrameUniformBufferAllocation)
 {
-    std::array<Vulkan::Resource::Buffer, 2u> UniformBuffers = {};
-    Vulkan::Resource::GetBuffer(UniformBufferAllocations [0u].Buffer, UniformBuffers [0u]);
-    Vulkan::Resource::GetBuffer(UniformBufferAllocations [1u].Buffer, UniformBuffers [1u]);
+    Vulkan::Resource::Buffer PerFrameUniformBuffer = {};
+    Vulkan::Resource::GetBuffer(kPerFrameUniformBufferAllocation.Buffer, PerFrameUniformBuffer);
 
-    std::array<VkDescriptorBufferInfo, 2u> const UniformBufferDescs =
+    VkImageView SceneColourImageView = {};
+    Vulkan::Resource::GetImageView(FrameState.SceneColourImageViews [FrameState.CurrentFrameStateIndex], SceneColourImageView);
+
+    VkDescriptorBufferInfo const kPerFrameUniformBufferDesc = Vulkan::DescriptorBufferInfo(PerFrameUniformBuffer.Resource, kPerFrameUniformBufferAllocation.OffsetInBytes, kPerFrameUniformBufferAllocation.SizeInBytes);
+    VkDescriptorImageInfo const kSceneColourImageDesc =
     {
-        Vulkan::DescriptorBufferInfo(UniformBuffers [0u].Resource, UniformBufferAllocations [0u].OffsetInBytes, UniformBufferAllocations [0u].SizeInBytes),
-        Vulkan::DescriptorBufferInfo(UniformBuffers [1u].Resource, UniformBufferAllocations [1u].OffsetInBytes, UniformBufferAllocations [1u].SizeInBytes),
+        VK_NULL_HANDLE,
+        SceneColourImageView,
+        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
     };
 
-    /* TODO: Add descriptor image info helper function and then write the descriptors to the descriptor set */
-    VkImageView InputAttachmentView = {};
-    Vulkan::Resource::GetImageView(FrameState.SceneColourImageViews [FrameState.CurrentFrameStateIndex], InputAttachmentView);
+    uint16 const kAllocatorHandle = FrameState.DescriptorAllocators [FrameState.CurrentFrameStateIndex];
 
-    VkDescriptorImageInfo InputAttachmentDesc = {};
-    InputAttachmentDesc.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    InputAttachmentDesc.imageView = InputAttachmentView;
+    Vulkan::Descriptors::BindBufferDescriptors(kAllocatorHandle, kPerFrameDescriptorSetHandle, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 0u, 1u, &kPerFrameUniformBufferDesc);
+    Vulkan::Descriptors::BindImageDescriptors(kAllocatorHandle, kPerFrameDescriptorSetHandle, VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1u, 1u, &kSceneColourImageDesc);
+}
 
-    std::array<VkDescriptorImageInfo, TextureHandles.size() + 2u> ImageViewsAndSamplers = {};
+static void UpdatePerDrawDescriptorSet(uint16 const kPerDrawDescriptorSetHandle, LinearBufferAllocator::Allocation const & kPerDrawUniformBufferAllocation, Assets::Material::MaterialData const & Material)
+{
+    Vulkan::Resource::Buffer PerDrawUniformBuffer = {};
+    Vulkan::Resource::GetBuffer(kPerDrawUniformBufferAllocation.Buffer, PerDrawUniformBuffer);
+
+    VkDescriptorBufferInfo const kPerDrawUniformBufferDesc = Vulkan::DescriptorBufferInfo(PerDrawUniformBuffer.Resource, kPerDrawUniformBufferAllocation.OffsetInBytes, kPerDrawUniformBufferAllocation.SizeInBytes);
+
+    std::array<VkDescriptorImageInfo, 7u> ImageViewsAndSamplers = {};
 
     Assets::Texture::TextureData TextureData = {};
 
-    for (uint8 TextureIndex = {};
-         TextureIndex < TextureHandles.size();
-         TextureIndex++)
-    {
-        if (TextureHandles [TextureIndex] > 0u)
-        {
-            Assets::Texture::GetTextureData(TextureHandles [TextureIndex], TextureData);
+    Assets::Texture::GetTextureData(Material.AlbedoTexture, TextureData);
+    Vulkan::Resource::GetImageView(TextureData.ViewHandle, ImageViewsAndSamplers [0u].imageView);
+    ImageViewsAndSamplers [0u].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
-            ImageViewsAndSamplers [TextureIndex].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    Assets::Texture::GetTextureData(Material.SpecularTexture, TextureData);
+    Vulkan::Resource::GetImageView(TextureData.ViewHandle, ImageViewsAndSamplers [1u].imageView);
+    ImageViewsAndSamplers [1u].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
-            Vulkan::Resource::GetImageView(TextureData.ViewHandle, ImageViewsAndSamplers [TextureIndex].imageView);
-        }
-    }
+    Assets::Texture::GetTextureData(Material.NormalTexture, TextureData);
+    Vulkan::Resource::GetImageView(TextureData.ViewHandle, ImageViewsAndSamplers [2u].imageView);
+    ImageViewsAndSamplers [2u].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    
+    Assets::Texture::GetTextureData(Material.RoughnessTexture, TextureData);
+    Vulkan::Resource::GetImageView(TextureData.ViewHandle, ImageViewsAndSamplers [3u].imageView);
+    ImageViewsAndSamplers [3u].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
-    ImageViewsAndSamplers [ImageViewsAndSamplers.size() - 2u].sampler = AnisotropicImageSampler;
-    ImageViewsAndSamplers [ImageViewsAndSamplers.size() - 1u].sampler = LinearImageSampler;
+    Assets::Texture::GetTextureData(Material.AmbientOcclusionTexture, TextureData);
+    Vulkan::Resource::GetImageView(TextureData.ViewHandle, ImageViewsAndSamplers [4u].imageView);
+    ImageViewsAndSamplers [4u].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
-    std::array<VkWriteDescriptorSet, 5u> const kDescriptors =
-    {
-        Vulkan::WriteDescriptorSet(FrameState.DescriptorSets [FrameState.CurrentFrameStateIndex << 1u], VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 0u, 1u, &UniformBufferDescs [0u], nullptr),
-        Vulkan::WriteDescriptorSet(FrameState.DescriptorSets [FrameState.CurrentFrameStateIndex << 1u], VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1u, 1u, &UniformBufferDescs [1u], nullptr),
-        Vulkan::WriteDescriptorSet(FrameState.DescriptorSets [FrameState.CurrentFrameStateIndex << 1u], VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 2u, 5u, nullptr, ImageViewsAndSamplers.data()),
-        Vulkan::WriteDescriptorSet(FrameState.DescriptorSets [FrameState.CurrentFrameStateIndex << 1u], VK_DESCRIPTOR_TYPE_SAMPLER, 7u, 2u, nullptr, &ImageViewsAndSamplers [ImageViewsAndSamplers.size() - 2u]),
-        Vulkan::WriteDescriptorSet(FrameState.DescriptorSets [(FrameState.CurrentFrameStateIndex << 1u) + 1u], VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 0u, 1u, nullptr, &InputAttachmentDesc),
-    };
+    ImageViewsAndSamplers [ImageViewsAndSamplers.size() - 2u].sampler = ImageSamplers [1u];
+    ImageViewsAndSamplers [ImageViewsAndSamplers.size() - 1u].sampler = ImageSamplers [0u];
 
-    vkUpdateDescriptorSets(DeviceState.Device, static_cast<uint32>(kDescriptors.size()), kDescriptors.data(), 0u, nullptr);
+    uint16 const kAllocatorHandle = FrameState.DescriptorAllocators [FrameState.CurrentFrameStateIndex];
+
+    Vulkan::Descriptors::BindBufferDescriptors(kAllocatorHandle, kPerDrawDescriptorSetHandle, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 0u, 1u, &kPerDrawUniformBufferDesc);
+    Vulkan::Descriptors::BindImageDescriptors(kAllocatorHandle, kPerDrawDescriptorSetHandle, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1u, static_cast<uint8>(ImageViewsAndSamplers.size() - 2u), ImageViewsAndSamplers.data());
+    Vulkan::Descriptors::BindImageDescriptors(kAllocatorHandle, kPerDrawDescriptorSetHandle, VK_DESCRIPTOR_TYPE_SAMPLER, 6u, 2u, &ImageViewsAndSamplers [ImageViewsAndSamplers.size() - 2u]);
 }
 
 static void ResetCurrentFrameState()
 {
     LinearBufferAllocator::Reset(FrameState.LinearAllocators [FrameState.CurrentFrameStateIndex]);
 
-    //Vulkan::Descriptors::ResetDescriptorAllocator(DeviceState, FrameState.DescriptorAllocators [FrameState.CurrentFrameStateIndex]);
+    Vulkan::Descriptors::ResetDescriptorAllocator(DeviceState, FrameState.DescriptorAllocators [FrameState.CurrentFrameStateIndex]);
 
     vkResetFences(DeviceState.Device, 1u, &FrameState.Fences [FrameState.CurrentFrameStateIndex]);
 
@@ -567,7 +666,7 @@ static void ResizeViewport()
     FrameState.CurrentFrameStateIndex = 0u;
 }
 
-static bool const PreRender(Scene::SceneData const & Scene)
+static bool const PreRender()
 {
     VkResult const ImageAcquireResult = vkAcquireNextImageKHR(DeviceState.Device, ViewportState.SwapChain, std::numeric_limits<uint64>::max(), FrameState.Semaphores [FrameState.CurrentFrameStateIndex], VK_NULL_HANDLE, &FrameState.CurrentImageIndex);
 
@@ -603,10 +702,6 @@ static bool const PreRender(Scene::SceneData const & Scene)
 
     VkCommandBuffer & CommandBuffer = FrameState.CommandBuffers [FrameState.CurrentFrameStateIndex];
 
-
-    std::vector<LinearBufferAllocator::Allocation> UniformBufferAllocations = {};
-    ::CreateAndFillUniformBuffers(Scene, UniformBufferAllocations);
-    ::UpdateFrameUniformBufferDescriptor(UniformBufferAllocations);
     Assets::StaticMesh::InitialiseGPUResources(CommandBuffer, DeviceState, FrameState.Fences [FrameState.CurrentFrameStateIndex]);
     Assets::Texture::InitialiseGPUResources(CommandBuffer, DeviceState, FrameState.Fences [FrameState.CurrentFrameStateIndex]);
 
@@ -622,64 +717,113 @@ static void PostRender()
     Vulkan::Device::DestroyUnusedResources(DeviceState);
 }
 
+static void RenderStaticMeshes(VkCommandBuffer const kCommandBuffer, uint16 const kDescriptorSetHandle, VkDescriptorSet const kMeshDescriptorSet, LinearBufferAllocator::Allocation const & kAllocation)
+{
+    for (Components::StaticMesh::Types::Iterator CurrentMesh = Components::StaticMesh::Types::Iterator::Begin();
+         CurrentMesh != Components::StaticMesh::Types::Iterator::End();
+         ++CurrentMesh)
+    {
+        Components::StaticMesh::Types::ComponentData const kComponentData = *CurrentMesh;
+
+        Assets::StaticMesh::AssetData MeshData = {};
+        Assets::Material::MaterialData MaterialData = {};
+
+        bool bHasData = Assets::StaticMesh::GetAssetData(kComponentData.MeshHandle, MeshData);
+        bHasData &= Assets::Material::GetAssetData(kComponentData.MaterialHandle, MaterialData);
+
+        if (bHasData)
+        {
+            ::UpdatePerDrawDescriptorSet(kDescriptorSetHandle, kAllocation, MaterialData);
+
+            std::array<Vulkan::Resource::Buffer, 5u> MeshBuffers = {};
+
+            Vulkan::Resource::GetBuffer(MeshData.VertexBufferHandle, MeshBuffers [0u]);
+            Vulkan::Resource::GetBuffer(MeshData.NormalBufferHandle, MeshBuffers [1u]);
+            Vulkan::Resource::GetBuffer(MeshData.TangentBufferHandle, MeshBuffers [2u]);
+            Vulkan::Resource::GetBuffer(MeshData.UVBufferHandle, MeshBuffers [3u]);
+            Vulkan::Resource::GetBuffer(MeshData.IndexBufferHandle, MeshBuffers [4u]);
+
+            vkCmdBindIndexBuffer(kCommandBuffer, MeshBuffers [4u].Resource, 0u, VK_INDEX_TYPE_UINT32);
+
+            {
+                std::array<VkBuffer, 4u> const VertexBuffers =
+                {
+                    MeshBuffers [0u].Resource,
+                    MeshBuffers [1u].Resource,
+                    MeshBuffers [2u].Resource,
+                    MeshBuffers [3u].Resource,
+                };
+
+                std::array const BufferOffsets = std::array<VkDeviceSize, VertexBuffers.size()>();
+
+                vkCmdBindVertexBuffers(kCommandBuffer, 0u, static_cast<uint32>(VertexBuffers.size()), VertexBuffers.data(), BufferOffsets.data());
+            }
+
+            vkCmdBindDescriptorSets(kCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, PipelineLayouts [0u], 1u, 1u, &kMeshDescriptorSet, 0u, nullptr);
+
+            /* Put this here at the moment, ideally we should be flushing after changing the material */
+            /* Doesn't do anything if there aren't any descriptors to flush */
+            Vulkan::Descriptors::FlushDescriptorWrites(DeviceState);
+
+            vkCmdDrawIndexed(kCommandBuffer, MeshData.IndexCount, 1u, 0u, 0u, 0u);
+        }
+    }
+}
+
 bool const ForwardRenderer::Initialise(VkApplicationInfo const & ApplicationInfo)
 {
     /* These are loaded and compiled async, doing them here should mean they will be ready by the time we create the pipeline state */
-    ShaderLibrary::LoadShader("ProjectOnScreen.vert", ProjectVerticesVSHandle);
-    ShaderLibrary::LoadShader("TorranceSparrow.frag", TorranceSparrowFSHandle);
+    ShaderLibrary::LoadShader("ProjectOnScreen.vert", VertexShaderHandles [0u]);
+    ShaderLibrary::LoadShader("TorranceSparrow.frag", FragmentShaderHandles [0u]);
 
-    ShaderLibrary::LoadShader("FullScreenTriangle.vert", FullScreenTriangleVSHandle);
-    ShaderLibrary::LoadShader("PostProcess.frag", PostProcessFSHandle);
-
-    Assets::Texture::FindTexture("Boat Diffuse", TextureHandles [0u]);
-    Assets::Texture::FindTexture("Boat AO", TextureHandles [1u]);
-    Assets::Texture::FindTexture("Boat Specular", TextureHandles [2u]);
-    Assets::Texture::FindTexture("Boat Gloss", TextureHandles [3u]);
+    ShaderLibrary::LoadShader("FullScreenTriangle.vert", VertexShaderHandles [1u]);
+    ShaderLibrary::LoadShader("PostProcess.frag", FragmentShaderHandles [1u]);
 
     bool bResult = false;
 
-    if (Vulkan::Instance::CreateInstance(ApplicationInfo, InstanceState) 
-        && Vulkan::Device::CreateDevice(InstanceState, DeviceState) 
-        && Vulkan::Viewport::CreateViewport(InstanceState, DeviceState, ViewportState))
+    if (Vulkan::Instance::CreateInstance(ApplicationInfo, InstanceState))
     {
-        bResult = ::CreateMainRenderPass();
-
-        ::CreateDescriptorSetLayout();
-
-        bResult = ::CreateTorranceSparrowPipeline() 
-            && ::CreateTorranceSparrowPipeline()
-            && ::CreateOutputPipeline();
+        bResult = Vulkan::Device::CreateDevice(InstanceState, DeviceState);
+        bResult &= Vulkan::Viewport::CreateViewport(InstanceState, DeviceState, ViewportState);
 
         if (bResult)
         {
-            ::CreateFrameState();
+            bResult &= ::CreateMainRenderPass();
+            bResult &= ::CreateDescriptorSetLayout();
+            bResult &= ::CreateTorranceSparrowPipeline();
+            bResult &= ::CreateOutputPipeline();
+
+            if (bResult)
+            {
+                ::CreateFrameState();
+
+                VkSamplerCreateInfo SamplerCreateInfo =
+                {
+                    VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+                    nullptr,
+                    0u,
+                    VK_FILTER_LINEAR, VK_FILTER_LINEAR,
+                    VK_SAMPLER_MIPMAP_MODE_NEAREST,
+                    VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE, VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE, VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+                    0.0f,
+                    VK_FALSE, 8.0f,
+                    VK_FALSE, VK_COMPARE_OP_NEVER,
+                    0.0f, 0.0f,
+                    VK_BORDER_COLOR_INT_OPAQUE_BLACK,
+                    VK_FALSE,
+                };
+
+                VERIFY_VKRESULT(vkCreateSampler(DeviceState.Device, &SamplerCreateInfo, nullptr, &ImageSamplers [0u]));
+
+                SamplerCreateInfo.anisotropyEnable = VK_TRUE;
+
+                VERIFY_VKRESULT(vkCreateSampler(DeviceState.Device, &SamplerCreateInfo, nullptr, &ImageSamplers [1u]));
+            }
+            else
+            {
+                Logging::Log(Logging::LogTypes::Error, PBR_TEXT("Failed to create graphics pipeline state. Exiting."));
+            }
         }
-        else
-        {
-            Logging::Log(Logging::LogTypes::Error, PBR_TEXT("Failed to create graphics pipeline state. Exiting."));
-        }
-
-        VkSamplerCreateInfo SamplerCreateInfo = 
-        {
-            VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
-            nullptr,
-            0u,
-            VK_FILTER_LINEAR, VK_FILTER_LINEAR,
-            VK_SAMPLER_MIPMAP_MODE_NEAREST,
-            VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE, VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE, VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
-            0.0f, 
-            VK_TRUE, 8.0f, 
-            VK_FALSE, VK_COMPARE_OP_NEVER,
-            0.0f, 0.0f,
-            VK_BORDER_COLOR_INT_OPAQUE_BLACK,
-            VK_FALSE,
-        };
-
-        VERIFY_VKRESULT(vkCreateSampler(DeviceState.Device, &SamplerCreateInfo, nullptr, &AnisotropicImageSampler));
-
-        SamplerCreateInfo.anisotropyEnable = VK_FALSE;
-
-        VERIFY_VKRESULT(vkCreateSampler(DeviceState.Device, &SamplerCreateInfo, nullptr, &LinearImageSampler));
     }
 
     return bResult;
@@ -693,16 +837,14 @@ bool const ForwardRenderer::Shutdown()
 
     DeviceMemoryAllocator::FreeAllDeviceMemory(DeviceState);
 
-    if (RenderPipeline)
+    for (uint8 PipelineIndex = {};
+         PipelineIndex < Pipelines.size();
+         PipelineIndex++)
     {
-        vkDestroyPipeline(DeviceState.Device, RenderPipeline, nullptr);
-        RenderPipeline = VK_NULL_HANDLE;
-    }
-
-    if (RenderPipelineLayout)
-    {
-        vkDestroyPipelineLayout(DeviceState.Device, RenderPipelineLayout, nullptr);
-        RenderPipelineLayout = VK_NULL_HANDLE;
+        if (Pipelines [PipelineIndex] != VK_NULL_HANDLE)
+        {
+            vkDestroyPipeline(DeviceState.Device, Pipelines [PipelineIndex], nullptr);
+        }
     }
 
     ShaderLibrary::DestroyShaderModules(DeviceState);
@@ -724,12 +866,29 @@ bool const ForwardRenderer::Shutdown()
 
 void ForwardRenderer::Render(Scene::SceneData const & Scene)
 {
-    if (!::PreRender(Scene))
+    if (!::PreRender())
     {
         return;
     }
 
-    VkCommandBuffer & CommandBuffer = FrameState.CommandBuffers [FrameState.CurrentFrameStateIndex];
+    // before rendering the meshes, we will want to find all lights in the scene and organise them into a buffer.
+    // due to the nature of the code, we can simply iterate over all the light components
+
+    // setup uniform buffers for all things that need rendering (atm this is just static meshes)
+
+    std::vector<LinearBufferAllocator::Allocation> UniformBufferAllocations = {};
+    ::CreateAndFillUniformBuffers(Scene, UniformBufferAllocations);
+
+    /* Only require 2 per frame atm, so allocate here */
+    uint16 const kDescriptorAllocatorHandle = { FrameState.DescriptorAllocators [FrameState.CurrentFrameStateIndex] };
+
+    std::array<uint16, 2u> DescriptorSetHandles = {};
+    Vulkan::Descriptors::AllocateDescriptorSet(DeviceState, kDescriptorAllocatorHandle, DescriptorSetLayoutHandles [0u], DescriptorSetHandles [0u]);
+    Vulkan::Descriptors::AllocateDescriptorSet(DeviceState, kDescriptorAllocatorHandle, DescriptorSetLayoutHandles [1u], DescriptorSetHandles [1u]);
+
+    ::UpdatePerFrameDescriptorSet(DescriptorSetHandles [0u], UniformBufferAllocations [0u]);
+
+    VkCommandBuffer CommandBuffer = FrameState.CommandBuffers [FrameState.CurrentFrameStateIndex];
 
     {
         std::array<VkClearValue, 3u> const kAttachmentClearValues =
@@ -750,61 +909,28 @@ void ForwardRenderer::Render(Scene::SceneData const & Scene)
     vkCmdSetViewport(CommandBuffer, 0u, 1u, &ViewportState.DynamicViewport);
     vkCmdSetScissor(CommandBuffer, 0u, 1u, &ViewportState.DynamicScissorRect);
 
-    vkCmdBindPipeline(CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, RenderPipeline);
+    vkCmdBindPipeline(CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, Pipelines [0u]);
 
-    vkCmdBindDescriptorSets(CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, RenderPipelineLayout, 0u, 1u, &FrameState.DescriptorSets [FrameState.CurrentFrameStateIndex << 1u], 0u, nullptr);
+    std::array<VkDescriptorSet, 2u> DescriptorSets = {};
+    Vulkan::Descriptors::GetDescriptorSet(kDescriptorAllocatorHandle, DescriptorSetHandles [0u], DescriptorSets[0u]);
+    Vulkan::Descriptors::GetDescriptorSet(kDescriptorAllocatorHandle, DescriptorSetHandles [1u], DescriptorSets [1u]);
 
-    for (uint32 CurrentActorHandle = { 1u };
-         CurrentActorHandle <= Scene.ActorCount;
-         CurrentActorHandle++)
-    {
-        if (Scene::DoesActorHaveComponents(Scene, CurrentActorHandle, static_cast<uint32>(Scene::ComponentMasks::StaticMesh) | static_cast<uint32>(Scene::ComponentMasks::Material)))
-        {
-            /* TODO: Render with material */
-            /* TODO: Per draw descriptor set */
+    /*
+        Frequency Based Descriptor Sets
+        - Allocate descriptor set per material (Need a way to determine active materials)
+        - Check if per mesh data is necessary
+        - Need a descriptor set for per-frame data
+    */
 
-            Components::StaticMesh::ComponentData MeshComponentData = {};
-            bool bHasData = Components::StaticMesh::GetComponentData(Scene, CurrentActorHandle, MeshComponentData);
+    /* bind the per-frame descriptor set */
+    vkCmdBindDescriptorSets(CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, PipelineLayouts [0u], 0u, 1u, DescriptorSets.data(), 0u, nullptr);
 
-            Assets::StaticMesh::AssetData MeshData = {};
-            bHasData &= Assets::StaticMesh::GetAssetData(MeshComponentData.AssetHandle, MeshData);
-
-            /*Components::Material::ComponentData MaterialData = {};
-            bHasResources &= Components::Material::GetComponentData(Scene, CurrentActorHandle, MaterialData);*/
-
-            if (bHasData)
-            {
-                std::array<Vulkan::Resource::Buffer, 4u> MeshBuffers = {};
-
-                Vulkan::Resource::GetBuffer(MeshData.VertexBufferHandle, MeshBuffers [0u]);
-                Vulkan::Resource::GetBuffer(MeshData.NormalBufferHandle, MeshBuffers [1u]);
-                Vulkan::Resource::GetBuffer(MeshData.UVBufferHandle, MeshBuffers [2u]);
-                Vulkan::Resource::GetBuffer(MeshData.IndexBufferHandle, MeshBuffers [3u]);
-
-                vkCmdBindIndexBuffer(CommandBuffer, MeshBuffers [3u].Resource, 0u, VK_INDEX_TYPE_UINT32);
-
-                {
-                    std::array<VkBuffer, 3u> const VertexBuffers =
-                    {
-                        MeshBuffers [0u].Resource,
-                        MeshBuffers [1u].Resource,
-                        MeshBuffers [2u].Resource,
-                    };
-
-                    std::array const BufferOffsets = std::array<VkDeviceSize, VertexBuffers.size()>();
-
-                    vkCmdBindVertexBuffers(CommandBuffer, 0u, static_cast<uint32>(VertexBuffers.size()), VertexBuffers.data(), BufferOffsets.data());
-                }
-
-                vkCmdDrawIndexed(CommandBuffer, MeshData.IndexCount, 1u, 0u, 0u, 0u);
-            }
-        }
-    }
-
+    ::RenderStaticMeshes(CommandBuffer, DescriptorSetHandles [1u], DescriptorSets [1u], UniformBufferAllocations [1u]);
+    
     vkCmdNextSubpass(CommandBuffer, VK_SUBPASS_CONTENTS_INLINE);
 
-    vkCmdBindPipeline(CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, OutputPipelineState);
-    vkCmdBindDescriptorSets(CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, OutputPipelineLayout, 0u, 1u, &FrameState.DescriptorSets [(FrameState.CurrentFrameStateIndex << 1u) + 1u], 0u, nullptr);
+    vkCmdBindPipeline(CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, Pipelines [1u]);
+    vkCmdBindDescriptorSets(CommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, PipelineLayouts [1u], 0u, 1u, DescriptorSets.data(), 0u, nullptr);
 
     vkCmdDraw(CommandBuffer, 3u, 1u, 0u, 0u);
 

@@ -33,6 +33,7 @@ namespace Assets::StaticMesh
 
         uint32 VertexBufferHandle = {};
         uint32 NormalBufferHandle = {};
+        uint32 TangentBufferHandle = {};
         uint32 UVBufferHandle = {};
         uint32 IndexBufferHandle = {};
 

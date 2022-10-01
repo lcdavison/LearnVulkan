@@ -12,6 +12,7 @@ namespace Components::StaticMesh::Types
 {
     struct ComponentData
     {
+        uint32 ParentActorHandle = {};
         uint32 MeshHandle = {};
         uint32 MaterialHandle = {};
     };
