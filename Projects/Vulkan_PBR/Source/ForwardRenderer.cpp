@@ -514,8 +514,6 @@ static bool const CreateOutputPipeline()
 
 static bool const CreateAndFillUniformBuffers(Scene::SceneData const & Scene, std::vector<LinearBufferAllocator::Allocation> & OutputUniformBufferAllocations)
 {
-    EVENT_SCOPE();
-
     bool bResult = false;
 
     {

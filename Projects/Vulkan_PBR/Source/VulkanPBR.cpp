@@ -277,8 +277,6 @@ static bool const Run()
 
     for (;;)
     {
-        FRAME_SCOPE();
-
         std::chrono::high_resolution_clock::time_point CurrentFrameBeginTime = { std::chrono::high_resolution_clock::now() };
         uint64 const FrameDurationInNanoSeconds = std::chrono::duration_cast<std::chrono::duration<uint64, std::nano>>(CurrentFrameBeginTime - PreviousFrameBeginTime).count();
         AccumulatedFrameTimeInNanoSeconds += FrameDurationInNanoSeconds;
@@ -295,8 +293,6 @@ static bool const Run()
 
                 if (AccumulatedFrameTimeInNanoSeconds >= kFixedUpdateTimeInNanoSeconds)
                 {
-                    EVENT_SCOPE_STATIC(Update);
-
                     constexpr float kFixedUpdateTimeInSeconds = static_cast<float>(kFixedUpdateTimeInNanoSeconds) / 1000000000.0f;
 
                     /* Branchless WASD */
