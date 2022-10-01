@@ -17,7 +17,6 @@
 #include "Scene.hpp"
 #include "VulkanPBR.hpp"
 
-#include <CPUProfiler/CPUProfiler.hpp>
 #include <Math/Matrix.hpp>
 #include <Math/Transform.hpp>
 #include <Math/Utilities.hpp>

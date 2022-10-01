@@ -11,7 +11,6 @@
 #include "Input/InputManager.hpp"
 #include "Scene.hpp"
 
-#include <CPUProfiler/CPUProfiler.hpp>
 #include <dwmapi.h>
 #include <Math/Transform.hpp>
 #include <Math/Utilities.hpp>
