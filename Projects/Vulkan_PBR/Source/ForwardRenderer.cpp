@@ -10,7 +10,6 @@
 
 #include "Components/StaticMeshComponent.hpp"
 #include "Components/TransformComponent.hpp"
-#include "Components/MaterialComponent.hpp"
 
 #include "Assets/StaticMesh.hpp"
 #include "Assets/Texture.hpp"
