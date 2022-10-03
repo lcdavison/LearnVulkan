@@ -859,18 +859,13 @@ void ForwardRenderer::Render(Scene::SceneData const & Scene)
     }
 
     {
-        VkPresentInfoKHR PresentInfo = {};
-        PresentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-        PresentInfo.swapchainCount = 1u;
-        PresentInfo.pSwapchains = &ViewportState.SwapChain;
-        PresentInfo.waitSemaphoreCount = 1u;
-        PresentInfo.pWaitSemaphores = &FrameState.Semaphores [kFrameStateCount + FrameState.CurrentFrameStateIndex];
-        PresentInfo.pImageIndices = &FrameState.CurrentImageIndex;
+        VkPresentInfoKHR const kPresentInfo = Vulkan::PresentInfo(1u, &ViewportState.SwapChain,
+                                                                  &FrameState.CurrentImageIndex,
+                                                                  1u, &FrameState.Semaphores [kFrameStateCount + FrameState.CurrentFrameStateIndex]);
 
-        VkResult PresentResult = vkQueuePresentKHR(DeviceState.GraphicsQueue, &PresentInfo);
+        VkResult const kPresentResult = vkQueuePresentKHR(DeviceState.GraphicsQueue, &kPresentInfo);
 
-        if (PresentResult == VK_SUBOPTIMAL_KHR
-            || PresentResult == VK_ERROR_OUT_OF_DATE_KHR)
+        if (kPresentResult == VK_SUBOPTIMAL_KHR || kPresentResult == VK_ERROR_OUT_OF_DATE_KHR)
         {
             ::ResizeViewport();
             return;

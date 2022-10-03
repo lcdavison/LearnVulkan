@@ -252,6 +252,22 @@ namespace Vulkan
     {
         return VkSwapchainCreateInfoKHR { VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR, nullptr, Flags, Surface, MinImageCount, ImageFormat, ImageColourSpace, ImageExtents, ArrayLayerCount, UsageFlags, SharingMode, QueueFamilyIndexCount, QueueFamilyIndices, static_cast<VkSurfaceTransformFlagBitsKHR>(PreTransformFlags), static_cast<VkCompositeAlphaFlagBitsKHR>(AlphaCompositionFlags), PresentMode, bClipped, OldSwapChain };
     }
+
+    inline VkPresentInfoKHR const PresentInfo(std::uint32_t const kSwapChainCount, VkSwapchainKHR const * const kSwapChains,
+                                              std::uint32_t const * const kImageIndices,
+                                              std::uint32_t const kWaitSemaphoreCount, VkSemaphore const * const kWaitSemaphores,
+                                              VkResult * const kResults = nullptr)
+    {
+        return VkPresentInfoKHR
+        {
+            VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+            nullptr,
+            kWaitSemaphoreCount, kWaitSemaphores,
+            kSwapChainCount, kSwapChains,
+            kImageIndices,
+            kResults,
+        };
+    }
 }
 
 VULKAN_WRAPPER_API bool const InitialiseVulkanWrapper();
