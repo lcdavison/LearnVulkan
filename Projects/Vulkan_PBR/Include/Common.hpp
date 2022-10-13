@@ -13,7 +13,6 @@
     #define PBR_TEXT(Text) Text
 #endif
 
-#if _DEBUG
 #define PBR_ASSERT(Condition) \
     do { \
         if (!(Condition)) { \
@@ -21,7 +20,5 @@
             __debugbreak(); \
         } \
     } while(false)
-#else
     /* TODO: Should probably throw an exception or something */
-    #define PBR_ASSERT(Condition)
-#endif
+    //#define PBR_ASSERT(Condition)
