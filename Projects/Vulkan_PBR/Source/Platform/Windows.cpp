@@ -7,6 +7,7 @@
 #undef OutputDebugString
 
 using namespace Platform;
+using namespace Platform::Windows::Types;
 
 /* This might be overkill, but the name collisions from the Win32 macros were becoming a pain */
 
@@ -22,12 +23,12 @@ auto CallWindowsFunction(TFunction1, TFunction2 Function2, TArguments && ... Arg
     return Function2(Arguments...);
 }
 
-void Windows::SetThreadDescription(Windows::Handle Thread, wchar_t const * Description)
+void Windows::SetThreadDescription(Handle Thread, wchar_t const * Description)
 {
     ::SetThreadDescription(Thread, Description);
 }
 
-Windows::MessageBoxResults Windows::MessageBox(MessageBoxTypes Type, Windows::TCHAR const * Caption, Windows::TCHAR const * Title)
+Windows::MessageBoxResults Windows::MessageBox(MessageBoxTypes Type, Char const * Caption, Char const * Title)
 {
     switch (Type)
     {
