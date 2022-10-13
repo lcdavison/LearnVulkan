@@ -13,5 +13,5 @@ namespace ShaderCompiler
     extern bool const Initialise();
     extern void Destroy();
 
-    extern bool const CompileShader(std::filesystem::path const & FilePath, unsigned int *& OutputByteCode, uint64 & OutputByteCodeSizeInBytes, std::basic_string<Platform::Windows::TCHAR> & OutputErrorMessage);
+    extern bool const CompileShader(std::filesystem::path const & FilePath, unsigned int *& OutputByteCode, uint64 & OutputByteCodeSizeInBytes, std::basic_string<Platform::Windows::Types::Char> & OutputErrorMessage);
 }

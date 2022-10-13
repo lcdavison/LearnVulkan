@@ -21,7 +21,7 @@ namespace Logging
 
     extern void Flush();
 
-    extern void DebugLog(Platform::Windows::TCHAR const * Message);
+    extern void DebugLog(Platform::Windows::Types::Char const * Message);
 
-    extern void FatalError(Platform::Windows::TCHAR const * Message);
+    extern void FatalError(Platform::Windows::Types::Char const * Message);
 }

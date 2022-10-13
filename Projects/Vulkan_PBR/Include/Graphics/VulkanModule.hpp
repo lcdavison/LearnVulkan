@@ -19,7 +19,7 @@
             VkResult Result = Function;\
             if (Result < VK_SUCCESS)\
             {\
-                std::basic_string<Platform::Windows::TCHAR> ErrorMessage = PBR_TEXT(""); \
+                std::basic_string<Platform::Windows::Types::Char> ErrorMessage = PBR_TEXT(""); \
                 ErrorMessage += PBR_TEXT("Function ["); \
                 ErrorMessage += PBR_TEXT(#Function); \
                 ErrorMessage += PBR_TEXT("]\nFailed with Error Code ["); \
