@@ -1,6 +1,7 @@
 # LearnVulkan
 
-[![CI Build](https://github.com/lcdavison/LearnVulkan/actions/workflows/CIBuild.yml/badge.svg?branch=main)](https://github.com/lcdavison/LearnVulkan/actions/workflows/CIBuild.yml)
+[![CI Build](https://github.com/lcdavison/LearnVulkan/actions/workflows/CI-Build.yml/badge.svg?branch=main)](https://github.com/lcdavison/LearnVulkan/actions/workflows/CI-Build.yml)
+[![Nightly Build](https://github.com/lcdavison/LearnVulkan/actions/workflows/Nightly-Build.yaml/badge.svg?branch=main)](https://github.com/lcdavison/LearnVulkan/actions/workflows/Nightly-Build.yaml)
 
 **WORK IN PROGRESS!**
 
