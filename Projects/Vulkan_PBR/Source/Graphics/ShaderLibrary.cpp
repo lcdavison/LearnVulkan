@@ -138,7 +138,7 @@ static ShaderData CompileShader(std::filesystem::path const FilePath)
 
             MessageBoxResults MessageBoxResult = MessageBox(MessageBoxTypes::YesNo, ErrorOutput.c_str(), PBR_TEXT("Shader Compile Error"));
 
-            if (MessageBoxResult == Windows::MessageBoxResults::No)
+            if (MessageBoxResult == MessageBoxResults::No)
             {
                 break;
             }
