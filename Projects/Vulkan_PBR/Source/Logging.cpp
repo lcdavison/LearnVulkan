@@ -12,6 +12,7 @@
 #include <cstdarg>
 
 using namespace Platform;
+using namespace Platform::Windows::Types;
 
 namespace LoggingThread
 {
@@ -136,12 +137,12 @@ void Logging::Flush()
     while (!LoggingThread::bEmptyMessageQueue);
 }
 
-void Logging::DebugLog(Windows::TCHAR const * Message)
+void Logging::DebugLog(Char const * Message)
 {
     Windows::OutputDebugString(Message);
 }
 
-void Logging::FatalError(Windows::TCHAR const * Message)
+void Logging::FatalError(Char const * Message)
 {
     Windows::MessageBox(Windows::MessageBoxTypes::Ok, Message, PBR_TEXT("Fatal Error"));
 }
