@@ -7,8 +7,19 @@ namespace Vulkan::Device
     struct DeviceState;
 }
 
-/* Creates a buffer for suballocation */
-/* These are ideal for allocating small buffers for single use in a frame */
+namespace Vulkan::Allocators::LinearBufferAllocator
+{
+    extern bool const CreateAllocator(Vulkan::Device::DeviceState const & kDeviceState, uint64 const kAllocatorSizeInBytes, VkBufferUsageFlags const kUsageFlags, VkMemoryPropertyFlags const kMemoryFlags, uint16 & OutputAllocatorHandle);
+
+    extern bool const DestroyAllocator(uint16 const kAllocatorHandle, Vulkan::Device::DeviceState const & kDeviceState);
+
+    extern bool const Allocate(uint16 const kAllocatorHandle, uint64 const kBufferSizeInBytes, uint16 & OutputAllocationHandle);
+
+    extern bool const Reset(uint16 const kAllocatorHandle);
+
+    extern bool const GetMappedAddress(uint16 const kAllocationHandle, void *& OutputMappedAddress);
+}
+
 namespace LinearBufferAllocator
 {
     struct Allocation
@@ -29,7 +40,7 @@ namespace LinearBufferAllocator
         uint32 Buffer;
     };
 
-    extern bool const CreateAllocator(Vulkan::Device::DeviceState const & DeviceState, uint64 const BufferSizeInBytes, VkBufferUsageFlags const UsageFlags, VkMemoryPropertyFlags const MemoryFlags, AllocatorState & OutputState);
+    extern bool const CreateAllocator(Vulkan::Device::DeviceState const & kDeviceState, uint64 const kBufferSizeInBytes, VkBufferUsageFlags const kUsageFlags, VkMemoryPropertyFlags const kMemoryFlags, AllocatorState & OutputState);
 
     extern bool const DestroyAllocator(AllocatorState & State, Vulkan::Device::DeviceState & DeviceState);
 
