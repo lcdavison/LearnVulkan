@@ -10,7 +10,8 @@
 #include <mutex>
 #include <condition_variable>
 
-using namespace Platform;
+using namespace Platform::Windows;
+using namespace Platform::Windows::Types;
 
 struct ShaderStatus
 {
@@ -102,7 +103,7 @@ namespace ShaderCompilationThread
         bStopThread = false;
         Thread = std::thread(Main);
 
-        Windows::SetThreadDescription(Thread.native_handle(), kThreadName.c_str());
+        SetThreadDescription(Thread.native_handle(), kThreadName.c_str());
     }
 
     static void Stop()
@@ -122,12 +123,12 @@ static ShaderData CompileShader(std::filesystem::path const FilePath)
 
     while (!bShaderCompiledSuccessfully)
     {
-        std::basic_string<Windows::TCHAR> ErrorMessage = {};
+        std::basic_string<Char> ErrorMessage = {};
         bShaderCompiledSuccessfully = ShaderCompiler::CompileShader(FilePath, CompiledOutput.ByteCode, CompiledOutput.ByteCodeSizeInBytes, ErrorMessage);
 
         if (!bShaderCompiledSuccessfully)
         {
-            std::basic_string<Windows::TCHAR> ErrorOutput = PBR_TEXT("");
+            std::basic_string<Char> ErrorOutput = PBR_TEXT("");
             ErrorOutput += PBR_TEXT("Error Compiling: ");
             ErrorOutput += FilePath.generic_string();
             ErrorOutput += PBR_TEXT("\n");
@@ -135,7 +136,7 @@ static ShaderData CompileShader(std::filesystem::path const FilePath)
             ErrorOutput += PBR_TEXT("\n");
             ErrorOutput += PBR_TEXT("Would you like to retry?");
 
-            Windows::MessageBoxResults MessageBoxResult = Windows::MessageBox(Windows::MessageBoxTypes::YesNo, ErrorOutput.c_str(), PBR_TEXT("Shader Compile Error"));
+            MessageBoxResults MessageBoxResult = MessageBox(MessageBoxTypes::YesNo, ErrorOutput.c_str(), PBR_TEXT("Shader Compile Error"));
 
             if (MessageBoxResult == Windows::MessageBoxResults::No)
             {
