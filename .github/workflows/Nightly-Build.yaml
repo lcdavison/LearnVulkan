@@ -1,4 +1,4 @@
-name: CMakeNightly
+name: Nightly Build
 
 on:
   workflow_dispatch:
