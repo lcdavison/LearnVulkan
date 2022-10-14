@@ -36,7 +36,7 @@ struct PerDrawUniformBufferData
 
 struct FrameStateCollection
 {
-    std::vector<LinearBufferAllocator::AllocatorState> LinearAllocators = {};
+    std::vector<uint16> LinearAllocatorHandles = {};
 
     std::vector<VkCommandBuffer> CommandBuffers = {};
 
@@ -134,7 +134,7 @@ static void CreateFrameState()
     FrameState.DepthStencilImageViews.resize(kFrameStateCount);
     FrameState.Semaphores.resize(kFrameStateCount * 2u);    // Each frame uses 2 semaphores
     FrameState.Fences.resize(kFrameStateCount);
-    FrameState.LinearAllocators.resize(kFrameStateCount);
+    FrameState.LinearAllocatorHandles.resize(kFrameStateCount);
     FrameState.DescriptorAllocators.resize(kFrameStateCount);
 
     Vulkan::Device::CreateCommandBuffers(DeviceState, VK_COMMAND_BUFFER_LEVEL_PRIMARY, kFrameStateCount, FrameState.CommandBuffers);
@@ -188,8 +188,11 @@ static void CreateFrameState()
 
         Vulkan::Device::CreateFence(DeviceState, VK_FENCE_CREATE_SIGNALED_BIT, FrameState.Fences [CurrentFrameStateIndex]);
 
-        LinearBufferAllocator::CreateAllocator(DeviceState, 1024u, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, FrameState.LinearAllocators [CurrentFrameStateIndex]);
-
+        Vulkan::Allocators::LinearBufferAllocator::CreateAllocator(DeviceState,
+                                                                   1024u,
+                                                                   VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+                                                                   VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                                                                   FrameState.LinearAllocatorHandles [CurrentFrameStateIndex]);
         Vulkan::Descriptors::CreateDescriptorAllocator(DeviceState,
                                                        Vulkan::Descriptors::DescriptorTypes::Uniform | Vulkan::Descriptors::DescriptorTypes::SampledImage | Vulkan::Descriptors::DescriptorTypes::Sampler,
                                                        FrameState.DescriptorAllocators [CurrentFrameStateIndex]);
@@ -198,9 +201,9 @@ static void CreateFrameState()
 
 static void DestroyFrameState()
 {
-    for (LinearBufferAllocator::AllocatorState & AllocatorState : FrameState.LinearAllocators)
+    for (uint16 const kAllocatorHandle : FrameState.LinearAllocatorHandles)
     {
-        LinearBufferAllocator::DestroyAllocator(AllocatorState, DeviceState);
+        Vulkan::Allocators::LinearBufferAllocator::DestroyAllocator(kAllocatorHandle, DeviceState);
     }
 
     for (VkFence & Fence : FrameState.Fences)
@@ -424,13 +427,13 @@ static bool const CreateOutputPipeline()
     return true;
 }
 
-static bool const CreateAndFillUniformBuffers(Scene::SceneData const & Scene, std::vector<LinearBufferAllocator::Allocation> & OutputUniformBufferAllocations)
+static bool const CreateAndFillUniformBuffers(Scene::SceneData const & Scene, std::vector<uint32> & OutputUniformBufferAllocations)
 {
     bool bResult = false;
 
     {
-        LinearBufferAllocator::Allocation & FrameUniformBufferAllocation = { OutputUniformBufferAllocations.emplace_back() };
-        bResult = LinearBufferAllocator::Allocate(FrameState.LinearAllocators [FrameState.CurrentFrameStateIndex], sizeof(PerFrameUniformBufferData), FrameUniformBufferAllocation);
+        uint32 AllocationHandle = {};
+        bResult = Vulkan::Allocators::LinearBufferAllocator::Allocate(FrameState.LinearAllocatorHandles [FrameState.CurrentFrameStateIndex], sizeof(PerFrameUniformBufferData), AllocationHandle);
 
         if (bResult)
         {
@@ -443,15 +446,24 @@ static bool const CreateAndFillUniformBuffers(Scene::SceneData const & Scene, st
             Camera::GetViewMatrix(Scene.MainCamera, PerFrameData.WorldToViewMatrix);
             PerFrameData.WorldToViewMatrix = Math::Matrix4x4::Inverse(PerFrameData.WorldToViewMatrix);
 
-            ::memcpy_s(FrameUniformBufferAllocation.MappedAddress, FrameUniformBufferAllocation.SizeInBytes, &PerFrameData, sizeof(PerFrameData));
+            void * MappedAddress = {};
+            Vulkan::Allocators::LinearBufferAllocator::GetMappedAddress(AllocationHandle, MappedAddress);
+
+            ::memcpy_s(MappedAddress, sizeof(PerFrameUniformBufferData), &PerFrameData, sizeof(PerFrameData));
+
+            OutputUniformBufferAllocations.push_back(AllocationHandle);
         }
     }
 
     PerDrawUniformBufferData IntermediateUniformBufferData = {};
 
     uint32 const kActorCount = { static_cast<uint32>(Scene.ComponentMasks.size()) };
-    LinearBufferAllocator::Allocation & UniformBufferAllocation = OutputUniformBufferAllocations.emplace_back();
-    bResult &= LinearBufferAllocator::Allocate(FrameState.LinearAllocators [FrameState.CurrentFrameStateIndex], sizeof(PerDrawUniformBufferData) * kActorCount, UniformBufferAllocation);
+
+    uint32 AllocationHandle = {};
+    bResult &= Vulkan::Allocators::LinearBufferAllocator::Allocate(FrameState.LinearAllocatorHandles [FrameState.CurrentFrameStateIndex], sizeof(PerFrameUniformBufferData) * kActorCount, AllocationHandle);
+
+    void * MappedAddress = {};
+    Vulkan::Allocators::LinearBufferAllocator::GetMappedAddress(AllocationHandle, MappedAddress);
 
     uint32 CurrentOutputIndex = {};
     for (Components::StaticMesh::Types::Iterator CurrentMesh = Components::StaticMesh::Types::Iterator::Begin();
@@ -468,25 +480,33 @@ static bool const CreateAndFillUniformBuffers(Scene::SceneData const & Scene, st
         //    // just use some default transform, but should also log this
         //}
 
-        PerDrawUniformBufferData * OutputAddress = static_cast<PerDrawUniformBufferData *>(UniformBufferAllocation.MappedAddress) + CurrentOutputIndex;
+        PerDrawUniformBufferData * OutputAddress = static_cast<PerDrawUniformBufferData *>(MappedAddress) + CurrentOutputIndex;
 
         std::memcpy(OutputAddress, &IntermediateUniformBufferData, sizeof(IntermediateUniformBufferData));
 
         CurrentOutputIndex++;
     }
 
+    OutputUniformBufferAllocations.push_back(AllocationHandle);
+
     return bResult;
 }
 
-static void UpdatePerFrameDescriptorSet(uint16 const kPerFrameDescriptorSetHandle, LinearBufferAllocator::Allocation const & kPerFrameUniformBufferAllocation)
+static void UpdatePerFrameDescriptorSet(uint16 const kPerFrameDescriptorSetHandle, uint32 const kPerFrameUniformBufferAllocation)
 {
+    using namespace Vulkan::Allocators;
+    using namespace Vulkan::Allocators::Types;
+
+    AllocationInfo Allocation = {};
+    LinearBufferAllocator::GetAllocationInfo(kPerFrameUniformBufferAllocation, Allocation);
+
     Vulkan::Resource::Buffer PerFrameUniformBuffer = {};
-    Vulkan::Resource::GetBuffer(kPerFrameUniformBufferAllocation.Buffer, PerFrameUniformBuffer);
+    Vulkan::Resource::GetBuffer(Allocation.BufferHandle, PerFrameUniformBuffer);
 
     VkImageView SceneColourImageView = {};
     Vulkan::Resource::GetImageView(FrameState.SceneColourImageViews [FrameState.CurrentFrameStateIndex], SceneColourImageView);
 
-    VkDescriptorBufferInfo const kPerFrameUniformBufferDesc = Vulkan::DescriptorBufferInfo(PerFrameUniformBuffer.Resource, kPerFrameUniformBufferAllocation.OffsetInBytes, kPerFrameUniformBufferAllocation.SizeInBytes);
+    VkDescriptorBufferInfo const kPerFrameUniformBufferDesc = Vulkan::DescriptorBufferInfo(PerFrameUniformBuffer.Resource, Allocation.OffsetInBytes, Allocation.SizeInBytes);
     VkDescriptorImageInfo const kSceneColourImageDesc =
     {
         VK_NULL_HANDLE,
@@ -500,12 +520,18 @@ static void UpdatePerFrameDescriptorSet(uint16 const kPerFrameDescriptorSetHandl
     Vulkan::Descriptors::BindImageDescriptors(kAllocatorHandle, kPerFrameDescriptorSetHandle, VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1u, 1u, &kSceneColourImageDesc);
 }
 
-static void UpdatePerDrawDescriptorSet(uint16 const kPerDrawDescriptorSetHandle, LinearBufferAllocator::Allocation const & kPerDrawUniformBufferAllocation, Assets::Material::MaterialData const & Material)
+static void UpdatePerDrawDescriptorSet(uint16 const kPerDrawDescriptorSetHandle, uint32 const kPerDrawUniformBufferAllocation, Assets::Material::MaterialData const & Material)
 {
-    Vulkan::Resource::Buffer PerDrawUniformBuffer = {};
-    Vulkan::Resource::GetBuffer(kPerDrawUniformBufferAllocation.Buffer, PerDrawUniformBuffer);
+    using namespace Vulkan::Allocators;
+    using namespace Vulkan::Allocators::Types;
 
-    VkDescriptorBufferInfo const kPerDrawUniformBufferDesc = Vulkan::DescriptorBufferInfo(PerDrawUniformBuffer.Resource, kPerDrawUniformBufferAllocation.OffsetInBytes, kPerDrawUniformBufferAllocation.SizeInBytes);
+    AllocationInfo Allocation = {};
+    LinearBufferAllocator::GetAllocationInfo(kPerDrawUniformBufferAllocation, Allocation);
+
+    Vulkan::Resource::Buffer PerDrawUniformBuffer = {};
+    Vulkan::Resource::GetBuffer(Allocation.BufferHandle, PerDrawUniformBuffer);
+
+    VkDescriptorBufferInfo const kPerDrawUniformBufferDesc = Vulkan::DescriptorBufferInfo(PerDrawUniformBuffer.Resource, Allocation.OffsetInBytes, Allocation.SizeInBytes);
 
     std::array<VkDescriptorImageInfo, 7u> ImageViewsAndSamplers = {};
 
@@ -543,7 +569,7 @@ static void UpdatePerDrawDescriptorSet(uint16 const kPerDrawDescriptorSetHandle,
 
 static void ResetCurrentFrameState()
 {
-    LinearBufferAllocator::Reset(FrameState.LinearAllocators [FrameState.CurrentFrameStateIndex]);
+    Vulkan::Allocators::LinearBufferAllocator::Reset(FrameState.LinearAllocatorHandles [FrameState.CurrentFrameStateIndex]);
 
     Vulkan::Descriptors::ResetDescriptorAllocator(DeviceState, FrameState.DescriptorAllocators [FrameState.CurrentFrameStateIndex]);
 
@@ -626,7 +652,7 @@ static void PostRender()
     Vulkan::Device::DestroyUnusedResources(DeviceState);
 }
 
-static void RenderStaticMeshes(VkCommandBuffer const kCommandBuffer, uint16 const kDescriptorSetHandle, VkDescriptorSet const kMeshDescriptorSet, LinearBufferAllocator::Allocation const & kAllocation)
+static void RenderStaticMeshes(VkCommandBuffer const kCommandBuffer, uint16 const kDescriptorSetHandle, VkDescriptorSet const kMeshDescriptorSet, uint32 const kAllocation)
 {
     for (Components::StaticMesh::Types::Iterator CurrentMesh = Components::StaticMesh::Types::Iterator::Begin();
          CurrentMesh != Components::StaticMesh::Types::Iterator::End();
@@ -785,7 +811,7 @@ void ForwardRenderer::Render(Scene::SceneData const & Scene)
 
     // setup uniform buffers for all things that need rendering (atm this is just static meshes)
 
-    std::vector<LinearBufferAllocator::Allocation> UniformBufferAllocations = {};
+    std::vector<uint32> UniformBufferAllocations = {};
     ::CreateAndFillUniformBuffers(Scene, UniformBufferAllocations);
 
     /* Only require 2 per frame atm, so allocate here */
