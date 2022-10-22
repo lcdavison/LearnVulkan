@@ -30,7 +30,7 @@ namespace Vulkan::Allocators::Private
 
 static std::vector<Private::LinearAllocatorState> LinearAllocators = {};
 
-bool const Vulkan::Allocators::LinearBufferAllocator::CreateAllocator(Vulkan::Device::DeviceState const & kDeviceState, uint64 const kAllocatorSizeInBytes, VkBufferUsageFlags const kUsageFlags, VkMemoryPropertyFlags const kMemoryFlags, uint16 & OutputAllocatorHandle)
+bool const LinearBufferAllocator::CreateAllocator(Vulkan::Device::DeviceState const & kDeviceState, uint64 const kAllocatorSizeInBytes, VkBufferUsageFlags const kUsageFlags, VkMemoryPropertyFlags const kMemoryFlags, uint16 & OutputAllocatorHandle)
 {
     if (kAllocatorSizeInBytes == 0u)
     {
@@ -49,7 +49,7 @@ bool const Vulkan::Allocators::LinearBufferAllocator::CreateAllocator(Vulkan::De
     return true;
 }
 
-bool const Vulkan::Allocators::LinearBufferAllocator::DestroyAllocator(uint16 const kAllocatorHandle, Vulkan::Device::DeviceState const & kDeviceState)
+bool const LinearBufferAllocator::DestroyAllocator(uint16 const kAllocatorHandle, Vulkan::Device::DeviceState const & kDeviceState)
 {
     if (kAllocatorHandle == 0u)
     {
@@ -67,7 +67,7 @@ bool const Vulkan::Allocators::LinearBufferAllocator::DestroyAllocator(uint16 co
     return true;
 }
 
-bool const Vulkan::Allocators::LinearBufferAllocator::Allocate(uint16 const kAllocatorHandle, uint64 const kBufferSizeInBytes, uint32 & OutputAllocationHandle)
+bool const LinearBufferAllocator::Allocate(uint16 const kAllocatorHandle, uint64 const kBufferSizeInBytes, uint32 & OutputAllocationHandle)
 {
     if (kAllocatorHandle == 0u)
     {
@@ -114,7 +114,7 @@ bool const Vulkan::Allocators::LinearBufferAllocator::Allocate(uint16 const kAll
     return true;
 }
 
-bool const Vulkan::Allocators::LinearBufferAllocator::Reset(uint16 const kAllocatorHandle)
+bool const LinearBufferAllocator::Reset(uint16 const kAllocatorHandle)
 {
     if (kAllocatorHandle == 0u)
     {
@@ -133,7 +133,7 @@ bool const Vulkan::Allocators::LinearBufferAllocator::Reset(uint16 const kAlloca
     return true;
 }
 
-bool const Vulkan::Allocators::LinearBufferAllocator::GetAllocationInfo(uint32 const kAllocationHandle, Types::AllocationInfo & OutputAllocationInfo)
+bool const LinearBufferAllocator::GetAllocationInfo(uint32 const kAllocationHandle, Types::AllocationInfo & OutputAllocationInfo)
 {
     if (kAllocationHandle == 0u)
     {
@@ -156,7 +156,7 @@ bool const Vulkan::Allocators::LinearBufferAllocator::GetAllocationInfo(uint32 c
     return true;
 }
 
-bool const Vulkan::Allocators::LinearBufferAllocator::GetMappedAddress(uint32 const kAllocationHandle, void *& OutputMappedAddress)
+bool const LinearBufferAllocator::GetMappedAddress(uint32 const kAllocationHandle, void *& OutputMappedAddress)
 {
     if (kAllocationHandle == 0u)
     {
