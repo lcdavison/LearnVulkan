@@ -7,25 +7,21 @@ namespace Vulkan::Device
     struct DeviceState;
 }
 
-/* Simple free list allocator for managing device memory */
-namespace DeviceMemoryAllocator
+namespace Vulkan::Memory
 {
-    struct Allocation
+    struct AllocationInfo
     {
-        VkDeviceMemory Memory;
+        VkDeviceMemory DeviceMemory = {};
 
-        uint64 AllocationID; /* Pool / Block */
-        uint64 SizeInBytes;
-        uint64 OffsetInBytes;
-        
-        uint64 AlignmentWasteInBytes;
+        uint64 OffsetInBytes = {};
+        uint64 SizeInBytes = {};
 
-        void * MappedAddress; /* The memory will only be mapped if it's host visible */
+        void * MappedAddress = {};
     };
 
-    extern bool const AllocateMemory(Vulkan::Device::DeviceState const & Device, VkMemoryRequirements const & MemoryRequirements, VkMemoryPropertyFlags const MemoryFlags, Allocation & OutputAllocation);
+    extern bool const Allocate(Vulkan::Device::DeviceState const & kDevice, VkMemoryRequirements const & kMemoryRequirements, VkMemoryPropertyFlags const kMemoryFlags, uint64 & OutputAllocationHandle);
 
-    extern bool const FreeMemory(Allocation & Allocation);
+    extern bool const Free(uint64 const kAllocationHandle);
 
-    extern void FreeAllDeviceMemory(Vulkan::Device::DeviceState const & Device);
+    extern bool const GetAllocationInfo(uint64 const kAllocationHandle, AllocationInfo & OutputAllocationInfo);
 }

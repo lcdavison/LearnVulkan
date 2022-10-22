@@ -2,47 +2,73 @@
 
 #include "Graphics/Device.hpp"
 
-#include <vector>
 #include <array>
+#include <list>
+#include <map>
+#include <unordered_map>
+#include <vector>
+#include <queue>
 
-static uint8 const kMaximumMemoryPoolBlockCount = { 16u };
+using namespace Vulkan::Memory;
 
-/* Free List Allocations */
-struct DeviceMemoryPool
+// TODO: Need a way to free all device memory
+
+namespace Vulkan::Memory::Private
 {
-    /* TODO: Instead of using vectors for each block, we could use a hash table indexed by size and chained with offsets */
-    /* Just take the first offset from the chain */
-    /* Coalescing the memory back in will be a bit more involved though */
-    std::array<std::vector<uint64>, kMaximumMemoryPoolBlockCount> BlockFreeListOffsetsInBytes;
-    std::array<std::vector<uint64>, kMaximumMemoryPoolBlockCount> BlockFreeListSizesInBytes;
+    namespace HandleConstants
+    {
+        static uint64 const kMemoryTypeMask = { 0x000000FF00000000 };
+        static uint64 const kHandleMask = { 0x00000000FFFFFFFF };
+    }
 
-    std::array<VkDeviceMemory, kMaximumMemoryPoolBlockCount> MemoryBlocks;
-    std::array<VkDeviceSize, kMaximumMemoryPoolBlockCount> MemoryBlockAllocatedSizeInBytes;
-    std::array<void *, kMaximumMemoryPoolBlockCount> BlockBaseMemoryAddresses;
+    static uint64 const kMemoryBlockSizeInBytes = { 256u << 10u << 10u }; // 512 MiB
+    static uint8 const kMaximumPoolBlockCount = { 16u };
 
-    uint8 NextUnallocatedMemoryBlockIndex = { 0u };
-};
+    /* Free list allocator with memory coalescing */
+    /* Just use a single block of memory atm */
+    struct MemoryPool
+    {
+        struct MemoryChunk
+        {
+            uint64 OffsetInBytes = {};
+            uint64 SizeInBytes = {};
+            uint32 AllocationHandle = {}; // this is so that we can remap the chunk in memory later
+            uint16 AlignmentOffsetInBytes = {};
+        };
 
-static uint64 const kDefaultBlockSizeInBytes = { 128u << 10u << 10u }; // 128 MiB
+        union Node
+        {
+            MemoryChunk Data;
+            uint32 NextFreeIndex;
+        };
 
-static std::array<DeviceMemoryPool, VK_MAX_MEMORY_TYPES> MemoryPools;
+        std::unordered_map<uint32, uint32> AllocationHandleRemappingTable = {};
+        std::vector<MemoryChunk> AllocatedChunks = {};
 
-static bool const GetDeviceMemoryTypeIndex(Vulkan::Device::DeviceState const & DeviceState, uint32 MemoryTypeMask, VkMemoryPropertyFlags const RequiredMemoryTypeFlags, uint32 & OutputMemoryTypeIndex)
+        std::multimap<uint64, MemoryChunk> ChunkSizeInBytesToFreeChunkMap = {};
+        std::map<uint64, std::multimap<uint64, MemoryChunk>::iterator> ChunkOffsetToFreeChunkMap = {};
+
+        VkDeviceMemory DeviceMemory = {};
+        void * DeviceMemoryStartAddress = {};
+    };
+}
+
+static std::unordered_map<uint8, Private::MemoryPool> DeviceMemoryPools = {};
+
+static bool const GetDeviceMemoryType(Vulkan::Device::DeviceState const & kDeviceState, VkMemoryRequirements const & kMemoryRequirements, VkMemoryPropertyFlags const & kMemoryProperties, uint32 & OutputMemoryTypeIndex)
 {
     bool bResult = false;
 
     VkPhysicalDeviceMemoryProperties MemoryProperties = {};
-    vkGetPhysicalDeviceMemoryProperties(DeviceState.PhysicalDevice, &MemoryProperties);
+    vkGetPhysicalDeviceMemoryProperties(kDeviceState.PhysicalDevice, &MemoryProperties);
 
     uint32 CurrentMemoryTypeIndex = {};
+    uint32 MemoryTypeMask = { kMemoryRequirements.memoryTypeBits };
     while (_BitScanForward(reinterpret_cast<unsigned long *>(&CurrentMemoryTypeIndex), MemoryTypeMask))
     {
-        /* Clear the bit from the mask */
-        MemoryTypeMask ^= (1u << CurrentMemoryTypeIndex);
+        MemoryTypeMask ^= 1u << CurrentMemoryTypeIndex;
 
-        VkMemoryType const & CurrentMemoryType = MemoryProperties.memoryTypes [CurrentMemoryTypeIndex];
-
-        if ((CurrentMemoryType.propertyFlags & RequiredMemoryTypeFlags) == RequiredMemoryTypeFlags)
+        if ((MemoryProperties.memoryTypes [CurrentMemoryTypeIndex].propertyFlags & kMemoryProperties) == kMemoryProperties)
         {
             OutputMemoryTypeIndex = CurrentMemoryTypeIndex;
             bResult = true;
@@ -53,215 +79,204 @@ static bool const GetDeviceMemoryTypeIndex(Vulkan::Device::DeviceState const & D
     return bResult;
 }
 
-static bool const GetDeviceMemoryBlockIndex(DeviceMemoryPool const & SelectedMemoryPool, VkMemoryRequirements const & MemoryRequirements, uint32 & OutputMemoryBlockIndex, uint32 & OutputFreeListChunkIndex)
+static bool const InitialiseMemoryPool(Private::MemoryPool & MemoryPool, Vulkan::Device::DeviceState const & kDeviceState, uint32 const kMemoryTypeIndex, bool const bIsCPUVisible)
 {
-    bool bResult = false;
-
-    for (uint8 CurrentBlockIndex = { 0u };
-         CurrentBlockIndex < kMaximumMemoryPoolBlockCount && !bResult;
-         CurrentBlockIndex++)
+    VkMemoryAllocateInfo const kAllocationInfo = 
     {
-        std::vector<uint64> const & CurrentFreeList = SelectedMemoryPool.BlockFreeListSizesInBytes [CurrentBlockIndex];
+        VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+        nullptr,
+        Private::kMemoryBlockSizeInBytes,
+        kMemoryTypeIndex,
+    };
 
-        /* Use a First-Fit method here, this should suffice currently */
-        for (int16 CurrentChunkIndex = { static_cast<int16>(CurrentFreeList.size() - 1l) };
-             CurrentChunkIndex >= 0l;
-             CurrentChunkIndex--)
-        {
-            if (MemoryRequirements.size <= CurrentFreeList [CurrentChunkIndex])
-            {
-                OutputMemoryBlockIndex = CurrentBlockIndex;
-                OutputFreeListChunkIndex = CurrentChunkIndex;
-                bResult = true;
-                break;
-            }
-        }
+    VERIFY_VKRESULT(vkAllocateMemory(kDeviceState.Device, &kAllocationInfo, nullptr, &MemoryPool.DeviceMemory));
+
+    if (bIsCPUVisible)
+    {
+        VERIFY_VKRESULT(vkMapMemory(kDeviceState.Device, MemoryPool.DeviceMemory, 0u, VK_WHOLE_SIZE, static_cast<VkMemoryMapFlags>(0u), &MemoryPool.DeviceMemoryStartAddress));
     }
 
-    return bResult;
+    decltype(MemoryPool.ChunkSizeInBytesToFreeChunkMap)::iterator FreeChunkIterator = MemoryPool.ChunkSizeInBytesToFreeChunkMap.insert(std::make_pair(Private::kMemoryBlockSizeInBytes, Private::MemoryPool::MemoryChunk { 0u, Private::kMemoryBlockSizeInBytes, 0u, 0u }));
+    MemoryPool.ChunkOffsetToFreeChunkMap.insert(std::make_pair(0u, FreeChunkIterator));
+
+    return true;
 }
 
-static void CreateMemoryBlockForPool(DeviceMemoryPool & MemoryPool, Vulkan::Device::DeviceState const & DeviceState, uint32 const MemoryTypeIndex, uint32 & OutputMemoryBlockIndex, VkDeviceMemory & OutputDeviceMemory)
+bool const Vulkan::Memory::Allocate(Vulkan::Device::DeviceState const & kDeviceState, VkMemoryRequirements const & kMemoryRequirements, VkMemoryPropertyFlags const kMemoryFlags, uint64 & OutputAllocationHandle)
 {
-    VkMemoryAllocateInfo AllocateInfo = {};
-    AllocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-    AllocateInfo.allocationSize = kDefaultBlockSizeInBytes;
-    AllocateInfo.memoryTypeIndex = MemoryTypeIndex;
-
-    VkDeviceMemory NewMemoryBlock = {};
-    VERIFY_VKRESULT(vkAllocateMemory(DeviceState.Device, &AllocateInfo, nullptr, &NewMemoryBlock));
-
-    uint32 MemoryBlockIndex = static_cast<uint32>(MemoryPool.NextUnallocatedMemoryBlockIndex);
-    MemoryPool.NextUnallocatedMemoryBlockIndex++;
-
-    MemoryPool.MemoryBlocks [MemoryBlockIndex] = NewMemoryBlock;
-
-    MemoryPool.BlockFreeListOffsetsInBytes [MemoryBlockIndex].push_back(0u);
-    MemoryPool.BlockFreeListSizesInBytes [MemoryBlockIndex].push_back(kDefaultBlockSizeInBytes);
-
-    MemoryPool.MemoryBlockAllocatedSizeInBytes [MemoryBlockIndex] = 0u;
-
-    OutputMemoryBlockIndex = MemoryBlockIndex;
-    OutputDeviceMemory = NewMemoryBlock;
-}
-
-bool const DeviceMemoryAllocator::AllocateMemory(Vulkan::Device::DeviceState const & DeviceState, VkMemoryRequirements const & MemoryRequirements, VkMemoryPropertyFlags const MemoryFlags, Allocation & OutputAllocation)
-{
-    bool bResult = true;
-
-    /* TODO: Have a fallback for allocations bigger than default block size */
-
     uint32 MemoryTypeIndex = {};
-    ::GetDeviceMemoryTypeIndex(DeviceState, MemoryRequirements.memoryTypeBits, MemoryFlags, MemoryTypeIndex);
-
-    DeviceMemoryPool & SelectedMemoryPool = MemoryPools [MemoryTypeIndex];
-
-    bool const bCPUVisible = (MemoryFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) > 0u;
-
-    uint32 MemoryBlockIndex = {};
-    uint32 FreeListChunkIndex = {};
-    if (!::GetDeviceMemoryBlockIndex(SelectedMemoryPool, MemoryRequirements, MemoryBlockIndex, FreeListChunkIndex))
+    bool bResult = ::GetDeviceMemoryType(kDeviceState, kMemoryRequirements, static_cast<uint32>(kMemoryFlags), MemoryTypeIndex);
+    
+    if (bResult)
     {
-        VkDeviceMemory NewMemoryBlock = {};
-        ::CreateMemoryBlockForPool(SelectedMemoryPool, DeviceState, MemoryTypeIndex, MemoryBlockIndex, NewMemoryBlock);
+        Private::MemoryPool & MemoryPool = DeviceMemoryPools [static_cast<uint8>(MemoryTypeIndex)];
 
-        if (bCPUVisible)
+        bool const kbIsCPUVisible = { (kMemoryFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) != 0u };
+
+        // check if the memory block has been allocated, allocate if not
+        if (MemoryPool.DeviceMemory == VK_NULL_HANDLE)
         {
-            VERIFY_VKRESULT(vkMapMemory(DeviceState.Device, NewMemoryBlock, 0u, kDefaultBlockSizeInBytes, 0u, &SelectedMemoryPool.BlockBaseMemoryAddresses [MemoryBlockIndex]));
+            /* we need to initialise the memory pool */
+            ::InitialiseMemoryPool(MemoryPool, kDeviceState, MemoryTypeIndex, kbIsCPUVisible);
         }
-    }
 
-    /* Offsets should be aligned in the memory block */
-    uint64 const MemoryBlockBaseOffset = SelectedMemoryPool.BlockFreeListOffsetsInBytes [MemoryBlockIndex][FreeListChunkIndex];
+        // worst case size since it needs to be aligned properly relative to the memory block
+        // this will cause some wastage
+        uint64 const kAllocationSizeInBytes = { kMemoryRequirements.size + kMemoryRequirements.alignment };
 
-    uint64 const MemoryBlockAlignedOffset = (MemoryBlockBaseOffset + MemoryRequirements.alignment - 1u) & ~(MemoryRequirements.alignment - 1u);
-    uint16 const MemoryBlockAlignmentWasteInBytes = static_cast<uint16>(MemoryBlockAlignedOffset - MemoryBlockBaseOffset);
+        // search the memory block for the first chunk that satisfies the allocation size
+        // this is just a first-fit strategy, which should be fine atm
+        decltype(MemoryPool.ChunkSizeInBytesToFreeChunkMap)::iterator FreeChunkIterator = MemoryPool.ChunkSizeInBytesToFreeChunkMap.lower_bound(kAllocationSizeInBytes);
 
-    uint64 const MemoryBlockSize = SelectedMemoryPool.BlockFreeListSizesInBytes [MemoryBlockIndex][FreeListChunkIndex];
-    uint64 const AllocationSizeInBytes = MemoryBlockAlignmentWasteInBytes + MemoryRequirements.size;
-
-    if (MemoryBlockSize > MemoryRequirements.size)
-    {
-        SelectedMemoryPool.BlockFreeListOffsetsInBytes [MemoryBlockIndex][FreeListChunkIndex] += AllocationSizeInBytes;
-        SelectedMemoryPool.BlockFreeListSizesInBytes [MemoryBlockIndex][FreeListChunkIndex] -= AllocationSizeInBytes;
-    }
-    else
-    {
-        /* Don't really like this but it will do for now */
-        auto OffsetIterator = SelectedMemoryPool.BlockFreeListOffsetsInBytes [MemoryBlockIndex].cbegin() + FreeListChunkIndex;
-        auto SizeIterator = SelectedMemoryPool.BlockFreeListSizesInBytes [MemoryBlockIndex].cbegin() + FreeListChunkIndex;
-
-        SelectedMemoryPool.BlockFreeListOffsetsInBytes [MemoryBlockIndex].erase(OffsetIterator);
-        SelectedMemoryPool.BlockFreeListSizesInBytes [MemoryBlockIndex].erase(SizeIterator);
-    }
-
-    /* OffsetInBytes - AlignmentWaste == BaseAllocationOffset */
-
-    OutputAllocation.Memory = SelectedMemoryPool.MemoryBlocks [MemoryBlockIndex];
-    OutputAllocation.AllocationID = (static_cast<uint64>(MemoryTypeIndex) << 32u) | static_cast<uint64>(MemoryBlockIndex);
-    OutputAllocation.OffsetInBytes = MemoryBlockAlignedOffset;
-    OutputAllocation.SizeInBytes = MemoryRequirements.size;
-    OutputAllocation.AlignmentWasteInBytes = MemoryBlockAlignmentWasteInBytes;
-    OutputAllocation.MappedAddress = bCPUVisible ? reinterpret_cast<void *>(reinterpret_cast<std::byte *>(SelectedMemoryPool.BlockBaseMemoryAddresses [MemoryBlockIndex]) + MemoryBlockAlignedOffset) : nullptr;
-
-    return bResult;
-}
-
-bool const DeviceMemoryAllocator::FreeMemory(DeviceMemoryAllocator::Allocation & Allocation)
-{
-    bool bResult = false;
-
-    /* First find pool, then find block that this allocation is from */
-    uint32 const MemoryPoolIndex = (Allocation.AllocationID & 0xFFFFFFFF00000000) >> 32u;
-    uint32 const PoolBlockIndex = (Allocation.AllocationID & 0x00000000FFFFFFFF);
-
-    DeviceMemoryPool & SelectedMemoryPool = MemoryPools [MemoryPoolIndex];
-
-    uint64 const AllocationOffsetInBytes = Allocation.OffsetInBytes - Allocation.AlignmentWasteInBytes;
-    uint64 const AllocationSizeInBytes = Allocation.SizeInBytes + Allocation.AlignmentWasteInBytes;
-
-    /* Get indices of lower and upper bound chunks */
-    uint32 GreatestLowerOffsetIndex = {};
-    uint32 SmallestHigherOffsetIndex = {};
-
-    uint64 GreatestLowerOffset = { std::numeric_limits<uint64>::min() };
-    uint64 SmallestHigherOffset = { std::numeric_limits<uint64>::max() };
-
-    bool bFoundLowerOffset = false;
-    bool bFoundHigherOffset = false;
-
-    for (uint32 CurrentOffsetIndex = { 0u };
-         CurrentOffsetIndex < SelectedMemoryPool.BlockFreeListOffsetsInBytes [PoolBlockIndex].size();
-         CurrentOffsetIndex++)
-    {
-        uint64 CurrentOffsetInBytes = SelectedMemoryPool.BlockFreeListOffsetsInBytes [PoolBlockIndex][CurrentOffsetIndex];
-
-        if (CurrentOffsetInBytes < AllocationOffsetInBytes && CurrentOffsetInBytes >= GreatestLowerOffset)
+        // if there are no free chunks then report a fatal error
+        if (FreeChunkIterator == MemoryPool.ChunkSizeInBytesToFreeChunkMap.cend())
         {
-            GreatestLowerOffsetIndex = CurrentOffsetIndex;
-            GreatestLowerOffset = CurrentOffsetInBytes;
-
-            bFoundLowerOffset = true;
+            /* FATAL ERROR: No space left in the memory block */
+            bResult = false;
         }
-        else if (CurrentOffsetInBytes > AllocationOffsetInBytes && CurrentOffsetInBytes <= SmallestHigherOffset)
+        else
         {
-            SmallestHigherOffsetIndex = CurrentOffsetIndex;
-            SmallestHigherOffset = CurrentOffsetInBytes;
+            Private::MemoryPool::MemoryChunk & FreeChunk = FreeChunkIterator->second;
 
-            bFoundHigherOffset = true;
-        }
-    }
+            uint64 const kAlignedMemoryOffset = (FreeChunk.OffsetInBytes + kMemoryRequirements.alignment - 1u) & ~(kMemoryRequirements.alignment - 1u);
+            uint16 const kAlignmentOffsetInBytes = { static_cast<uint16>(kAlignedMemoryOffset - FreeChunk.OffsetInBytes) };
 
-    /* 4 Cases:
-    *  0 - No offsets just append to free list
-    *  1 - 1 offset to left, merge left
-    *  2 - 1 offset to right, merge right
-    *  3 - Offsets left and right, merge from left to right
-    */
-    bool const bCanMergeLeftBlock =
-        bFoundLowerOffset &&
-        GreatestLowerOffset + SelectedMemoryPool.BlockFreeListSizesInBytes [PoolBlockIndex][GreatestLowerOffsetIndex] == AllocationOffsetInBytes;
+            // if the aligned offset is the same as the previous offset then we should reclaim the additional alignment bytes since they aren't needed
 
-    bool const bCanMergeRightBlock =
-        bFoundHigherOffset &&
-        AllocationOffsetInBytes + AllocationSizeInBytes == SelectedMemoryPool.BlockFreeListOffsetsInBytes [PoolBlockIndex][SmallestHigherOffsetIndex];
+            // store the allocation and return a handle
+            Private::MemoryPool::MemoryChunk & NewChunk = MemoryPool.AllocatedChunks.emplace_back(Private::MemoryPool::MemoryChunk { FreeChunk.OffsetInBytes, kAllocationSizeInBytes, 0u, kAlignmentOffsetInBytes });
 
-    if (bCanMergeLeftBlock && bCanMergeRightBlock)
-    {
-        SelectedMemoryPool.BlockFreeListSizesInBytes [PoolBlockIndex][GreatestLowerOffsetIndex] += AllocationSizeInBytes + SelectedMemoryPool.BlockFreeListSizesInBytes [PoolBlockIndex][SmallestHigherOffsetIndex];
+            uint32 const kAllocationHandle = { static_cast<uint32>(MemoryPool.AllocatedChunks.size()) };
+            MemoryPool.AllocationHandleRemappingTable.insert(std::make_pair(kAllocationHandle, kAllocationHandle - 1u));
 
-        SelectedMemoryPool.BlockFreeListSizesInBytes [PoolBlockIndex].erase(SelectedMemoryPool.BlockFreeListSizesInBytes [PoolBlockIndex].cbegin() + SmallestHigherOffsetIndex);
-        SelectedMemoryPool.BlockFreeListOffsetsInBytes [PoolBlockIndex].erase(SelectedMemoryPool.BlockFreeListOffsetsInBytes [PoolBlockIndex].cbegin() + SmallestHigherOffsetIndex);
-    }
-    else if (bCanMergeLeftBlock)
-    {
-        SelectedMemoryPool.BlockFreeListSizesInBytes [PoolBlockIndex][GreatestLowerOffsetIndex] += AllocationSizeInBytes;
-    }
-    else if (bCanMergeRightBlock)
-    {
-        SelectedMemoryPool.BlockFreeListOffsetsInBytes [PoolBlockIndex][SmallestHigherOffsetIndex] -= AllocationSizeInBytes;
-        SelectedMemoryPool.BlockFreeListSizesInBytes [PoolBlockIndex][SmallestHigherOffsetIndex] += AllocationSizeInBytes;
-    }
-    else
-    {
-        SelectedMemoryPool.BlockFreeListOffsetsInBytes [PoolBlockIndex].push_back(AllocationOffsetInBytes);
-        SelectedMemoryPool.BlockFreeListSizesInBytes [PoolBlockIndex].push_back(AllocationSizeInBytes);
-    }
+            NewChunk.AllocationHandle = kAllocationHandle;
 
-    return bResult;
-}
-
-void DeviceMemoryAllocator::FreeAllDeviceMemory(Vulkan::Device::DeviceState const & DeviceState)
-{
-    for (DeviceMemoryPool & Pool : MemoryPools)
-    {
-        for (VkDeviceMemory MemoryBlock : Pool.MemoryBlocks)
-        {
-            if (MemoryBlock)
+            // try to split the chunk if there is residual memory
+            if (FreeChunk.SizeInBytes > kAllocationSizeInBytes)
             {
-                vkFreeMemory(DeviceState.Device, MemoryBlock, nullptr);
-                MemoryBlock = VK_NULL_HANDLE;
+                Private::MemoryPool::MemoryChunk const kNewChunk =
+                {
+                    FreeChunk.OffsetInBytes + kAllocationSizeInBytes,
+                    FreeChunk.SizeInBytes - kAllocationSizeInBytes,
+                    0u, 0u
+                };
+
+                decltype(MemoryPool.ChunkSizeInBytesToFreeChunkMap)::iterator const NewChunkIterator = MemoryPool.ChunkSizeInBytesToFreeChunkMap.insert(std::make_pair(kNewChunk.SizeInBytes, kNewChunk));
+                MemoryPool.ChunkOffsetToFreeChunkMap.insert(std::make_pair(kNewChunk.OffsetInBytes, NewChunkIterator));
             }
+
+            MemoryPool.ChunkOffsetToFreeChunkMap.erase(FreeChunk.OffsetInBytes);
+            MemoryPool.ChunkSizeInBytesToFreeChunkMap.erase(FreeChunkIterator);
+
+            OutputAllocationHandle = { (static_cast<uint64>(MemoryTypeIndex) << 32u) | static_cast<uint64>(kAllocationHandle) };
         }
     }
+
+    return bResult;
+}
+
+bool const Vulkan::Memory::Free(uint64 const kAllocationHandle)
+{
+    if (kAllocationHandle == 0u)
+    {
+        /* ERROR */
+        return false;
+    }
+
+    uint32 const kMemoryTypeIndex = (kAllocationHandle & Private::HandleConstants::kMemoryTypeMask) >> 32u;
+    uint32 const kAllocationHandleBits = (kAllocationHandle & Private::HandleConstants::kHandleMask);
+
+    Private::MemoryPool & MemoryPool = DeviceMemoryPools [static_cast<uint8>(kMemoryTypeIndex)];
+
+    uint32 const kAllocationIndex = MemoryPool.AllocationHandleRemappingTable [kAllocationHandleBits];
+
+    Private::MemoryPool::MemoryChunk & Chunk = MemoryPool.AllocatedChunks [kAllocationIndex];
+
+    decltype(MemoryPool.ChunkOffsetToFreeChunkMap)::iterator NextValidOffset = { MemoryPool.ChunkOffsetToFreeChunkMap.upper_bound(Chunk.OffsetInBytes - Chunk.AlignmentOffsetInBytes) };
+    decltype(MemoryPool.ChunkOffsetToFreeChunkMap)::iterator PreviousValidOffset = { MemoryPool.ChunkOffsetToFreeChunkMap.end() };
+
+    if (NextValidOffset != MemoryPool.ChunkOffsetToFreeChunkMap.cbegin())
+    {
+        // if it is equal to the end then there isn't 1 greater, but there is still possibly 1 less than
+        PreviousValidOffset = NextValidOffset;
+        PreviousValidOffset--;
+    }
+
+    if (PreviousValidOffset != MemoryPool.ChunkOffsetToFreeChunkMap.cend())
+    {
+        Private::MemoryPool::MemoryChunk const & PreviousChunk = PreviousValidOffset->second->second;
+        uint64 const kPreviousChunkEndOffset = { PreviousChunk.OffsetInBytes + PreviousChunk.SizeInBytes };
+
+        if (kPreviousChunkEndOffset == Chunk.OffsetInBytes)
+        {
+            // merge into chunk
+            Chunk.OffsetInBytes = PreviousChunk.OffsetInBytes;
+            Chunk.SizeInBytes += PreviousChunk.SizeInBytes;
+
+            // remove from the maps
+            MemoryPool.ChunkSizeInBytesToFreeChunkMap.erase(PreviousValidOffset->second);
+            MemoryPool.ChunkOffsetToFreeChunkMap.erase(PreviousValidOffset);            
+        }
+    }
+
+    if (NextValidOffset != MemoryPool.ChunkOffsetToFreeChunkMap.cend())
+    {
+        Private::MemoryPool::MemoryChunk const & NextChunk = NextValidOffset->second->second;
+        uint64 const kChunkEndOffset = { Chunk.OffsetInBytes + Chunk.SizeInBytes };
+
+        if (kChunkEndOffset == NextChunk.OffsetInBytes)
+        {
+            Chunk.SizeInBytes += NextChunk.SizeInBytes;
+
+            // remove from map
+            MemoryPool.ChunkSizeInBytesToFreeChunkMap.erase(NextValidOffset->second);
+            MemoryPool.ChunkOffsetToFreeChunkMap.erase(NextValidOffset);
+        }
+    }
+
+    // add the new chunk back into the free list
+    decltype(MemoryPool.ChunkSizeInBytesToFreeChunkMap)::iterator const kNewChunkIterator = MemoryPool.ChunkSizeInBytesToFreeChunkMap.insert(std::make_pair(Chunk.SizeInBytes, Chunk));
+    MemoryPool.ChunkOffsetToFreeChunkMap.insert(std::make_pair(Chunk.OffsetInBytes, kNewChunkIterator));
+
+    // remove from allocated chunks
+    MemoryPool.AllocationHandleRemappingTable.erase(kAllocationHandleBits);
+
+    if (MemoryPool.AllocatedChunks.size() > 1u)
+    {
+        // remap the swapped chunk
+        std::swap(MemoryPool.AllocatedChunks [kAllocationIndex], MemoryPool.AllocatedChunks.back());
+        MemoryPool.AllocationHandleRemappingTable [MemoryPool.AllocatedChunks [kAllocationIndex].AllocationHandle] = kAllocationIndex;
+    }
+
+    MemoryPool.AllocatedChunks.pop_back();
+
+    return true;
+}
+
+bool const Vulkan::Memory::GetAllocationInfo(uint64 const kAllocationHandle, Vulkan::Memory::AllocationInfo & OutputAllocationInfo)
+{
+    if (kAllocationHandle == 0u)
+    {
+        /* ERROR */
+        return false;
+    }
+
+    uint8 const kMemoryTypeIndex = { static_cast<uint8>((kAllocationHandle & Private::HandleConstants::kMemoryTypeMask) >> 32u) };
+    uint32 const kAllocationHandleBits = { (kAllocationHandle & Private::HandleConstants::kHandleMask) };
+
+    Private::MemoryPool const & kMemoryPool = DeviceMemoryPools [kMemoryTypeIndex];
+
+    /* need to do some additional checks for handle validity */
+    uint32 const kAllocationIndex = kMemoryPool.AllocationHandleRemappingTable.at(kAllocationHandleBits);
+
+    Private::MemoryPool::MemoryChunk const & kMemoryChunk = kMemoryPool.AllocatedChunks [kAllocationIndex];
+
+    uint64 const kAllocationOffset = { kMemoryChunk.OffsetInBytes + kMemoryChunk.AlignmentOffsetInBytes };
+
+    OutputAllocationInfo.DeviceMemory = kMemoryPool.DeviceMemory;
+    OutputAllocationInfo.OffsetInBytes = kAllocationOffset;
+    OutputAllocationInfo.SizeInBytes = kMemoryChunk.SizeInBytes;
+    OutputAllocationInfo.MappedAddress = static_cast<void *>(static_cast<std::byte *>(kMemoryPool.DeviceMemoryStartAddress) + kAllocationOffset);
+
+    return true;
 }
