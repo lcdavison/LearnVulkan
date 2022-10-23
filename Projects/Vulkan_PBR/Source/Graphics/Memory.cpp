@@ -36,12 +36,6 @@ namespace Vulkan::Memory::Private
             uint16 AlignmentOffsetInBytes = {};
         };
 
-        union Node
-        {
-            MemoryChunk Data;
-            uint32 NextFreeIndex;
-        };
-
         std::unordered_map<uint32, uint32> AllocationHandleRemappingTable = {};
         std::vector<MemoryChunk> AllocatedChunks = {};
 
