@@ -21,7 +21,7 @@ namespace Vulkan::Memory::Private
         static uint64 const kHandleMask = { 0x00000000FFFFFFFF };
     }
 
-    static uint64 const kMemoryBlockSizeInBytes = { 256u << 10u << 10u }; // 512 MiB
+    static uint64 const kMemoryBlockSizeInBytes = { 256u << 10u << 10u }; // 256 MiB
     static uint8 const kMaximumPoolBlockCount = { 16u };
 
     /* Free list allocator with memory coalescing */
