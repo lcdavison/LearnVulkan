@@ -770,8 +770,6 @@ bool const ForwardRenderer::Shutdown()
 
     ::DestroyFrameState();
 
-    DeviceMemoryAllocator::FreeAllDeviceMemory(DeviceState);
-
     for (uint8 PipelineIndex = {};
          PipelineIndex < Pipelines.size();
          PipelineIndex++)
