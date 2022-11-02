@@ -17,6 +17,15 @@ To generate the project run one of the following:
 
 The solution file can then be found in `.\Build`
 
+## Planned Features
+- Light Components
+- Shadows
+- Tiled Forward Lighting
+- Scene Graph
+- Debug UI
+
+And whatever else I would like to implement in the future...
+
 ## Boat Model
 
 Currently the project is hard coded to render the boat model from the following:
