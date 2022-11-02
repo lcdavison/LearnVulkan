@@ -11,12 +11,11 @@
 #include "Input/InputManager.hpp"
 #include "Scene.hpp"
 
-#include <dwmapi.h>
 #include <Math/Transform.hpp>
 #include <Math/Utilities.hpp>
 #include <Windows.h>
 #include <Windowsx.h>
-#include <dwmapi.h>
+
 #include <thread>
 
 #ifndef HID_USAGE_PAGE_GENERIC
@@ -310,10 +309,6 @@ static bool const Run()
                 }
 
                 ForwardRenderer::Render(PBRScene);
-
-
-                /* Not really necessary for fullscreen, but this helps little bit with microstutter in windowed/borderless */
-                ::DwmFlush();
             }
             else
             {

@@ -100,7 +100,6 @@ target_link_libraries(
     MathLib
     OBJLoader
     BMPLoader
-    dwmapi
 )
 
 # This is for debugging the .exe since we have required resources here
