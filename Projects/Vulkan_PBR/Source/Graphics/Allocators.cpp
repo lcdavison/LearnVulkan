@@ -94,18 +94,14 @@ bool const LinearBufferAllocator::Allocate(uint16 const kAllocatorHandle, uint64
     Vulkan::Resource::Buffer Buffer = {};
     Vulkan::Resource::GetBuffer(LinearAllocator.BufferHandle, Buffer);
 
-    /* We can remove this after a refactor */
-    if (Buffer.MemoryAllocation == nullptr)
-    {
-        /* ERROR */
-        return false;
-    }
-
     uint64 const kOffsetInBytes = LinearAllocator.CurrentOffsetInBytes;
     LinearAllocator.CurrentOffsetInBytes += kBufferSizeInBytes;
     LinearAllocator.CurrentSizeInBytes -= kBufferSizeInBytes;
 
-    void * const kMappedMemory = static_cast<void *>(static_cast<std::byte *>(Buffer.MemoryAllocation->MappedAddress) + kOffsetInBytes);
+    Vulkan::Memory::AllocationInfo MemoryInfo = {};
+    Vulkan::Memory::GetAllocationInfo(Buffer.MemoryAllocationHandle, MemoryInfo);
+
+    void * const kMappedMemory = static_cast<void *>(static_cast<std::byte *>(MemoryInfo.MappedAddress) + kOffsetInBytes);
 
     LinearAllocator.Allocations.emplace_back(Private::LinearAllocatorState::Allocation { kOffsetInBytes, kBufferSizeInBytes, kMappedMemory });
 

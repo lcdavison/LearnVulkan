@@ -177,11 +177,18 @@ static void TransferToGPU(uint32 const AssetHandle, VkCommandBuffer CommandBuffe
     Vulkan::Resource::GetBuffer(StagingBufferHandles [3u], StagingBuffers [3u]);
     Vulkan::Resource::GetBuffer(StagingBufferHandles [4u], StagingBuffers [4u]);
 
-    ::memcpy_s(StagingBuffers [0u].MemoryAllocation->MappedAddress, StagingBuffers [0u].MemoryAllocation->SizeInBytes, StaticMeshes.RawVertexBuffers [kAssetIndex].get(), kVertexBufferSizeInBytes);
-    ::memcpy_s(StagingBuffers [1u].MemoryAllocation->MappedAddress, StagingBuffers [1u].MemoryAllocation->SizeInBytes, StaticMeshes.RawNormalBuffers [kAssetIndex].get(), kVertexBufferSizeInBytes);
-    ::memcpy_s(StagingBuffers [2u].MemoryAllocation->MappedAddress, StagingBuffers [2u].MemoryAllocation->SizeInBytes, StaticMeshes.RawTangentBuffers [kAssetIndex].get(), kTangentBufferSizeInBytes);
-    ::memcpy_s(StagingBuffers [3u].MemoryAllocation->MappedAddress, StagingBuffers [3u].MemoryAllocation->SizeInBytes, StaticMeshes.RawUVBuffers [kAssetIndex].get(), kVertexBufferSizeInBytes);
-    ::memcpy_s(StagingBuffers [4u].MemoryAllocation->MappedAddress, StagingBuffers [4u].MemoryAllocation->SizeInBytes, StaticMeshes.RawIndexBuffers [kAssetIndex].get(), kIndexBufferSizeInBytes);
+    std::array<Vulkan::Memory::AllocationInfo, 5u> AllocationInfos = {};
+    Vulkan::Memory::GetAllocationInfo(StagingBuffers [0u].MemoryAllocationHandle, AllocationInfos [0u]);
+    Vulkan::Memory::GetAllocationInfo(StagingBuffers [1u].MemoryAllocationHandle, AllocationInfos [1u]);
+    Vulkan::Memory::GetAllocationInfo(StagingBuffers [2u].MemoryAllocationHandle, AllocationInfos [2u]);
+    Vulkan::Memory::GetAllocationInfo(StagingBuffers [3u].MemoryAllocationHandle, AllocationInfos [3u]);
+    Vulkan::Memory::GetAllocationInfo(StagingBuffers [4u].MemoryAllocationHandle, AllocationInfos [4u]);
+
+    ::memcpy_s(AllocationInfos[0u].MappedAddress, AllocationInfos[0u].SizeInBytes, StaticMeshes.RawVertexBuffers [kAssetIndex].get(), kVertexBufferSizeInBytes);
+    ::memcpy_s(AllocationInfos[1u].MappedAddress, AllocationInfos[1u].SizeInBytes, StaticMeshes.RawNormalBuffers [kAssetIndex].get(), kVertexBufferSizeInBytes);
+    ::memcpy_s(AllocationInfos[2u].MappedAddress, AllocationInfos[2u].SizeInBytes, StaticMeshes.RawTangentBuffers [kAssetIndex].get(), kTangentBufferSizeInBytes);
+    ::memcpy_s(AllocationInfos[3u].MappedAddress, AllocationInfos[3u].SizeInBytes, StaticMeshes.RawUVBuffers [kAssetIndex].get(), kVertexBufferSizeInBytes);
+    ::memcpy_s(AllocationInfos[4u].MappedAddress, AllocationInfos[4u].SizeInBytes, StaticMeshes.RawIndexBuffers [kAssetIndex].get(), kIndexBufferSizeInBytes);
     
     std::array<Vulkan::Resource::Buffer, 5u> MeshBuffers = {};
     Vulkan::Resource::GetBuffer(StaticMeshes.VertexBufferHandles [kAssetIndex], MeshBuffers [0u]);

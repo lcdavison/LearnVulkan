@@ -25,6 +25,7 @@ list(
     "Include/Input/InputManager.hpp"
     "Include/Platform/Windows.hpp"
     "Include/ShaderCompiler/ShaderCompiler.hpp"
+    "Include/Utilities/Containers.hpp"
     "Include/Utilities/Iterator.hpp"
     "Include/Utilities/String.hpp"
     "Include/Common.hpp"

@@ -62,13 +62,10 @@ static void TransferTextureDataToGPU(uint32 const TextureIndex, VkCommandBuffer 
     Vulkan::Resource::Buffer StagingBuffer = {};
     Vulkan::Resource::GetBuffer(StagingBufferHandle, StagingBuffer);
 
-    if (!StagingBuffer.MemoryAllocation)
-    {
-        /* ERROR */
-        return;
-    }
+    Vulkan::Memory::AllocationInfo AllocationInfo = {};
+    Vulkan::Memory::GetAllocationInfo(StagingBuffer.MemoryAllocationHandle, AllocationInfo);
 
-    ::memcpy_s(StagingBuffer.MemoryAllocation->MappedAddress, StagingBuffer.MemoryAllocation->SizeInBytes, Textures.RawDatas [TextureIndex], ImageSizeInBytes);
+    ::memcpy_s(AllocationInfo.MappedAddress, AllocationInfo.SizeInBytes, Textures.RawDatas [TextureIndex], ImageSizeInBytes);
 
     Vulkan::Resource::Image Image = {};
     Vulkan::Resource::GetImage(Textures.ImageHandles [TextureIndex], Image);

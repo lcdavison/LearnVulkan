@@ -2,12 +2,6 @@
 
 #include <vector>
 
-/* TODO: Separate resource management, still use this for Create\Destroy Buffer */
-namespace DeviceMemoryAllocator
-{
-    struct Allocation;
-}
-
 namespace Vulkan::Instance
 {
     struct InstanceState;
@@ -55,14 +49,14 @@ namespace Vulkan::Resource
 {
     struct Buffer
     {
-        DeviceMemoryAllocator::Allocation const * MemoryAllocation = {};
-        VkBuffer Resource = {};
         VkDeviceSize SizeInBytes = {};
+        uint64 MemoryAllocationHandle = {};
+        VkBuffer Resource = {};
     };
 
     struct Image
     {
-        DeviceMemoryAllocator::Allocation const * MemoryAllocation = {};
+        uint64 MemoryAllocationHandle = {};
         VkImage Resource = {};
         uint32 Width = {};
         uint32 Height = {};
