@@ -62,13 +62,13 @@ namespace Vulkan::Resource
         uint32 Height = {};
     };
 
-    extern bool const GetBuffer(uint32 const BufferIndex, Vulkan::Resource::Buffer & OutputBuffer);
+    extern bool const GetBuffer(uint32 const kBufferHandle, Vulkan::Resource::Buffer & OutputBuffer);
 
-    extern bool const GetImage(uint32 const ImageHandle, Vulkan::Resource::Image & OutputImage);
+    extern bool const GetImage(uint32 const kImageHandle, Vulkan::Resource::Image & OutputImage);
 
-    extern bool const GetImageView(uint32 const ImageViewHandle, VkImageView & OutputImageView);
+    extern bool const GetImageView(uint32 const kImageViewHandle, VkImageView & OutputImageView);
 
-    extern bool const GetFrameBuffer(uint32 const FrameBufferHandle, VkFramebuffer & OutputFrameBuffer);
+    extern bool const GetFrameBuffer(uint32 const kFrameBufferHandle, VkFramebuffer & OutputFrameBuffer);
 }
 
 namespace Vulkan::Device
@@ -86,41 +86,42 @@ namespace Vulkan::Device
         VkCommandPool CommandPool;
     };
 
-    extern bool const CreateDevice(Vulkan::Instance::InstanceState const & InstanceState, DeviceState & OutputDeviceState);
+    extern bool const CreateDevice(Vulkan::Instance::InstanceState const & kInstanceState, DeviceState & OutputDeviceState);
 
-    extern void DestroyDevice(DeviceState & State);
+    extern void DestroyDevice(DeviceState & kDeviceState);
 
-    extern void CreateCommandBuffers(DeviceState const & State, VkCommandBufferLevel CommandBufferLevel, uint32 const CommandBufferCount, std::vector<VkCommandBuffer> & OutputCommandBuffers);
+    extern void CreateCommandBuffers(DeviceState const & kDeviceState, VkCommandBufferLevel const kCommandBufferLevel, uint32 const kCommandBufferCount, std::vector<VkCommandBuffer> & OutputCommandBuffers);
 
-    extern void DestroyCommandBuffers(DeviceState const & State, std::vector<VkCommandBuffer> & CommandBuffers);
+    extern void DestroyCommandBuffers(DeviceState const & kDeviceState, std::vector<VkCommandBuffer> & CommandBuffers);
 
-    extern void CreateSemaphore(DeviceState const & State, VkSemaphoreCreateFlags Flags, VkSemaphore & OutputSemaphore);
+    extern void CreateSemaphore(DeviceState const & kDeviceState, VkSemaphoreCreateFlags const kFlags, VkSemaphore & OutputSemaphore);
 
-    extern void DestroySemaphore(DeviceState const & State, VkSemaphore & Semaphore);
+    extern void DestroySemaphore(DeviceState const & kDeviceState, VkSemaphore & Semaphore);
 
-    extern void CreateFence(DeviceState const & State, VkFenceCreateFlags Flags, VkFence & OutputFence);
+    extern void CreateFence(DeviceState const & kDeviceState, VkFenceCreateFlags const kFlags, VkFence & OutputFence);
 
-    extern void DestroyFence(DeviceState const & State, VkFence & Fence);
+    extern void DestroyFence(DeviceState const & kDeviceState, VkFence & Fence);
 
-    extern void CreateEvent(DeviceState const & State, VkEventCreateFlags Flags, VkEvent & OutputEvent);
+    extern void CreateEvent(DeviceState const & kDeviceState, VkEventCreateFlags const kFlags, VkEvent & OutputEvent);
 
-    extern void DestroyEvent(DeviceState const & State, VkEvent & Event);
+    extern void DestroyEvent(DeviceState const & kDeviceState, VkEvent & Event);
 
-    extern void CreateFrameBuffer(DeviceState const & State, uint32 const Width, uint32 const Height, VkRenderPass const RenderPass, std::vector<VkImageView> const & Attachments, uint32 & OutputFrameBufferHandle);
+    extern void CreateFrameBuffer(DeviceState const & kDeviceState, uint32 const kWidth, uint32 const kHeight, VkRenderPass const kRenderPass, std::vector<VkImageView> const & kAttachments, uint32 & OutputFrameBufferHandle);
 
-    extern void DestroyFrameBuffer(DeviceState const & State, uint32 const FrameBufferHandle, VkFence const FenceToWaitFor);
+    extern void DestroyFrameBuffer(DeviceState const & kDeviceState, uint32 const kFrameBufferHandle, VkFence const FenceToWaitFor);
 
-    extern void CreateBuffer(DeviceState const & State, uint64 const SizeInBytes, VkBufferUsageFlags UsageFlags, VkMemoryPropertyFlags MemoryFlags, uint32 & OutputBufferHandle);
+    extern void CreateBuffer(DeviceState const & kDeviceState, uint64 const kSizeInBytes, VkBufferUsageFlags const kUsageFlags, VkMemoryPropertyFlags const kMemoryFlags, uint32 & OutputBufferHandle);
 
-    extern void DestroyBuffer(DeviceState const & State, uint32 const BufferHandle, VkFence const FenceToWaitFor);
 
-    extern void CreateImage(DeviceState const & State, Vulkan::ImageDescriptor const & Descriptor, VkMemoryPropertyFlags const MemoryFlags, uint32 & OutputImageHandle);
+    extern void DestroyBuffer(DeviceState const & kDeviceState, uint32 const kBufferHandle, VkFence const kFenceToWaitFor);
 
-    extern void DestroyImage(DeviceState const & State, uint32 const ImageHandle, VkFence const FenceToWaitFor);
+    extern void CreateImage(DeviceState const & kDeviceState, Vulkan::ImageDescriptor const & kDescriptor, VkMemoryPropertyFlags const kMemoryFlags, uint32 & OutputImageHandle);
 
-    extern void CreateImageView(DeviceState const & State, uint32 const ImageHandle, Vulkan::ImageViewDescriptor const & Descriptor, uint32 & OutputImageViewHandle);
+    extern void DestroyImage(DeviceState const & kDeviceState, uint32 const kImageHandle, VkFence const kFenceToWaitFor);
 
-    extern void DestroyImageView(DeviceState const & State, uint32 const ImageViewHandle, VkFence const FenceToWaitFor);
+    extern void CreateImageView(DeviceState const & kDeviceState, uint32 const kImageHandle, Vulkan::ImageViewDescriptor const & kDescriptor, uint32 & OutputImageViewHandle);
 
-    extern void DestroyUnusedResources(DeviceState const & State);
+    extern void DestroyImageView(DeviceState const & kDeviceState, uint32 const kImageViewHandle, VkFence const kFenceToWaitFor);
+
+    extern void DestroyUnusedResources(DeviceState const & kDeviceState);
 }

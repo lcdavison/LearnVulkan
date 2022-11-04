@@ -337,278 +337,283 @@ bool const Vulkan::Device::CreateDevice(Vulkan::Instance::InstanceState const & 
     return bResult;
 }
 
-void Vulkan::Device::DestroyDevice(Vulkan::Device::DeviceState & State)
+void Vulkan::Device::DestroyDevice(Vulkan::Device::DeviceState & DeviceState)
 {
-    VERIFY_VKRESULT(vkDeviceWaitIdle(State.Device));
+    VERIFY_VKRESULT(vkDeviceWaitIdle(DeviceState.Device));
 
-    if (State.CommandPool)
+    if (DeviceState.CommandPool)
     {
-        vkDestroyCommandPool(State.Device, State.CommandPool, nullptr);
-        State.CommandPool = VK_NULL_HANDLE;
+        vkDestroyCommandPool(DeviceState.Device, DeviceState.CommandPool, nullptr);
+        DeviceState.CommandPool = VK_NULL_HANDLE;
     }
 
-    if (State.Device)
+    if (DeviceState.Device)
     {
-        vkDestroyDevice(State.Device, nullptr);
-        State.Device = VK_NULL_HANDLE;
+        vkDestroyDevice(DeviceState.Device, nullptr);
+        DeviceState.Device = VK_NULL_HANDLE;
     }
 }
 
-void Vulkan::Device::CreateCommandBuffers(Vulkan::Device::DeviceState const & State, VkCommandBufferLevel CommandBufferLevel, uint32 const CommandBufferCount, std::vector<VkCommandBuffer> & OutputCommandBuffers)
+void Vulkan::Device::CreateCommandBuffers(Vulkan::Device::DeviceState const & kDeviceState, VkCommandBufferLevel const kCommandBufferLevel, uint32 const kCommandBufferCount, std::vector<VkCommandBuffer> & OutputCommandBuffers)
 {
-    std::vector CommandBuffers = std::vector<VkCommandBuffer>(CommandBufferCount);
+    std::vector CommandBuffers = std::vector<VkCommandBuffer>(kCommandBufferCount);
 
     VkCommandBufferAllocateInfo AllocateInfo = {};
     AllocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    AllocateInfo.commandPool = State.CommandPool;
-    AllocateInfo.commandBufferCount = CommandBufferCount;
-    AllocateInfo.level = CommandBufferLevel;
+    AllocateInfo.commandPool = kDeviceState.CommandPool;
+    AllocateInfo.commandBufferCount = kCommandBufferCount;
+    AllocateInfo.level = kCommandBufferLevel;
 
-    VERIFY_VKRESULT(vkAllocateCommandBuffers(State.Device, &AllocateInfo, CommandBuffers.data()));
+    VERIFY_VKRESULT(vkAllocateCommandBuffers(kDeviceState.Device, &AllocateInfo, CommandBuffers.data()));
 
     OutputCommandBuffers = std::move(CommandBuffers);
 }
 
-void Vulkan::Device::DestroyCommandBuffers(Vulkan::Device::DeviceState const & State, std::vector<VkCommandBuffer> & CommandBuffers)
+void Vulkan::Device::DestroyCommandBuffers(Vulkan::Device::DeviceState const & kDeviceState, std::vector<VkCommandBuffer> & CommandBuffers)
 {
-    vkFreeCommandBuffers(State.Device, State.CommandPool, static_cast<uint32>(CommandBuffers.size()), CommandBuffers.data());
+    vkFreeCommandBuffers(kDeviceState.Device, kDeviceState.CommandPool, static_cast<uint32>(CommandBuffers.size()), CommandBuffers.data());
+
+    for (VkCommandBuffer CommandBuffer : CommandBuffers)
+    {
+        CommandBuffer = VK_NULL_HANDLE;
+    }
 }
 
-void Vulkan::Device::CreateSemaphore(Vulkan::Device::DeviceState const & State, VkSemaphoreCreateFlags Flags, VkSemaphore & OutputSemaphore)
+void Vulkan::Device::CreateSemaphore(Vulkan::Device::DeviceState const & kDeviceState, VkSemaphoreCreateFlags const kFlags, VkSemaphore & OutputSemaphore)
 {
     VkSemaphoreCreateInfo CreateInfo = {};
     CreateInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-    CreateInfo.flags = Flags;
+    CreateInfo.flags = kFlags;
 
-    VERIFY_VKRESULT(vkCreateSemaphore(State.Device, &CreateInfo, nullptr, &OutputSemaphore));
+    VERIFY_VKRESULT(vkCreateSemaphore(kDeviceState.Device, &CreateInfo, nullptr, &OutputSemaphore));
 }
 
-void Vulkan::Device::DestroySemaphore(Vulkan::Device::DeviceState const & State, VkSemaphore & Semaphore)
+void Vulkan::Device::DestroySemaphore(Vulkan::Device::DeviceState const & kDeviceState, VkSemaphore & Semaphore)
 {
     if (Semaphore != VK_NULL_HANDLE)
     {
-        vkDestroySemaphore(State.Device, Semaphore, nullptr);
+        vkDestroySemaphore(kDeviceState.Device, Semaphore, nullptr);
         Semaphore = VK_NULL_HANDLE;
     }
 }
 
-void Vulkan::Device::CreateFence(Vulkan::Device::DeviceState const & State, VkFenceCreateFlags Flags, VkFence & OutputFence)
+void Vulkan::Device::CreateFence(Vulkan::Device::DeviceState const & kDeviceState, VkFenceCreateFlags const kFlags, VkFence & OutputFence)
 {
     VkFenceCreateInfo CreateInfo = {};
     CreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-    CreateInfo.flags = Flags;
+    CreateInfo.flags = kFlags;
 
-    VERIFY_VKRESULT(vkCreateFence(State.Device, &CreateInfo, nullptr, &OutputFence));
+    VERIFY_VKRESULT(vkCreateFence(kDeviceState.Device, &CreateInfo, nullptr, &OutputFence));
 }
 
-void Vulkan::Device::DestroyFence(Vulkan::Device::DeviceState const & State, VkFence & Fence)
+void Vulkan::Device::DestroyFence(Vulkan::Device::DeviceState const & kDeviceState, VkFence & Fence)
 {
     if (Fence != VK_NULL_HANDLE)
     {
-        vkDestroyFence(State.Device, Fence, nullptr);
+        vkDestroyFence(kDeviceState.Device, Fence, nullptr);
         Fence = VK_NULL_HANDLE;
     }
 }
 
-void Vulkan::Device::CreateEvent(Vulkan::Device::DeviceState const & State, VkEventCreateFlags Flags, VkEvent & OutputEvent)
+void Vulkan::Device::CreateEvent(Vulkan::Device::DeviceState const & kDeviceState, VkEventCreateFlags const kFlags, VkEvent & OutputEvent)
 {
     VkEventCreateInfo CreateInfo = {};
     CreateInfo.sType = VK_STRUCTURE_TYPE_EVENT_CREATE_INFO;
-    CreateInfo.flags = Flags;
+    CreateInfo.flags = kFlags;
 
-    VERIFY_VKRESULT(vkCreateEvent(State.Device, &CreateInfo, nullptr, &OutputEvent));
+    VERIFY_VKRESULT(vkCreateEvent(kDeviceState.Device, &CreateInfo, nullptr, &OutputEvent));
 }
 
-void Vulkan::Device::DestroyEvent(Vulkan::Device::DeviceState const & State, VkEvent & Event)
+void Vulkan::Device::DestroyEvent(Vulkan::Device::DeviceState const & kDeviceState, VkEvent & Event)
 {
     if (Event != VK_NULL_HANDLE)
     {
-        vkDestroyEvent(State.Device, Event, nullptr);
+        vkDestroyEvent(kDeviceState.Device, Event, nullptr);
         Event = VK_NULL_HANDLE;
     }
 }
 
-void Vulkan::Device::CreateFrameBuffer(Vulkan::Device::DeviceState const & State, uint32 const Width, uint32 const Height, VkRenderPass const RenderPass, std::vector<VkImageView> const & Attachments, uint32 & OutputFrameBufferHandle)
+void Vulkan::Device::CreateFrameBuffer(Vulkan::Device::DeviceState const & kDeviceState, uint32 const kWidth, uint32 const kHeight, VkRenderPass const kRenderPass, std::vector<VkImageView> const & kAttachments, uint32 & OutputFrameBufferHandle)
 {
-    VkExtent3D const FrameBufferExtents = { Width, Height, 1u };
+    VkExtent3D const FrameBufferExtents = { kWidth, kHeight, 1u };
 
-    VkFramebufferCreateInfo const CreateInfo = Vulkan::FrameBuffer(FrameBufferExtents, RenderPass, static_cast<uint32>(Attachments.size()), Attachments.data());
+    VkFramebufferCreateInfo const CreateInfo = Vulkan::FrameBuffer(FrameBufferExtents, kRenderPass, static_cast<uint32>(kAttachments.size()), kAttachments.data());
 
     VkFramebuffer NewFrameBuffer = {};
-    VERIFY_VKRESULT(vkCreateFramebuffer(State.Device, &CreateInfo, nullptr, &NewFrameBuffer));
+    VERIFY_VKRESULT(vkCreateFramebuffer(kDeviceState.Device, &CreateInfo, nullptr, &NewFrameBuffer));
 
     uint32 const kNewFrameBufferHandle = { FrameBufferManager.Resources.Add(NewFrameBuffer) + 1u };
 
     OutputFrameBufferHandle = kNewFrameBufferHandle;
 }
 
-void Vulkan::Device::DestroyFrameBuffer(Vulkan::Device::DeviceState const & State, uint32 const FrameBufferHandle, VkFence const FenceToWaitFor)
+void Vulkan::Device::DestroyFrameBuffer(Vulkan::Device::DeviceState const & kDeviceState, uint32 const kFrameBufferHandle, VkFence const kFenceToWaitFor)
 {
-    if (FrameBufferHandle == 0u)
+    if (kFrameBufferHandle == 0u)
     {
         Logging::Log(Logging::LogTypes::Error, PBR_TEXT("DestroyFrameBuffer: Invalid frame buffer handle. Cannot destroy NULL frame buffer"));
         return;
     }
 
-    if (FenceToWaitFor == VK_NULL_HANDLE)
+    if (kFenceToWaitFor == VK_NULL_HANDLE)
     {
-        FrameBufferManager.DestroyResource(State, FrameBufferHandle);
+        FrameBufferManager.DestroyResource(kDeviceState, kFrameBufferHandle);
     }
     else
     {
-        Logging::Log(Logging::LogTypes::Info, String::Format(PBR_TEXT("DestroyFrameBuffer: Queueing frame buffer for deletion [ID: %u]"), FrameBufferHandle));
+        Logging::Log(Logging::LogTypes::Info, String::Format(PBR_TEXT("DestroyFrameBuffer: Queueing frame buffer for deletion [ID: %u]"), kFrameBufferHandle));
 
-        std::vector<uint32> & DeletionQueue = FrameBufferManager.FenceToPendingDeletionQueueMap [FenceToWaitFor];
-        DeletionQueue.push_back(FrameBufferHandle);
+        std::vector<uint32> & DeletionQueue = FrameBufferManager.FenceToPendingDeletionQueueMap [kFenceToWaitFor];
+        DeletionQueue.push_back(kFrameBufferHandle);
     }
 }
 
-void Vulkan::Device::CreateBuffer(Vulkan::Device::DeviceState const & State, uint64 const SizeInBytes, VkBufferUsageFlags UsageFlags, VkMemoryPropertyFlags MemoryFlags, uint32 & OutputBufferHandle)
+void Vulkan::Device::CreateBuffer(Vulkan::Device::DeviceState const & kDeviceState, uint64 const kSizeInBytes, VkBufferUsageFlags const kUsageFlags, VkMemoryPropertyFlags const kMemoryFlags, uint32 & OutputBufferHandle)
 {
-    Vulkan::Resource::Buffer NewBuffer = { SizeInBytes, 0u, VK_NULL_HANDLE };
+    Vulkan::Resource::Buffer NewBuffer = { kSizeInBytes, 0u, VK_NULL_HANDLE };
 
-    VkBufferCreateInfo const CreateInfo = Vulkan::Buffer(SizeInBytes, UsageFlags);
+    VkBufferCreateInfo const CreateInfo = Vulkan::Buffer(kSizeInBytes, kUsageFlags);
 
-    VERIFY_VKRESULT(vkCreateBuffer(State.Device, &CreateInfo, nullptr, &NewBuffer.Resource));
+    VERIFY_VKRESULT(vkCreateBuffer(kDeviceState.Device, &CreateInfo, nullptr, &NewBuffer.Resource));
 
     VkMemoryRequirements MemoryRequirements = {};
-    vkGetBufferMemoryRequirements(State.Device, NewBuffer.Resource, &MemoryRequirements);
+    vkGetBufferMemoryRequirements(kDeviceState.Device, NewBuffer.Resource, &MemoryRequirements);
 
-    Vulkan::Memory::Allocate(State, MemoryRequirements, MemoryFlags, NewBuffer.MemoryAllocationHandle);
+    Vulkan::Memory::Allocate(kDeviceState, MemoryRequirements, kMemoryFlags, NewBuffer.MemoryAllocationHandle);
 
     Vulkan::Memory::AllocationInfo AllocationInfo = {};
     Vulkan::Memory::GetAllocationInfo(NewBuffer.MemoryAllocationHandle, AllocationInfo);
 
-    VERIFY_VKRESULT(vkBindBufferMemory(State.Device, NewBuffer.Resource, AllocationInfo.DeviceMemory, AllocationInfo.OffsetInBytes));
+    VERIFY_VKRESULT(vkBindBufferMemory(kDeviceState.Device, NewBuffer.Resource, AllocationInfo.DeviceMemory, AllocationInfo.OffsetInBytes));
 
     uint32 const kNewBufferHandle = { BufferManager.Resources.Add(NewBuffer) + 1u };
 
     OutputBufferHandle = kNewBufferHandle;
 }
 
-void Vulkan::Device::DestroyBuffer(Vulkan::Device::DeviceState const & State, uint32 const BufferHandle, VkFence const FenceToWaitFor)
+void Vulkan::Device::DestroyBuffer(Vulkan::Device::DeviceState const & kDeviceState, uint32 const kBufferHandle, VkFence const kFenceToWaitFor)
 {
-    if (BufferHandle == 0u)
+    if (kBufferHandle == 0u)
     {
         Logging::Log(Logging::LogTypes::Error, PBR_TEXT("DestroyBuffer: Invalid buffer handle. Cannot destroy NULL buffer."));
         return;
     }
 
-    if (FenceToWaitFor == VK_NULL_HANDLE)
+    if (kFenceToWaitFor == VK_NULL_HANDLE)
     {
-        BufferManager.DestroyResource(State, BufferHandle);
+        BufferManager.DestroyResource(kDeviceState, kBufferHandle);
     }
     else
     {
-        Logging::Log(Logging::LogTypes::Info, String::Format(PBR_TEXT("DestroyBuffer: Queueing buffer for deletion [ID: %u]"), BufferHandle));
+        Logging::Log(Logging::LogTypes::Info, String::Format(PBR_TEXT("DestroyBuffer: Queueing buffer for deletion [ID: %u]"), kBufferHandle));
 
-        std::vector<uint32> & DeletionQueue = BufferManager.FenceToPendingDeletionQueueMap [FenceToWaitFor];
-        DeletionQueue.push_back(BufferHandle);
+        std::vector<uint32> & DeletionQueue = BufferManager.FenceToPendingDeletionQueueMap [kFenceToWaitFor];
+        DeletionQueue.push_back(kBufferHandle);
     }
 }
 
-void Vulkan::Device::CreateImage(Vulkan::Device::DeviceState const & State, Vulkan::ImageDescriptor const & Descriptor, VkMemoryPropertyFlags const MemoryFlags, uint32 & OutputImageHandle)
+void Vulkan::Device::CreateImage(Vulkan::Device::DeviceState const & kDeviceState, Vulkan::ImageDescriptor const & kDescriptor, VkMemoryPropertyFlags const kMemoryFlags, uint32 & OutputImageHandle)
 {
-    Vulkan::Resource::Image NewImage = { 0u, nullptr, Descriptor.Width, Descriptor.Height };
+    Vulkan::Resource::Image NewImage = { 0u, nullptr, kDescriptor.Width, kDescriptor.Height };
 
-    VkExtent3D const ImageExtents = VkExtent3D { Descriptor.Width, Descriptor.Height, Descriptor.Depth };
+    VkExtent3D const ImageExtents = VkExtent3D { kDescriptor.Width, kDescriptor.Height, kDescriptor.Depth };
 
-    VkImageCreateInfo const CreateInfo = Vulkan::Image(Descriptor.ImageType, Descriptor.Format,
-                                                       Descriptor.UsageFlags, ImageExtents,
-                                                       Descriptor.bIsCPUWritable ? VK_IMAGE_LAYOUT_PREINITIALIZED : VK_IMAGE_LAYOUT_UNDEFINED,
-                                                       Descriptor.MipLevelCount, Descriptor.ArrayLayerCount, Descriptor.SampleCount,
-                                                       Descriptor.Tiling, VK_SHARING_MODE_EXCLUSIVE, 0u, nullptr, Descriptor.Flags);
+    VkImageCreateInfo const CreateInfo = Vulkan::Image(kDescriptor.ImageType, kDescriptor.Format,
+                                                       kDescriptor.UsageFlags, ImageExtents,
+                                                       kDescriptor.bIsCPUWritable ? VK_IMAGE_LAYOUT_PREINITIALIZED : VK_IMAGE_LAYOUT_UNDEFINED,
+                                                       kDescriptor.MipLevelCount, kDescriptor.ArrayLayerCount, kDescriptor.SampleCount,
+                                                       kDescriptor.Tiling, VK_SHARING_MODE_EXCLUSIVE, 0u, nullptr, kDescriptor.Flags);
 
-    VERIFY_VKRESULT(vkCreateImage(State.Device, &CreateInfo, nullptr, &NewImage.Resource));
+    VERIFY_VKRESULT(vkCreateImage(kDeviceState.Device, &CreateInfo, nullptr, &NewImage.Resource));
 
     VkMemoryRequirements MemoryRequirements = {};
-    vkGetImageMemoryRequirements(State.Device, NewImage.Resource, &MemoryRequirements);
+    vkGetImageMemoryRequirements(kDeviceState.Device, NewImage.Resource, &MemoryRequirements);
 
-    Vulkan::Memory::Allocate(State, MemoryRequirements, MemoryFlags, NewImage.MemoryAllocationHandle);
+    Vulkan::Memory::Allocate(kDeviceState, MemoryRequirements, kMemoryFlags, NewImage.MemoryAllocationHandle);
 
     Vulkan::Memory::AllocationInfo AllocationInfo = {};
     Vulkan::Memory::GetAllocationInfo(NewImage.MemoryAllocationHandle, AllocationInfo);
 
-    VERIFY_VKRESULT(vkBindImageMemory(State.Device, NewImage.Resource, AllocationInfo.DeviceMemory, AllocationInfo.OffsetInBytes));
+    VERIFY_VKRESULT(vkBindImageMemory(kDeviceState.Device, NewImage.Resource, AllocationInfo.DeviceMemory, AllocationInfo.OffsetInBytes));
 
     uint32 const kNewImageHandle = { ImageManager.Resources.Add(NewImage) + 1u };
 
     OutputImageHandle = kNewImageHandle;
 }
 
-void Vulkan::Device::DestroyImage(Vulkan::Device::DeviceState const & State, uint32 const ImageHandle, VkFence const FenceToWaitFor)
+void Vulkan::Device::DestroyImage(Vulkan::Device::DeviceState const & kDeviceState, uint32 const kImageHandle, VkFence const kFenceToWaitFor)
 {
-    if (ImageHandle == 0u)
+    if (kImageHandle == 0u)
     {
         Logging::Log(Logging::LogTypes::Error, PBR_TEXT("DestroyImage: Invalid image handle. Cannot destroy NULL image."));
         return;
     }
 
-    if (FenceToWaitFor == VK_NULL_HANDLE)
+    if (kFenceToWaitFor == VK_NULL_HANDLE)
     {
-        ImageManager.DestroyResource(State, ImageHandle);
+        ImageManager.DestroyResource(kDeviceState, kImageHandle);
     }
     else
     {
-        Logging::Log(Logging::LogTypes::Info, String::Format(PBR_TEXT("DestroyImage: Queueing image for deletion [ID: %u]"), ImageHandle));
+        Logging::Log(Logging::LogTypes::Info, String::Format(PBR_TEXT("DestroyImage: Queueing image for deletion [ID: %u]"), kImageHandle));
 
-        std::vector<uint32> & DeletionQueue = ImageManager.FenceToPendingDeletionQueueMap [FenceToWaitFor];
-        DeletionQueue.push_back(ImageHandle);
+        std::vector<uint32> & DeletionQueue = ImageManager.FenceToPendingDeletionQueueMap [kFenceToWaitFor];
+        DeletionQueue.push_back(kImageHandle);
     }
 }
 
-void Vulkan::Device::CreateImageView(Vulkan::Device::DeviceState const & State, uint32 const ImageHandle, Vulkan::ImageViewDescriptor const & Descriptor, uint32 & OutputImageViewHandle)
+void Vulkan::Device::CreateImageView(Vulkan::Device::DeviceState const & kDeviceState, uint32 const kImageHandle, Vulkan::ImageViewDescriptor const & kDescriptor, uint32 & OutputImageViewHandle)
 {
     Vulkan::Resource::Image Image = {};
-    Vulkan::Resource::GetImage(ImageHandle, Image);
+    Vulkan::Resource::GetImage(kImageHandle, Image);
 
-    VkComponentMapping const ComponentMapping = Descriptor.bReverseComponents 
+    VkComponentMapping const ComponentMapping = kDescriptor.bReverseComponents 
         ? Vulkan::ComponentMapping(VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_G, VK_COMPONENT_SWIZZLE_R) 
         : Vulkan::ComponentMapping();
 
-    VkImageSubresourceRange const SubResourceRange = Vulkan::ImageSubResourceRange(Descriptor.AspectFlags, Descriptor.MipLevelCount, Descriptor.ArrayLayerCount);
+    VkImageSubresourceRange const SubResourceRange = Vulkan::ImageSubResourceRange(kDescriptor.AspectFlags, kDescriptor.MipLevelCount, kDescriptor.ArrayLayerCount);
 
-    VkImageViewCreateInfo const CreateInfo = Vulkan::ImageView(Image.Resource, Descriptor.ViewType, Descriptor.Format, ComponentMapping, SubResourceRange);
+    VkImageViewCreateInfo const CreateInfo = Vulkan::ImageView(Image.Resource, kDescriptor.ViewType, kDescriptor.Format, ComponentMapping, SubResourceRange);
 
     VkImageView NewImageView = {};  
-    VERIFY_VKRESULT(vkCreateImageView(State.Device, &CreateInfo, nullptr, &NewImageView));
+    VERIFY_VKRESULT(vkCreateImageView(kDeviceState.Device, &CreateInfo, nullptr, &NewImageView));
 
     uint32 const kNewImageViewHandle = { ImageViewManager.Resources.Add(NewImageView) + 1u };
 
     OutputImageViewHandle = kNewImageViewHandle;
 }
 
-void Vulkan::Device::DestroyImageView(Vulkan::Device::DeviceState const & State, uint32 const ImageViewHandle, VkFence const FenceToWaitFor)
+void Vulkan::Device::DestroyImageView(Vulkan::Device::DeviceState const & kDeviceState, uint32 const kImageViewHandle, VkFence const kFenceToWaitFor)
 {
-    if (ImageViewHandle == 0u)
+    if (kImageViewHandle == 0u)
     {
         Logging::Log(Logging::LogTypes::Info, PBR_TEXT("DestroyImageView: Invalid image view handle. Cannot destroy NULL image view."));
         return;
     }
 
-    if (FenceToWaitFor == VK_NULL_HANDLE)
+    if (kFenceToWaitFor == VK_NULL_HANDLE)
     {
-        ImageViewManager.DestroyResource(State, ImageViewHandle);
+        ImageViewManager.DestroyResource(kDeviceState, kImageViewHandle);
     }
     else
     {
-        Logging::Log(Logging::LogTypes::Info, String::Format(PBR_TEXT("DestroyImageView: Queueing image view for deletion [ID: %u]"), ImageViewHandle));
+        Logging::Log(Logging::LogTypes::Info, String::Format(PBR_TEXT("DestroyImageView: Queueing image view for deletion [ID: %u]"), kImageViewHandle));
 
-        ImageViewManager.FenceToPendingDeletionQueueMap [FenceToWaitFor].push_back(ImageViewHandle);
+        ImageViewManager.FenceToPendingDeletionQueueMap [kFenceToWaitFor].push_back(kImageViewHandle);
     }
 }
 
-void Vulkan::Device::DestroyUnusedResources(Vulkan::Device::DeviceState const & State)
+void Vulkan::Device::DestroyUnusedResources(Vulkan::Device::DeviceState const & kDeviceState)
 {
     for (auto & DeletionEntry : BufferManager.FenceToPendingDeletionQueueMap)
     {
-        VkResult const FenceStatus = vkGetFenceStatus(State.Device, DeletionEntry.first);
+        VkResult const FenceStatus = vkGetFenceStatus(kDeviceState.Device, DeletionEntry.first);
 
         if (FenceStatus == VK_SUCCESS)
         {
             for (uint32 const BufferHandle : DeletionEntry.second)
             {
-                BufferManager.DestroyResource(State, BufferHandle);
+                BufferManager.DestroyResource(kDeviceState, BufferHandle);
             }
 
             DeletionEntry.second.clear();
@@ -617,13 +622,13 @@ void Vulkan::Device::DestroyUnusedResources(Vulkan::Device::DeviceState const & 
 
     for (auto & DeletionEntry : ImageManager.FenceToPendingDeletionQueueMap)
     {
-        VkResult const FenceStatus = vkGetFenceStatus(State.Device, DeletionEntry.first);
+        VkResult const FenceStatus = vkGetFenceStatus(kDeviceState.Device, DeletionEntry.first);
 
         if (FenceStatus == VK_SUCCESS)
         {
             for (uint32 const ImageHandle : DeletionEntry.second)
             {
-                ImageManager.DestroyResource(State, ImageHandle);
+                ImageManager.DestroyResource(kDeviceState, ImageHandle);
             }
 
             DeletionEntry.second.clear();
@@ -632,92 +637,92 @@ void Vulkan::Device::DestroyUnusedResources(Vulkan::Device::DeviceState const & 
 
     for (auto & DeletionEntry : ImageViewManager.FenceToPendingDeletionQueueMap)
     {
-        VkResult const FenceStatus = vkGetFenceStatus(State.Device, DeletionEntry.first);
+        VkResult const FenceStatus = vkGetFenceStatus(kDeviceState.Device, DeletionEntry.first);
 
         if (FenceStatus == VK_SUCCESS)
         {
             for (uint32 const ImageViewHandle : DeletionEntry.second)
             {
-                ImageViewManager.DestroyResource(State, ImageViewHandle);
+                ImageViewManager.DestroyResource(kDeviceState, ImageViewHandle);
             }
         }
     }
 
     for (std::pair<const VkFence, std::vector<uint32>> & DeletionEntry : FrameBufferManager.FenceToPendingDeletionQueueMap)
     {
-        VkResult const FenceStatus = vkGetFenceStatus(State.Device, DeletionEntry.first);
+        VkResult const FenceStatus = vkGetFenceStatus(kDeviceState.Device, DeletionEntry.first);
 
         if (FenceStatus == VK_SUCCESS)
         {
             for (uint32 const FrameBufferHandle : DeletionEntry.second)
             {
-                FrameBufferManager.DestroyResource(State, FrameBufferHandle);
+                FrameBufferManager.DestroyResource(kDeviceState, FrameBufferHandle);
             }
         }
     }
 }
 
-bool const Vulkan::Resource::GetBuffer(uint32 const BufferHandle, Vulkan::Resource::Buffer & OutputBuffer)
+bool const Vulkan::Resource::GetBuffer(uint32 const kBufferHandle, Vulkan::Resource::Buffer & OutputBuffer)
 {
-    if (BufferHandle == 0u)
+    if (kBufferHandle == 0u)
     {
         Logging::Log(Logging::LogTypes::Error, PBR_TEXT("GetBuffer: Invalid buffer handle. Cannot get buffer for NULL handle."));
         return false;
     }
 
-    //PBR_ASSERT(BufferHandle <= BufferManager.Resources.size());
+    //PBR_ASSERT(kBufferHandle <= BufferManager.Resources.size());
 
-    uint32 const kBufferIndex = BufferHandle - 1u;
+    uint32 const kBufferIndex = kBufferHandle - 1u;
     OutputBuffer = BufferManager.Resources [kBufferIndex];
 
     return true;
 }
 
-bool const Vulkan::Resource::GetImage(uint32 const ImageHandle, Vulkan::Resource::Image & OutputImage)
+bool const Vulkan::Resource::GetImage(uint32 const kImageHandle, Vulkan::Resource::Image & OutputImage)
 {
-    if (ImageHandle == 0u)
+    if (kImageHandle == 0u)
     {
         Logging::Log(Logging::LogTypes::Error, PBR_TEXT("GetImage: Invalid image handle. Cannot get image for NULL handle."));
         return false;
     }
 
-    //PBR_ASSERT(ImageHandle <= ImageManager.Resources.size());
+    //PBR_ASSERT(kImageHandle <= ImageManager.Resources.size());
 
-    uint32 const kImageIndex = ImageHandle - 1u;
+    uint32 const kImageIndex = kImageHandle - 1u;
 
     OutputImage = ImageManager.Resources [kImageIndex];
 
     return true;
 }
 
-bool const Vulkan::Resource::GetImageView(uint32 const ImageViewHandle, VkImageView & OutputImageView)
+bool const Vulkan::Resource::GetImageView(uint32 const kImageViewHandle, VkImageView & OutputImageView)
 {
-    if (ImageViewHandle == 0u)
+    if (kImageViewHandle == 0u)
     {
         Logging::Log(Logging::LogTypes::Error, PBR_TEXT("GetImageView: Invalid image view handle. Cannot get image view for NULL handle."));
         return false;
     }
 
-    //PBR_ASSERT(ImageViewHandle <= ImageViewManager.Resources.size());
+    //PBR_ASSERT(kImageViewHandle <= ImageViewManager.Resources.size());
 
-    uint32 const kImageViewIndex = ImageViewHandle - 1u;
+    uint32 const kImageViewIndex = kImageViewHandle - 1u;
 
     OutputImageView = ImageViewManager.Resources [kImageViewIndex];
 
     return true;
 }
 
-bool const Vulkan::Resource::GetFrameBuffer(uint32 const FrameBufferHandle, VkFramebuffer & OutputFrameBuffer)
+bool const Vulkan::Resource::GetFrameBuffer(uint32 const kFrameBufferHandle, VkFramebuffer & OutputFrameBuffer)
 {
-    if (FrameBufferHandle == 0u)
+    if (kFrameBufferHandle == 0u)
     {
         Logging::Log(Logging::LogTypes::Error, PBR_TEXT("GetFrameBuffer: Invalid frame buffer handle. Cannot get frame buffer for NULL handle."));
         return false;
     }
 
-    //PBR_ASSERT(FrameBufferHandle <= FrameBufferManager.Resources.size());
+    //PBR_ASSERT(kFrameBufferHandle <= FrameBufferManager.Resources.size());
 
-    uint32 const kFrameBufferIndex = { FrameBufferHandle - 1u };
+    uint32 const kFrameBufferIndex = { kFrameBufferHandle - 1u };
 
     OutputFrameBuffer = FrameBufferManager.Resources [kFrameBufferIndex];
 
