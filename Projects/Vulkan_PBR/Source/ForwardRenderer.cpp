@@ -631,7 +631,15 @@ static bool const PreRender()
         Vulkan::Device::DestroyFrameBuffer(DeviceState, FrameState.FrameBuffers [FrameState.CurrentFrameStateIndex], VK_NULL_HANDLE);
     }
 
-    Vulkan::Device::CreateFrameBuffer(DeviceState, ViewportState.ImageExtents.width, ViewportState.ImageExtents.height, MainRenderPass, FrameBufferAttachments, FrameState.FrameBuffers [FrameState.CurrentFrameStateIndex]);
+    Vulkan::Resource::FrameBufferDescriptor const FrameBufferDesc = Vulkan::Resource::FrameBufferDescriptor
+    {
+        MainRenderPass,
+        FrameBufferAttachments.data(),
+        static_cast<uint32>(FrameBufferAttachments.size()),
+        ViewportState.ImageExtents.width, ViewportState.ImageExtents.height,
+    };
+
+    Vulkan::Device::CreateFrameBuffer(DeviceState, FrameBufferDesc, FrameState.FrameBuffers [FrameState.CurrentFrameStateIndex]);
 
     ::ResetCurrentFrameState();
 
