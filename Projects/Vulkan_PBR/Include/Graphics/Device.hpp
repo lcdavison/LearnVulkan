@@ -9,13 +9,6 @@ namespace Vulkan::Instance
 
 namespace Vulkan
 {
-    struct BufferDescriptor
-    {
-        uint64 SizeInBytes = {};
-        VkBufferUsageFlags UsageFlags = {};
-        VkBufferCreateFlags Flags = {};
-    };
-
     struct ImageDescriptor
     {
         VkImageType ImageType = {};
@@ -47,6 +40,23 @@ namespace Vulkan
 
 namespace Vulkan::Resource
 {
+    struct BufferDescriptor
+    {
+        uint64 SizeInBytes = {};
+        VkBufferCreateFlags CreateFlags = {};
+        VkBufferUsageFlags UsageFlags = {};
+        VkMemoryPropertyFlags MemoryFlags = {};
+    };
+
+    struct FrameBufferDescriptor
+    {
+        VkRenderPass RenderPass = {};
+        VkImageView * Attachments = {};
+        uint32 AttachmentCount = {};
+        uint32 Width = {};
+        uint32 Height = {};
+    };
+
     struct Buffer
     {
         VkDeviceSize SizeInBytes = {};
@@ -106,12 +116,13 @@ namespace Vulkan::Device
 
     extern void DestroyEvent(DeviceState const & kDeviceState, VkEvent & Event);
 
-    extern void CreateFrameBuffer(DeviceState const & kDeviceState, uint32 const kWidth, uint32 const kHeight, VkRenderPass const kRenderPass, std::vector<VkImageView> const & kAttachments, uint32 & OutputFrameBufferHandle);
+    extern void CreateFrameBuffer(DeviceState const & kDeviceState, Vulkan::Resource::FrameBufferDescriptor const & kDescriptor, uint32 & OutputFrameBufferHandle);
 
     extern void DestroyFrameBuffer(DeviceState const & kDeviceState, uint32 const kFrameBufferHandle, VkFence const FenceToWaitFor);
 
     extern void CreateBuffer(DeviceState const & kDeviceState, uint64 const kSizeInBytes, VkBufferUsageFlags const kUsageFlags, VkMemoryPropertyFlags const kMemoryFlags, uint32 & OutputBufferHandle);
 
+    extern void CreateBuffer(DeviceState const & kDeviceState, Vulkan::Resource::BufferDescriptor const & kDescriptor, uint32 & OutputBufferHandle);
 
     extern void DestroyBuffer(DeviceState const & kDeviceState, uint32 const kBufferHandle, VkFence const kFenceToWaitFor);
 

@@ -11,8 +11,8 @@
 
 namespace Vulkan
 {
-    constexpr VkApplicationInfo const ApplicationInfo(char const * const kApplicationName, std::uint32_t const kApplicationVersionNo, 
-                                                      std::uint32_t const kAPIVersionNo, 
+    constexpr VkApplicationInfo const ApplicationInfo(char const * const kApplicationName, std::uint32_t const kApplicationVersionNo,
+                                                      std::uint32_t const kAPIVersionNo,
                                                       char const * const kEngineName = nullptr, std::uint32_t const kEngineVersionNo = 0u)
     {
         return VkApplicationInfo
@@ -27,9 +27,75 @@ namespace Vulkan
         };
     }
 
+    constexpr VkCommandBufferAllocateInfo const CommandBufferAllocateInfo(VkCommandPool const kCommandPool, 
+                                                                          std::uint32_t const kCommandBufferCount = 1u, 
+                                                                          VkCommandBufferLevel const kCommandBufferLevel = VK_COMMAND_BUFFER_LEVEL_PRIMARY)
+    {
+        return VkCommandBufferAllocateInfo
+        {
+            VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+            nullptr,
+            kCommandPool,
+            kCommandBufferLevel,
+            kCommandBufferCount,
+        };
+    }
+
+    constexpr VkCommandPoolCreateInfo const CommandPoolInfo(std::uint32_t const kQueueFamilyIndex, VkCommandPoolCreateFlags const kFlags = 0u)
+    {
+        return VkCommandPoolCreateInfo
+        {
+            VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+            nullptr,
+            kFlags,
+            kQueueFamilyIndex,
+        };
+    }
+
+    constexpr VkDeviceCreateInfo const DeviceInfo(std::uint32_t const kQueueCreateInfoCount, VkDeviceQueueCreateInfo const * const kDeviceQueueCreateInfos,
+                                                  VkPhysicalDeviceFeatures const * const kDeviceFeatures = nullptr,
+                                                  std::uint32_t const kEnabledExtensionCount = 0u, char const * const * const kEnabledExtensionNames = nullptr,
+                                                  std::uint32_t const kEnabledLayerCount = 0u, char const * const * const kEnabledLayerNames = nullptr,
+                                                  VkDeviceCreateFlags const kFlags = 0u)
+    {
+        return VkDeviceCreateInfo
+        {
+            VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
+            nullptr,
+            kFlags,
+            kQueueCreateInfoCount, kDeviceQueueCreateInfos,
+            kEnabledLayerCount, kEnabledLayerNames,
+            kEnabledExtensionCount, kEnabledExtensionNames,
+            kDeviceFeatures,
+        };
+    }
+
+    constexpr VkDeviceQueueCreateInfo const DeviceQueue(std::uint32_t const kQueueFamilyIndex, std::uint32_t const kQueueCount, float const * const kQueuePriorities, VkDeviceQueueCreateFlags const kFlags = 0u)
+    {
+        return VkDeviceQueueCreateInfo
+        {
+            VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
+            nullptr,
+            kFlags,
+            kQueueFamilyIndex,
+            kQueueCount,
+            kQueuePriorities,
+        };
+    }
+
     inline VkDescriptorBufferInfo const DescriptorBufferInfo(VkBuffer const Buffer, VkDeviceSize const OffsetInBytes, VkDeviceSize const RangeInBytes)
     {
         return VkDescriptorBufferInfo { Buffer, OffsetInBytes, RangeInBytes };
+    }
+
+    constexpr VkFenceCreateInfo const FenceInfo(VkFenceCreateFlags const kFlags = 0u)
+    {
+        return VkFenceCreateInfo
+        {
+            VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
+            nullptr,
+            kFlags,
+        };
     }
 
     inline VkWriteDescriptorSet WriteDescriptorSet(VkDescriptorSet const DescriptorSet, VkDescriptorType const DescriptorType,
@@ -266,6 +332,16 @@ namespace Vulkan
             kSwapChainCount, kSwapChains,
             kImageIndices,
             kResults,
+        };
+    }
+
+    constexpr VkSemaphoreCreateInfo const SemaphoreInfo(VkSemaphoreCreateFlags const kFlags = 0u)
+    {
+        return VkSemaphoreCreateInfo
+        {
+            VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+            nullptr,
+            kFlags,
         };
     }
 }
