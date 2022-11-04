@@ -150,14 +150,14 @@ static std::vector<char const *> const kRequiredExtensionNames =
 //    return true;
 //}
 
-static bool const HasRequiredExtensions(VkPhysicalDevice Device)
+static bool const HasRequiredExtensions(VkPhysicalDevice const kPhysicalDevice)
 {
     uint32 ExtensionCount = {};
-    VERIFY_VKRESULT(vkEnumerateDeviceExtensionProperties(Device, nullptr, &ExtensionCount, nullptr));
+    VERIFY_VKRESULT(vkEnumerateDeviceExtensionProperties(kPhysicalDevice, nullptr, &ExtensionCount, nullptr));
 
     std::vector AvailableExtensions = std::vector<VkExtensionProperties>(ExtensionCount);
 
-    VERIFY_VKRESULT(vkEnumerateDeviceExtensionProperties(Device, nullptr, &ExtensionCount, AvailableExtensions.data()));
+    VERIFY_VKRESULT(vkEnumerateDeviceExtensionProperties(kPhysicalDevice, nullptr, &ExtensionCount, AvailableExtensions.data()));
 
 #if defined(_DEBUG)
     {
@@ -196,18 +196,18 @@ static bool const HasRequiredExtensions(VkPhysicalDevice Device)
     return MatchedExtensionCount == kRequiredExtensionNames.size();
 }
 
-static bool const GetPhysicalDeviceList(VkInstance Instance, std::vector<VkPhysicalDevice> & OutputPhysicalDevices)
+static bool const GetPhysicalDeviceList(VkInstance const kInstance, std::vector<VkPhysicalDevice> & OutputPhysicalDevices)
 {
     bool bResult = false;
 
     uint32 DeviceCount = {};
-    VERIFY_VKRESULT(vkEnumeratePhysicalDevices(Instance, &DeviceCount, nullptr));
+    VERIFY_VKRESULT(vkEnumeratePhysicalDevices(kInstance, &DeviceCount, nullptr));
 
     if (DeviceCount > 0u)
     {
         OutputPhysicalDevices.resize(DeviceCount);
 
-        VERIFY_VKRESULT(vkEnumeratePhysicalDevices(Instance, &DeviceCount, OutputPhysicalDevices.data()));
+        VERIFY_VKRESULT(vkEnumeratePhysicalDevices(kInstance, &DeviceCount, OutputPhysicalDevices.data()));
 
         bResult = true;
     }
@@ -219,12 +219,12 @@ static bool const GetPhysicalDeviceList(VkInstance Instance, std::vector<VkPhysi
     return bResult;
 }
 
-static bool const GetPhysicalDevice(VkInstance Instance, std::function<bool(VkPhysicalDeviceFeatures const &, VkPhysicalDeviceProperties const &)> PhysicalDeviceRequirementPredicate, VkPhysicalDevice & OutputPhysicalDevice)
+static bool const GetPhysicalDevice(VkInstance const kInstance, std::function<bool(VkPhysicalDeviceFeatures const &, VkPhysicalDeviceProperties const &)> const & kPhysicalDeviceRequirementPredicate, VkPhysicalDevice & OutputPhysicalDevice)
 {
     bool bResult = false;
 
     std::vector PhysicalDevices = std::vector<VkPhysicalDevice>();
-    if (::GetPhysicalDeviceList(Instance, PhysicalDevices))
+    if (::GetPhysicalDeviceList(kInstance, PhysicalDevices))
     {
         for (VkPhysicalDevice CurrentPhysicalDevice : PhysicalDevices)
         {
@@ -233,8 +233,8 @@ static bool const GetPhysicalDevice(VkInstance Instance, std::function<bool(VkPh
 
             VkPhysicalDeviceFeatures DeviceFeatures = {};
             vkGetPhysicalDeviceFeatures(CurrentPhysicalDevice, &DeviceFeatures);
-
-            if (PhysicalDeviceRequirementPredicate(DeviceFeatures, DeviceProperties))
+            
+            if (kPhysicalDeviceRequirementPredicate(DeviceFeatures, DeviceProperties))
             {
 #if defined(_DEBUG)
                 std::basic_string Output = "Selected Device: ";
@@ -254,28 +254,28 @@ static bool const GetPhysicalDevice(VkInstance Instance, std::function<bool(VkPh
     return bResult;
 }
 
-static bool const GetQueueFamilyIndex(VkPhysicalDevice Device, VkQueueFlags RequiredFlags, bool const bSupportPresentation, VkSurfaceKHR Surface, uint32 & OutputQueueFamilyIndex)
+static bool const GetQueueFamilyIndex(VkPhysicalDevice const kPhysicalDevice, VkQueueFlags const kRequiredFlags, bool const kbSupportPresentation, VkSurfaceKHR const kSurface, uint32 & OutputQueueFamilyIndex)
 {
     bool bResult = false;
 
     uint32 PropertyCount = {};
-    vkGetPhysicalDeviceQueueFamilyProperties(Device, &PropertyCount, nullptr);
+    vkGetPhysicalDeviceQueueFamilyProperties(kPhysicalDevice, &PropertyCount, nullptr);
 
     std::vector Properties = std::vector<VkQueueFamilyProperties>(PropertyCount);
-    vkGetPhysicalDeviceQueueFamilyProperties(Device, &PropertyCount, Properties.data());
+    vkGetPhysicalDeviceQueueFamilyProperties(kPhysicalDevice, &PropertyCount, Properties.data());
 
     {
         uint32 CurrentFamilyIndex = {};
         for (VkQueueFamilyProperties const & FamilyProperties : Properties)
         {
-            if (FamilyProperties.queueFlags & RequiredFlags)
+            if (FamilyProperties.queueFlags & kRequiredFlags)
             {
                 bool bSelectQueueFamily = true;
 
-                if (bSupportPresentation)
+                if (kbSupportPresentation)
                 {
                     VkBool32 SupportsPresentation = {};
-                    VERIFY_VKRESULT(vkGetPhysicalDeviceSurfaceSupportKHR(Device, CurrentFamilyIndex, Surface, &SupportsPresentation));
+                    VERIFY_VKRESULT(vkGetPhysicalDeviceSurfaceSupportKHR(kPhysicalDevice, CurrentFamilyIndex, kSurface, &SupportsPresentation));
 
                     bSelectQueueFamily = bSelectQueueFamily && SupportsPresentation == VK_TRUE;
                 }
