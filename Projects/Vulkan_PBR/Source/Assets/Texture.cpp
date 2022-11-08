@@ -1,14 +1,13 @@
 #include "Assets/Texture.hpp"
 
-#include <BMPLoader/BMPLoader.hpp>
-
 #include "Graphics/Device.hpp"
 #include "Graphics/Memory.hpp"
 
-#include <vector>
-#include <queue>
-#include <unordered_set>
+#include <BMPLoader/BMPLoader.hpp>
+
 #include <unordered_map>
+#include <unordered_set>
+#include <vector>
 
 /* This is only designed for 2D textures atm */
 
@@ -24,8 +23,7 @@ struct TextureCollection
 
 static TextureCollection Textures = {};
 
-/* Keep track of new texture handles for transfer to GPU */
-static std::queue<uint32> NewTextureHandles = {};
+static std::vector<uint32> NewTextureHandles = {};
 
 static std::unordered_set<std::string> ImportedTextureSet = {};
 static std::unordered_map<std::string, uint32> TextureNameToHandleMap = {};
@@ -136,7 +134,7 @@ bool const Assets::Texture::ImportTexture(std::filesystem::path const & FilePath
                 
                 ImportedTextureSet.emplace(std::move(PathString));
 
-                NewTextureHandles.push(OutputAssetHandle);
+                NewTextureHandles.push_back(OutputAssetHandle);
             }
         }
     }
@@ -179,15 +177,16 @@ bool const Assets::Texture::GetTextureData(uint32 const AssetHandle, Assets::Tex
 
 bool const Assets::Texture::InitialiseGPUResources(VkCommandBuffer CommandBuffer, Vulkan::Device::DeviceState const & DeviceState, VkFence const TransferFence)
 {
-    while (NewTextureHandles.size() > 0u)
+    for (uint32 CurrentAssetIndex = {};
+         CurrentAssetIndex < NewTextureHandles.size();
+         CurrentAssetIndex++)
     {
-        uint32 const TextureIndex = NewTextureHandles.front() - 1u;
-        NewTextureHandles.pop();
+        uint32 const kTextureIndex = NewTextureHandles [CurrentAssetIndex] - 1u;
 
-        ::CreateTextureResources(TextureIndex, DeviceState);
-        ::TransferTextureDataToGPU(TextureIndex, CommandBuffer, DeviceState, TransferFence);
+        ::CreateTextureResources(kTextureIndex, DeviceState);
+        ::TransferTextureDataToGPU(kTextureIndex, CommandBuffer, DeviceState, TransferFence);
 
-        Vulkan::ImageViewDescriptor const ViewDesc =
+        Vulkan::ImageViewDescriptor const kViewDesc =
         {
             VK_IMAGE_VIEW_TYPE_2D,
             VK_FORMAT_R8G8B8A8_UNORM,
@@ -197,8 +196,10 @@ bool const Assets::Texture::InitialiseGPUResources(VkCommandBuffer CommandBuffer
             true,
         };
 
-        Vulkan::Device::CreateImageView(DeviceState, Textures.ImageHandles [TextureIndex], ViewDesc, Textures.ViewHandles [TextureIndex]);
+        Vulkan::Device::CreateImageView(DeviceState, Textures.ImageHandles [kTextureIndex], kViewDesc, Textures.ViewHandles [kTextureIndex]);
     }
+
+    NewTextureHandles.clear();
 
     return true;
 }
