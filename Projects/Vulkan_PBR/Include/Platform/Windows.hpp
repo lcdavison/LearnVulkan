@@ -58,6 +58,10 @@ namespace Platform::Windows
 
     extern MessageBoxResults MessageBox(MessageBoxTypes Type, Types::Char const * Caption, Types::Char const * Title);
 
+    extern Types::Handle GetCurrentProcess();
+
+    extern bool TerminateProcess(Types::Handle Process, Types::UInt ExitCode);
+
     extern void PostQuitMessage(int const ExitCode);
 
     extern void OutputDebugString(Types::Char const * Message);

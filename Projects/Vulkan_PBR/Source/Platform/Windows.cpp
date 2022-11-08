@@ -46,6 +46,16 @@ Windows::MessageBoxResults Windows::MessageBox(MessageBoxTypes Type, Char const 
     }
 }
 
+Handle Platform::Windows::GetCurrentProcess()
+{
+    return ::GetCurrentProcess();
+}
+
+bool Platform::Windows::TerminateProcess(Handle Process, UInt ExitCode)
+{
+    return ::TerminateProcess(Process, ExitCode) == TRUE;
+}
+
 void Platform::Windows::PostQuitMessage(int const ExitCode)
 {
     ::PostQuitMessage(ExitCode);

@@ -30,7 +30,7 @@
                 ErrorMessage += TO_STRING(__LINE__); \
                 ErrorMessage += PBR_TEXT("]"); \
                 Logging::FatalError(ErrorMessage.c_str()); \
-                Platform::Windows::PostQuitMessage(EXIT_FAILURE); \
+                Platform::Windows::TerminateProcess(Platform::Windows::GetCurrentProcess(), EXIT_FAILURE); \
             }\
         } while(false)
 #else
