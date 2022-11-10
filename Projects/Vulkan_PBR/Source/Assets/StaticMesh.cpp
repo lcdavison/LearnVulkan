@@ -1,49 +1,102 @@
 #include "Assets/StaticMesh.hpp"
 
-#include <OBJLoader/OBJLoader.hpp>
-
 #include "Graphics/Device.hpp"
 #include "Graphics/Memory.hpp"
 
+#include <Math/Vector.hpp>
+#include <OBJLoader/OBJLoader.hpp>
+
 #include <memory>
-#include <vector>
-#include <queue>
 #include <unordered_map>
+#include <vector>
 
-/* TODO: Write an allocator for more efficient buffer allocations with larger numbers of meshes */
-
-struct StaticMeshCollection
+namespace Assets::StaticMesh::Private
 {
-    std::vector<std::unique_ptr<Math::Vector3[]>> RawVertexBuffers = {};
-    std::vector<std::unique_ptr<Math::Vector3[]>> RawNormalBuffers = {};
-    std::vector<std::unique_ptr<Math::Vector4[]>> RawTangentBuffers = {}; // Use 4th component to store bitangent sign
-    std::vector<std::unique_ptr<Math::Vector3[]>> RawUVBuffers = {};
-    std::vector<std::unique_ptr<uint32[]>> RawIndexBuffers = {};
+    static std::vector StaticMeshes = std::vector<Assets::StaticMesh::Types::StaticMesh>();
+    static std::vector NewAssetHandles = std::vector<uint32>();
+}
 
-    std::vector<uint32> VertexCounts = {};
-    std::vector<uint32> IndexCounts = {};
+static void GenerateTangentVectors(std::vector<Math::Vector3> const & kVertices, 
+                                   std::vector<Math::Vector3> const & kNormals, 
+                                   std::vector<Math::Vector3> const & kUVs, 
+                                   std::vector<uint32> const & kMeshIndices, 
+                                   std::vector<Math::Vector4> & OutputTangents)
+{
+    std::vector TangentVectors = std::vector<Math::Vector4>(kVertices.size());
+    std::vector BitangentVectors = std::vector<Math::Vector3>(kVertices.size());
 
-    std::vector<uint32> VertexBufferHandles = {};
-    std::vector<uint32> NormalBufferHandles = {};
-    std::vector<uint32> TangentBufferHandles = {};
-    std::vector<uint32> UVBufferHandles = {};
-    std::vector<uint32> IndexBufferHandles = {};
+    for (uint32 CurrentIndexOffset = {};
+         CurrentIndexOffset < kMeshIndices.size();
+         CurrentIndexOffset += 3u)
+    {
+        std::array const kIndices = std::array<uint32, 3u>
+        {
+            kMeshIndices [CurrentIndexOffset + 0u],
+            kMeshIndices [CurrentIndexOffset + 1u],
+            kMeshIndices [CurrentIndexOffset + 2u],
+        };
 
-    std::vector<Assets::StaticMesh::StaticMeshStatus> StatusBits = {};
-};
+        std::array const kEdges = std::array<Math::Vector3, 2u>
+        {
+            kVertices [kIndices [1u]] - kVertices [kIndices [0u]],
+            kVertices [kIndices [2u]] - kVertices [kIndices [0u]],
+        };
 
-static StaticMeshCollection StaticMeshes = {};
+        std::array const kComponentDifferences = std::array<float, 4u>
+        {
+            kUVs [kIndices [1u]].X - kUVs [kIndices [0u]].X, kUVs [kIndices [2u]].X - kUVs [kIndices [0u]].X,
+            kUVs [kIndices [1u]].Y - kUVs [kIndices [0u]].Y, kUVs [kIndices [2u]].Y - kUVs [kIndices [0u]].Y,
+        };
 
-static std::queue<uint32> NewAssetHandles = {};
+        /* TODO: Need to implement a division operator for the vectors */
+        float const kInverseDeterminant = 1.0f / (kComponentDifferences [0u] * kComponentDifferences [3u] - kComponentDifferences [1u] * kComponentDifferences [2u]);
 
-static void ProcessMeshData(OBJLoader::OBJMeshData const & OBJMeshData, 
-                            Assets::StaticMesh::StaticMeshStatus & OutputStatus,
-                            uint32 & OutputVertexCount,
-                            uint32 & OutputIndexCount,
-                            Math::Vector3 *& OutputVertices,
-                            Math::Vector3 *& OutputNormals,
-                            Math::Vector3 *& OutputUVs,
-                            uint32 *& OutputIndices)
+        Math::Vector3 const kTangentVector = (kEdges [0u] * kComponentDifferences [3u] - kEdges [1u] * kComponentDifferences [2u]) * kInverseDeterminant;
+        Math::Vector3 const kBitangentVector = (kEdges [1u] * kComponentDifferences [0u] - kEdges [0u] * kComponentDifferences [1u]) * kInverseDeterminant;
+
+        std::array const kOutputTangentVectors = std::array<Math::Vector3 *, 3u>
+        {
+            reinterpret_cast<Math::Vector3 *>(&(TangentVectors [kIndices [0u]])),
+            reinterpret_cast<Math::Vector3 *>(&(TangentVectors [kIndices [1u]])),
+            reinterpret_cast<Math::Vector3 *>(&(TangentVectors [kIndices [2u]])),
+        };
+
+        *kOutputTangentVectors [0u] = *kOutputTangentVectors [0u] + kTangentVector;
+        *kOutputTangentVectors [1u] = *kOutputTangentVectors [1u] + kTangentVector;
+        *kOutputTangentVectors [2u] = *kOutputTangentVectors [2u] + kTangentVector;
+
+        BitangentVectors [kIndices [0u]] = BitangentVectors [kIndices [0u]] + kBitangentVector;
+        BitangentVectors [kIndices [1u]] = BitangentVectors [kIndices [1u]] + kBitangentVector;
+        BitangentVectors [kIndices [2u]] = BitangentVectors [kIndices [2u]] + kBitangentVector;
+    }
+
+    for (uint32 VertexIndex = { 0u };
+         VertexIndex < kVertices.size();
+         VertexIndex++)
+    {
+        Math::Vector3 & TangentVector = reinterpret_cast<Math::Vector3 &>(TangentVectors [VertexIndex]);
+        Math::Vector3 & BitangentVector = BitangentVectors [VertexIndex];
+
+        /* Make sure tangent vector is perpendicular to the normal vector */
+        Math::Vector3 const kAdjustedTangent = TangentVector - (TangentVector * kNormals [VertexIndex]) * kNormals [VertexIndex];
+        TangentVector = Math::Vector3::Normalize(kAdjustedTangent);
+
+        /* Make sure the bitangent vector is perpendicular to both the normal and tangent vectors */
+        Math::Vector3 const kAdjustedBitangent = BitangentVector - ((BitangentVector * TangentVector) * TangentVector) - ((BitangentVector * kNormals [VertexIndex]) * kNormals [VertexIndex]);
+        BitangentVector = Math::Vector3::Normalize(kAdjustedBitangent);
+
+        /*
+        *   Cross product between tangent and bitangent to get normal.
+        *   Use dot product of result with normal to determine the sign.
+        *   Use this sign in the shader to flip the bitangent, this ensures consistency.
+        */
+        TangentVectors [VertexIndex].W = ((TangentVector ^ BitangentVector) * kNormals [VertexIndex]) > 0.0f ? 1.0f : -1.0f;
+    }
+
+    OutputTangents = std::move(TangentVectors);
+}
+
+static void ProcessMeshData(OBJLoader::OBJMeshData const & kOBJMeshData, Assets::StaticMesh::Types::StaticMesh & OutputStaticMesh)
 {
     /* Need to find a better way, rather than using a string */
     std::unordered_map<std::string, uint32> VertexLookUpTable = {};
@@ -54,352 +107,218 @@ static void ProcessMeshData(OBJLoader::OBJMeshData const & OBJMeshData,
 
     std::vector<uint32> Indices = {};
 
-    OutputStatus.bHasNormals = OBJMeshData.FaceNormalIndices.size() > 0u;
-    OutputStatus.bHasUVs = OBJMeshData.FaceTextureCoordinateIndices.size() > 0u;
+    OutputStaticMesh.Status.bHasNormals = kOBJMeshData.FaceNormalIndices.size() > 0u;
+    OutputStaticMesh.Status.bHasUVs = kOBJMeshData.FaceTextureCoordinateIndices.size() > 0u;
 
-    /* Create unique vertices based on face data */
-    for (uint32 const CurrentFaceOffset : OBJMeshData.FaceOffsets)
+    for (uint32 const kFaceOffset : kOBJMeshData.FaceOffsets)
     {
-        /* Currently this just uses whatever winding order is used in the OBJ file */
-        /* We could process the vertices further afterwards to set them to either CW or CCW */
-        for (uint8 CurrentFaceVertexIndex = { 0u };
-             CurrentFaceVertexIndex < 3u;
-             CurrentFaceVertexIndex++)
+        for (uint8 FaceVertexOffset = {};
+             FaceVertexOffset < 3u; // may not necessarily be 3 vertices to a face (Quads instead of Tris), so this will need to be changed some time
+             FaceVertexOffset++)
         {
-            uint32 const VertexIndex = OBJMeshData.FaceVertexIndices [CurrentFaceOffset + CurrentFaceVertexIndex];
+            uint32 const kVertexIndex = kOBJMeshData.FaceVertexIndices [kFaceOffset + FaceVertexOffset];
 
-            uint32 NormalIndex = {};
-            if (OutputStatus.bHasNormals)
+            uint32 const kNormalIndex = OutputStaticMesh.Status.bHasNormals
+                ? kOBJMeshData.FaceNormalIndices [kFaceOffset + FaceVertexOffset]
+                : 0u;
+
+            uint32 const kUVIndex = OutputStaticMesh.Status.bHasUVs
+                ? kOBJMeshData.FaceTextureCoordinateIndices [kFaceOffset + FaceVertexOffset]
+                : 0u;
+
+            uint32 IndexBufferValue = {};
+
+            std::string IndexString = std::to_string(kVertexIndex) + std::to_string(kNormalIndex) + std::to_string(kUVIndex);
+
+            decltype(VertexLookUpTable)::const_iterator const kVertexIterator = VertexLookUpTable.find(IndexString);
+
+            if (kVertexIterator != VertexLookUpTable.cend())
             {
-                NormalIndex = OBJMeshData.FaceNormalIndices [CurrentFaceOffset + CurrentFaceVertexIndex];
-            }
-
-            uint32 TextureCoordinateIndex = {};
-            if (OutputStatus.bHasUVs)
-            {
-                TextureCoordinateIndex = OBJMeshData.FaceTextureCoordinateIndices [CurrentFaceOffset + CurrentFaceVertexIndex];
-            }
-
-            uint32 Index = {};
-
-            std::string IndexString = std::to_string(VertexIndex) + std::to_string(NormalIndex) + std::to_string(TextureCoordinateIndex);
-
-            auto FoundVertex = VertexLookUpTable.find(IndexString);
-
-            if (FoundVertex != VertexLookUpTable.end())
-            {
-                Index = FoundVertex->second;
+                auto const & [Key, VertexIndex] = *kVertexIterator;
+                IndexBufferValue = VertexIndex;
             }
             else
             {
-                Index = static_cast<uint32>(Vertices.size());
+                IndexBufferValue = static_cast<uint32>(Vertices.size());
 
-                OBJLoader::OBJVertex const & VertexData = OBJMeshData.Positions [VertexIndex - 1u];
-                Vertices.push_back(Math::Vector3 { VertexData.X, VertexData.Y, VertexData.Z });
+                OBJLoader::OBJVertex const & kVertex = kOBJMeshData.Positions [kVertexIndex - 1u];
+                Vertices.push_back(Math::Vector3 { kVertex.X, kVertex.Y, kVertex.Z });
 
-                if (OutputStatus.bHasNormals)
+                if (OutputStaticMesh.Status.bHasNormals)
                 {
-                    OBJLoader::OBJNormal const & NormalData = OBJMeshData.Normals [NormalIndex - 1u];
-                    Normals.push_back(Math::Vector3 { NormalData.X, NormalData.Y, NormalData.Z });
+                    OBJLoader::OBJNormal const & kNormal = kOBJMeshData.Normals [kNormalIndex - 1u];
+                    Normals.push_back(Math::Vector3 { kNormal.X, kNormal.Y, kNormal.Z });
                 }
 
-                if (OutputStatus.bHasUVs)
+                if (OutputStaticMesh.Status.bHasUVs)
                 {
-                    OBJLoader::OBJTextureCoordinate const & UVData = OBJMeshData.TextureCoordinates [TextureCoordinateIndex - 1u];
-                    UVs.emplace_back(Math::Vector3 { UVData.U, UVData.V, UVData.W });
+                    OBJLoader::OBJTextureCoordinate const & kUV = kOBJMeshData.TextureCoordinates [kUVIndex - 1u];
+                    UVs.emplace_back(Math::Vector3 { kUV.U, kUV.V, kUV.W });
                 }
 
-                VertexLookUpTable [std::move(IndexString)] = Index;
+                VertexLookUpTable [std::move(IndexString)] = IndexBufferValue;
             }
 
-            Indices.push_back(Index);
+            Indices.push_back(IndexBufferValue);
         }
     }
 
-    Vertices.shrink_to_fit();
-    Normals.shrink_to_fit();
-    UVs.shrink_to_fit();
+    std::vector Tangents = std::vector<Math::Vector4>();
+    ::GenerateTangentVectors(Vertices, Normals, UVs, Indices, Tangents);
 
-    Indices.shrink_to_fit();
+    OutputStaticMesh.VertexCount = static_cast<uint32>(Vertices.size());
+    OutputStaticMesh.IndexCount = static_cast<uint32>(Indices.size());
 
-    /* 
-        TBH we can probably just straight up write to this memory,
-        though we would still overallocate and need to resize to shrink memory usage (or just remove these raw buffers completely, which we can do after the data is uploaded to the GPU)
-    */
-    OutputVertices = new Math::Vector3 [Vertices.size()];
-    OutputNormals = new Math::Vector3 [Normals.size()];
-    OutputUVs = new Math::Vector3 [UVs.size()];
-    OutputIndices = new uint32 [Indices.size()];
+    uint64 const kVertexDataSizeInBytes = { Vertices.size() * sizeof(Math::Vector3) };
+    uint64 const kTangentDataSizeInBytes = { Tangents.size() * sizeof(Math::Vector4) };
 
-    OutputVertexCount = static_cast<uint32>(Vertices.size());
-    OutputIndexCount = static_cast<uint32>(Indices.size());
+    OutputStaticMesh.MeshDataSizeInBytes = kVertexDataSizeInBytes * 3u + Tangents.size() * sizeof(Math::Vector4);
 
-    std::copy(Vertices.cbegin(), Vertices.cend(), OutputVertices);
-    std::copy(Normals.cbegin(), Normals.cend(), OutputNormals);
-    std::copy(UVs.cbegin(), UVs.cend(), OutputUVs);
-    std::copy(Indices.cbegin(), Indices.cend(), OutputIndices);
+    OutputStaticMesh.MeshData = new std::byte [OutputStaticMesh.MeshDataSizeInBytes];
+    OutputStaticMesh.IndexData = new uint32 [OutputStaticMesh.IndexCount];
+
+    OutputStaticMesh.NormalDataOffsetInBytes = kVertexDataSizeInBytes;
+    OutputStaticMesh.TangentDataOffsetInBytes = OutputStaticMesh.NormalDataOffsetInBytes + kVertexDataSizeInBytes;
+    OutputStaticMesh.UVDataOffsetInBytes = OutputStaticMesh.TangentDataOffsetInBytes + kTangentDataSizeInBytes;
+
+    Math::Vector3 * const kVertexData = reinterpret_cast<Math::Vector3 *>(OutputStaticMesh.MeshData);
+    Math::Vector3 * const kNormalData = reinterpret_cast<Math::Vector3 *>(OutputStaticMesh.MeshData + OutputStaticMesh.NormalDataOffsetInBytes);
+    Math::Vector4 * const kTangentData = reinterpret_cast<Math::Vector4 *>(OutputStaticMesh.MeshData + OutputStaticMesh.TangentDataOffsetInBytes);
+    Math::Vector3 * const kUVData = reinterpret_cast<Math::Vector3 *>(OutputStaticMesh.MeshData + OutputStaticMesh.UVDataOffsetInBytes);
+
+    /* Vertices | Normals | Tangents | UVs */
+    std::copy(Vertices.cbegin(), Vertices.cend(), kVertexData);
+    std::copy(Normals.cbegin(), Normals.cend(), kNormalData);
+    std::copy(Tangents.cbegin(), Tangents.cend(), kTangentData);
+    std::copy(UVs.cbegin(), UVs.cend(), kUVData);
+
+    std::copy(Indices.cbegin(), Indices.cend(), OutputStaticMesh.IndexData);
 }
 
-static void CreateGPUResources(uint32 const AssetHandle, Vulkan::Device::DeviceState const & DeviceState)
+static void CreateGPUResources(uint32 const kAssetIndex, Vulkan::Device::DeviceState const & kDeviceState)
 {
+    using namespace Assets::StaticMesh;
     /* TODO : Check static mesh flags before creating some of these buffers */
 
-    uint32 const kAssetIndex = AssetHandle - 1u;
-    uint64 const kVertexBufferSizeInBytes = { StaticMeshes.VertexCounts [kAssetIndex] * sizeof(Math::Vector3) };
-    uint64 const kTangentBufferSizeInBytes = { StaticMeshes.VertexCounts [kAssetIndex] * sizeof(Math::Vector4) };
-    uint64 const kIndexBufferSizeInBytes = { StaticMeshes.IndexCounts [kAssetIndex] * sizeof(uint32) };
+    Types::StaticMesh & StaticMesh = Private::StaticMeshes [kAssetIndex];
 
-    Vulkan::Device::CreateBuffer(DeviceState, kVertexBufferSizeInBytes, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, StaticMeshes.VertexBufferHandles [kAssetIndex]);
-    Vulkan::Device::CreateBuffer(DeviceState, kVertexBufferSizeInBytes, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, StaticMeshes.NormalBufferHandles [kAssetIndex]);
-    Vulkan::Device::CreateBuffer(DeviceState, kTangentBufferSizeInBytes, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, StaticMeshes.TangentBufferHandles [kAssetIndex]);
-    Vulkan::Device::CreateBuffer(DeviceState, kVertexBufferSizeInBytes, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, StaticMeshes.UVBufferHandles [kAssetIndex]);
-    Vulkan::Device::CreateBuffer(DeviceState, kIndexBufferSizeInBytes, VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, StaticMeshes.IndexBufferHandles [kAssetIndex]);
+    uint64 const kIndexBufferSizeInBytes = { StaticMesh.IndexCount * sizeof(uint32) };
+
+    Vulkan::Resource::BufferDescriptor BufferDesc = Vulkan::Resource::BufferDescriptor
+    {
+        StaticMesh.MeshDataSizeInBytes,
+        0u,
+        VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+    };
+
+    Vulkan::Device::CreateBuffer(kDeviceState, BufferDesc, StaticMesh.MeshBufferHandle);
+
+    BufferDesc.SizeInBytes = kIndexBufferSizeInBytes;
+    BufferDesc.UsageFlags ^= (VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
+
+    Vulkan::Device::CreateBuffer(kDeviceState, BufferDesc, StaticMesh.IndexBufferHandle);
 }
 
-static void TransferToGPU(uint32 const AssetHandle, VkCommandBuffer CommandBuffer, Vulkan::Device::DeviceState const & DeviceState, VkFence const TransferFence, std::vector<VkBufferMemoryBarrier> & OutputMemoryBarriers)
+static void TransferToGPU(uint32 const kAssetIndex, VkCommandBuffer const kCommandBuffer, Vulkan::Device::DeviceState const & kDeviceState, VkFence const kTransferFence, std::vector<VkBufferMemoryBarrier> & OutputMemoryBarriers)
 {
-    uint32 const kAssetIndex = AssetHandle - 1u;
-    uint64 const kVertexBufferSizeInBytes = { StaticMeshes.VertexCounts [kAssetIndex] * sizeof(Math::Vector3) };
-    uint64 const kTangentBufferSizeInBytes = { StaticMeshes.VertexCounts [kAssetIndex] * sizeof(Math::Vector4) };
-    uint64 const kIndexBufferSizeInBytes = { StaticMeshes.IndexCounts [kAssetIndex] * sizeof(uint32) };
+    using namespace Assets::StaticMesh;
 
-    std::array<uint32, 5u> StagingBufferHandles = {};
-    Vulkan::Device::CreateBuffer(DeviceState, kVertexBufferSizeInBytes, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, StagingBufferHandles [0u]);
-    Vulkan::Device::CreateBuffer(DeviceState, kVertexBufferSizeInBytes, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, StagingBufferHandles [1u]);
-    Vulkan::Device::CreateBuffer(DeviceState, kTangentBufferSizeInBytes, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, StagingBufferHandles [2u]);
-    Vulkan::Device::CreateBuffer(DeviceState, kVertexBufferSizeInBytes, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, StagingBufferHandles [3u]);
-    Vulkan::Device::CreateBuffer(DeviceState, kIndexBufferSizeInBytes, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, StagingBufferHandles [4u]);
+    Types::StaticMesh const & StaticMesh = Private::StaticMeshes [kAssetIndex];
 
-    std::array<Vulkan::Resource::Buffer, 5u> StagingBuffers = {};
+    uint64 const kIndexBufferSizeInBytes = { StaticMesh.IndexCount * sizeof(uint32) };
+
+    Vulkan::Resource::BufferDescriptor BufferDesc = Vulkan::Resource::BufferDescriptor
+    {
+        StaticMesh.MeshDataSizeInBytes,
+        0u,
+        VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+    };
+
+    std::array StagingBufferHandles = std::array<uint32, 2u>();
+
+    Vulkan::Device::CreateBuffer(kDeviceState, BufferDesc, StagingBufferHandles [0u]);
+
+    BufferDesc.SizeInBytes = kIndexBufferSizeInBytes;
+
+    Vulkan::Device::CreateBuffer(kDeviceState, BufferDesc, StagingBufferHandles [1u]);
+
+    std::array StagingBuffers = std::array<Vulkan::Resource::Buffer, 2u>();
     Vulkan::Resource::GetBuffer(StagingBufferHandles [0u], StagingBuffers [0u]);
     Vulkan::Resource::GetBuffer(StagingBufferHandles [1u], StagingBuffers [1u]);
-    Vulkan::Resource::GetBuffer(StagingBufferHandles [2u], StagingBuffers [2u]);
-    Vulkan::Resource::GetBuffer(StagingBufferHandles [3u], StagingBuffers [3u]);
-    Vulkan::Resource::GetBuffer(StagingBufferHandles [4u], StagingBuffers [4u]);
 
-    std::array<Vulkan::Memory::AllocationInfo, 5u> AllocationInfos = {};
+    std::array AllocationInfos = std::array<Vulkan::Memory::AllocationInfo, 2u>();
     Vulkan::Memory::GetAllocationInfo(StagingBuffers [0u].MemoryAllocationHandle, AllocationInfos [0u]);
     Vulkan::Memory::GetAllocationInfo(StagingBuffers [1u].MemoryAllocationHandle, AllocationInfos [1u]);
-    Vulkan::Memory::GetAllocationInfo(StagingBuffers [2u].MemoryAllocationHandle, AllocationInfos [2u]);
-    Vulkan::Memory::GetAllocationInfo(StagingBuffers [3u].MemoryAllocationHandle, AllocationInfos [3u]);
-    Vulkan::Memory::GetAllocationInfo(StagingBuffers [4u].MemoryAllocationHandle, AllocationInfos [4u]);
 
-    ::memcpy_s(AllocationInfos[0u].MappedAddress, AllocationInfos[0u].SizeInBytes, StaticMeshes.RawVertexBuffers [kAssetIndex].get(), kVertexBufferSizeInBytes);
-    ::memcpy_s(AllocationInfos[1u].MappedAddress, AllocationInfos[1u].SizeInBytes, StaticMeshes.RawNormalBuffers [kAssetIndex].get(), kVertexBufferSizeInBytes);
-    ::memcpy_s(AllocationInfos[2u].MappedAddress, AllocationInfos[2u].SizeInBytes, StaticMeshes.RawTangentBuffers [kAssetIndex].get(), kTangentBufferSizeInBytes);
-    ::memcpy_s(AllocationInfos[3u].MappedAddress, AllocationInfos[3u].SizeInBytes, StaticMeshes.RawUVBuffers [kAssetIndex].get(), kVertexBufferSizeInBytes);
-    ::memcpy_s(AllocationInfos[4u].MappedAddress, AllocationInfos[4u].SizeInBytes, StaticMeshes.RawIndexBuffers [kAssetIndex].get(), kIndexBufferSizeInBytes);
+    std::memcpy(AllocationInfos [0u].MappedAddress, StaticMesh.MeshData, StaticMesh.MeshDataSizeInBytes);
+    std::memcpy(AllocationInfos [1u].MappedAddress, StaticMesh.IndexData, kIndexBufferSizeInBytes);
     
-    std::array<Vulkan::Resource::Buffer, 5u> MeshBuffers = {};
-    Vulkan::Resource::GetBuffer(StaticMeshes.VertexBufferHandles [kAssetIndex], MeshBuffers [0u]);
-    Vulkan::Resource::GetBuffer(StaticMeshes.NormalBufferHandles [kAssetIndex], MeshBuffers [1u]);
-    Vulkan::Resource::GetBuffer(StaticMeshes.TangentBufferHandles [kAssetIndex], MeshBuffers [2u]);
-    Vulkan::Resource::GetBuffer(StaticMeshes.UVBufferHandles [kAssetIndex], MeshBuffers [3u]);
-    Vulkan::Resource::GetBuffer(StaticMeshes.IndexBufferHandles [kAssetIndex], MeshBuffers [4u]);
+    std::array MeshBuffers = std::array<Vulkan::Resource::Buffer, 2u>();
+    Vulkan::Resource::GetBuffer(StaticMesh.MeshBufferHandle, MeshBuffers [0u]);
+    Vulkan::Resource::GetBuffer(StaticMesh.IndexBufferHandle, MeshBuffers [1u]);
 
-    std::array<VkBufferCopy, 5u> const CopyRegions =
+    std::array const kCopyRegions = std::array<VkBufferCopy, 2u>
     {
-        VkBufferCopy { 0u, 0u, kVertexBufferSizeInBytes },
-        VkBufferCopy { 0u, 0u, kVertexBufferSizeInBytes },
-        VkBufferCopy { 0u, 0u, kTangentBufferSizeInBytes },
-        VkBufferCopy { 0u, 0u, kVertexBufferSizeInBytes },
+        VkBufferCopy { 0u, 0u, StaticMesh.MeshDataSizeInBytes },
         VkBufferCopy { 0u, 0u, kIndexBufferSizeInBytes },
     };
 
-    vkCmdCopyBuffer(CommandBuffer, StagingBuffers [0u].Resource, MeshBuffers [0u].Resource, 1u, &CopyRegions [0u]);
-    vkCmdCopyBuffer(CommandBuffer, StagingBuffers [1u].Resource, MeshBuffers [1u].Resource, 1u, &CopyRegions [1u]);
-    vkCmdCopyBuffer(CommandBuffer, StagingBuffers [2u].Resource, MeshBuffers [2u].Resource, 1u, &CopyRegions [2u]);
-    vkCmdCopyBuffer(CommandBuffer, StagingBuffers [3u].Resource, MeshBuffers [3u].Resource, 1u, &CopyRegions [3u]);
-    vkCmdCopyBuffer(CommandBuffer, StagingBuffers [4u].Resource, MeshBuffers [4u].Resource, 1u, &CopyRegions [4u]);
+    vkCmdCopyBuffer(kCommandBuffer, StagingBuffers [0u].Resource, MeshBuffers [0u].Resource, 1u, &kCopyRegions [0u]);
+    vkCmdCopyBuffer(kCommandBuffer, StagingBuffers [1u].Resource, MeshBuffers [1u].Resource, 1u, &kCopyRegions [1u]);
 
     /* Make the transferred data available and visible to vertex/index reads */
     OutputMemoryBarriers.emplace_back(Vulkan::BufferMemoryBarrier(MeshBuffers [0u].Resource, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT));
-    OutputMemoryBarriers.emplace_back(Vulkan::BufferMemoryBarrier(MeshBuffers [1u].Resource, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT));
-    OutputMemoryBarriers.emplace_back(Vulkan::BufferMemoryBarrier(MeshBuffers [2u].Resource, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT));
-    OutputMemoryBarriers.emplace_back(Vulkan::BufferMemoryBarrier(MeshBuffers [3u].Resource, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT));
-    OutputMemoryBarriers.emplace_back(Vulkan::BufferMemoryBarrier(MeshBuffers [4u].Resource, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_INDEX_READ_BIT));
+    OutputMemoryBarriers.emplace_back(Vulkan::BufferMemoryBarrier(MeshBuffers [1u].Resource, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_INDEX_READ_BIT));
 
-    Vulkan::Device::DestroyBuffer(DeviceState, StagingBufferHandles [0u], TransferFence);
-    Vulkan::Device::DestroyBuffer(DeviceState, StagingBufferHandles [1u], TransferFence);
-    Vulkan::Device::DestroyBuffer(DeviceState, StagingBufferHandles [2u], TransferFence);
-    Vulkan::Device::DestroyBuffer(DeviceState, StagingBufferHandles [3u], TransferFence);
-    Vulkan::Device::DestroyBuffer(DeviceState, StagingBufferHandles [4u], TransferFence);
+    Vulkan::Device::DestroyBuffer(kDeviceState, StagingBufferHandles [0u], kTransferFence);
+    Vulkan::Device::DestroyBuffer(kDeviceState, StagingBufferHandles [1u], kTransferFence);
 }
 
-static void GenerateTangentVectors(uint32 const AssetHandle)
+bool const Assets::StaticMesh::ImportStaticMesh(std::filesystem::path const & kFilePath, std::string AssetName, uint32 & OutputAssetHandle)
 {
-    uint32 const kAssetIndex = { AssetHandle - 1u };
+    using namespace Assets::StaticMesh;
 
-    uint32 const * const kMeshIndices = StaticMeshes.RawIndexBuffers [kAssetIndex].get();
-    Math::Vector3 const * const kMeshVertices = StaticMeshes.RawVertexBuffers [kAssetIndex].get();
-    Math::Vector3 const * const kMeshNormals = StaticMeshes.RawNormalBuffers [kAssetIndex].get();
-    Math::Vector3 const * const kMeshUVs = StaticMeshes.RawUVBuffers [kAssetIndex].get();
-
-    uint32 const kIndexCount = StaticMeshes.IndexCounts [kAssetIndex];
-    uint32 const kVertexCount = StaticMeshes.VertexCounts [kAssetIndex];
-
-    StaticMeshes.RawTangentBuffers [kAssetIndex].reset(new Math::Vector4 [kVertexCount]);
-    Math::Vector4 * MeshTangents = StaticMeshes.RawTangentBuffers [kAssetIndex].get();
-    Math::Vector3 * MeshBitangents = new Math::Vector3 [kVertexCount];
-
-    std::memset(MeshTangents, 0, kVertexCount * sizeof(*MeshTangents));
-    std::memset(MeshBitangents, 0, kVertexCount * sizeof(*MeshBitangents));
-
-    for (uint32 CurrentIndexOffset = { 0u }; 
-         CurrentIndexOffset < kIndexCount; 
-         CurrentIndexOffset += 3u)
-    {
-        std::array<uint32, 3u> const kIndices =
-        {
-            kMeshIndices [CurrentIndexOffset + 0u],
-            kMeshIndices [CurrentIndexOffset + 1u],
-            kMeshIndices [CurrentIndexOffset + 2u],
-        };
-
-        std::array<Math::Vector3, 2u> const kEdges =
-        {
-            kMeshVertices [kIndices [1u]] - kMeshVertices [kIndices [0u]],
-            kMeshVertices [kIndices [2u]] - kMeshVertices [kIndices [0u]],
-        };
-
-        std::array<float, 4u> const kComponentDifferences =
-        {
-            kMeshUVs [kIndices [1u]].X - kMeshUVs [kIndices [0u]].X, kMeshUVs [kIndices [2u]].X - kMeshUVs [kIndices [0u]].X,
-            kMeshUVs [kIndices [1u]].Y - kMeshUVs [kIndices [0u]].Y, kMeshUVs [kIndices [2u]].Y - kMeshUVs [kIndices [0u]].Y,
-        };
-
-        /* TODO: Need to implement a division operator for the vectors */
-        float const kInverseDeterminant = 1.0f / (kComponentDifferences [0u] * kComponentDifferences [3u] - kComponentDifferences [1u] * kComponentDifferences [2u]);
-        Math::Vector3 const kTangentVector = (kEdges [0u] * kComponentDifferences [3u] - kEdges [1u] * kComponentDifferences [2u]) * kInverseDeterminant;
-        Math::Vector3 const kBitangentVector = (kEdges [1u] * kComponentDifferences [0u] - kEdges [0u] * kComponentDifferences [1u]) * kInverseDeterminant;
-
-        std::array<Math::Vector3 *, 3u> const kOutputTangentVectors =
-        {
-            reinterpret_cast<Math::Vector3 *>(MeshTangents + kIndices [0u]),
-            reinterpret_cast<Math::Vector3 *>(MeshTangents + kIndices [1u]),
-            reinterpret_cast<Math::Vector3 *>(MeshTangents + kIndices [2u]),
-        };
-
-        *kOutputTangentVectors [0u] = *kOutputTangentVectors [0u] + kTangentVector;
-        *kOutputTangentVectors [1u] = *kOutputTangentVectors [1u] + kTangentVector;
-        *kOutputTangentVectors [2u] = *kOutputTangentVectors [2u] + kTangentVector;
-
-        MeshBitangents [kIndices [0u]] = MeshBitangents [kIndices [0u]] + kBitangentVector;
-        MeshBitangents [kIndices [1u]] = MeshBitangents [kIndices [1u]] + kBitangentVector;
-        MeshBitangents [kIndices [2u]] = MeshBitangents [kIndices [2u]] + kBitangentVector;
-    }
-
-    for (uint32 VertexIndex = { 0u };
-         VertexIndex < kVertexCount;
-         VertexIndex++)
-    {
-        Math::Vector3 & TangentVector = *reinterpret_cast<Math::Vector3 *>(MeshTangents + VertexIndex);
-        Math::Vector3 & BitangentVector = MeshBitangents [VertexIndex];
-
-        Math::Vector3 const kAdjustedTangent = TangentVector - (TangentVector * kMeshNormals [VertexIndex]) * kMeshNormals [VertexIndex];
-        TangentVector = Math::Vector3::Normalize(kAdjustedTangent);
-
-        Math::Vector3 const kAdjustedBitangent = BitangentVector - ((BitangentVector * TangentVector) * TangentVector) - ((BitangentVector * kMeshNormals [VertexIndex]) * kMeshNormals [VertexIndex]);
-        BitangentVector = Math::Vector3::Normalize(kAdjustedBitangent);
-
-        /*
-        *   Cross product between tangent and bitangent to get normal.
-        *   Use dot product of result with normal to determine the sign.
-        *   Use this sign in the shader to flip the bitangent, this ensures consistency.
-        */
-        MeshTangents [VertexIndex].W = ((TangentVector ^ BitangentVector) * kMeshNormals [VertexIndex]) > 0.0f ? 1.0f : -1.0f;
-    }
-}
-
-bool const Assets::StaticMesh::ImportStaticMesh(std::filesystem::path const & FilePath, std::string AssetName, uint32 & OutputAssetHandle)
-{
     bool bResult = false;
 
-    /* Only support obj files atm */
-    if (FilePath.extension() == ".obj")
+    if (kFilePath.has_extension() && kFilePath.extension() == ".obj")
     {
         OBJLoader::OBJMeshData MeshData = {};
-        std::vector<OBJLoader::OBJMaterialData> Materials = {};
-        bResult = OBJLoader::LoadFile(FilePath, MeshData, Materials);
+        std::vector Materials = std::vector<OBJLoader::OBJMaterialData>();
 
-        if (bResult)
-        {
-            Math::Vector3 * Vertices = {};
-            Math::Vector3 * Normals = {};
-            Math::Vector3 * UVs = {};
-            uint32 * Indices = {};
+        bResult = OBJLoader::LoadFile(kFilePath, MeshData, Materials);
 
-            Assets::StaticMesh::StaticMeshStatus Status = {};
-            uint32 VertexCount = {};
-            uint32 IndexCount = {};
+        Types::StaticMesh & StaticMeshData = Private::StaticMeshes.emplace_back();
+        ::ProcessMeshData(MeshData, StaticMeshData);
 
-            ::ProcessMeshData(MeshData,
-                              Status,
-                              VertexCount,
-                              IndexCount,
-                              Vertices,
-                              Normals,
-                              UVs,
-                              Indices);
-
-            std::unique_ptr<Math::Vector3[]> & RawVertexBuffer = StaticMeshes.RawVertexBuffers.emplace_back();
-            std::unique_ptr<Math::Vector3[]> & RawNormalBuffer = StaticMeshes.RawNormalBuffers.emplace_back();
-            std::unique_ptr<Math::Vector3[]> & RawUVBuffer = StaticMeshes.RawUVBuffers.emplace_back();
-            std::unique_ptr<uint32[]> & RawIndexBuffer = StaticMeshes.RawIndexBuffers.emplace_back();
-            StaticMeshes.RawTangentBuffers.emplace_back();
-
-            RawVertexBuffer.reset(Vertices);
-            RawNormalBuffer.reset(Normals);
-            RawUVBuffer.reset(UVs);
-            RawIndexBuffer.reset(Indices);
-
-            StaticMeshes.StatusBits.push_back(Status);
-            StaticMeshes.VertexCounts.push_back(VertexCount);
-            StaticMeshes.IndexCounts.push_back(IndexCount);
-
-            StaticMeshes.VertexBufferHandles.emplace_back();
-            StaticMeshes.NormalBufferHandles.emplace_back();
-            StaticMeshes.TangentBufferHandles.emplace_back();
-            StaticMeshes.UVBufferHandles.emplace_back();
-            StaticMeshes.IndexBufferHandles.emplace_back();
-
-            OutputAssetHandle = static_cast<uint32>(StaticMeshes.RawVertexBuffers.size());
-            NewAssetHandles.push(OutputAssetHandle);
-
-            /* TODO: If there aren't any Normals then generate vertex normals */
-            
-            if (StaticMeshes.StatusBits [OutputAssetHandle - 1u].bHasNormals
-                && StaticMeshes.StatusBits [OutputAssetHandle - 1u].bHasUVs)
-            {
-                ::GenerateTangentVectors(OutputAssetHandle);
-            }
-
-            /* TODO: If all goes well we should queue up this asset for serialisation */
-        }
+        OutputAssetHandle = { static_cast<uint32>(Private::StaticMeshes.size()) };
+        Private::NewAssetHandles.push_back(OutputAssetHandle);
     }
 
     return bResult;
 }
 
-bool const Assets::StaticMesh::InitialiseGPUResources(VkCommandBuffer CommandBuffer, Vulkan::Device::DeviceState const & DeviceState, VkFence const TransferFence)
+bool const Assets::StaticMesh::InitialiseGPUResources(VkCommandBuffer const kCommandBuffer, Vulkan::Device::DeviceState const & kDeviceState, VkFence const kTransferFence)
 {
-    /* Again a memory allocator would be good for this stuff on a frame by frame basis */
-    std::vector<VkBufferMemoryBarrier> MemoryBarriers = {};
+    std::vector MemoryBarriers = std::vector<VkBufferMemoryBarrier>();
 
-    while (NewAssetHandles.size() > 0u)
+    for (uint32 CurrentAssetIndex = {};
+         CurrentAssetIndex < Private::NewAssetHandles.size();
+         CurrentAssetIndex++)
     {
-        uint32 const AssetHandle = NewAssetHandles.front();
+        uint32 const AssetIndex = Private::NewAssetHandles [CurrentAssetIndex] - 1u;
 
-        ::CreateGPUResources(AssetHandle, DeviceState);
-        
-        ::TransferToGPU(AssetHandle, CommandBuffer, DeviceState, TransferFence, MemoryBarriers);
+        ::CreateGPUResources(AssetIndex, kDeviceState);
 
-        NewAssetHandles.pop();
+        ::TransferToGPU(AssetIndex, kCommandBuffer, kDeviceState, kTransferFence, MemoryBarriers);
     }
+
+    Private::NewAssetHandles.clear();
 
     if (MemoryBarriers.size() > 0u)
     {
-        vkCmdPipelineBarrier(CommandBuffer,
+        vkCmdPipelineBarrier(kCommandBuffer,
                              VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_VERTEX_INPUT_BIT,
                              0u,
                              0u, nullptr,
@@ -410,31 +329,17 @@ bool const Assets::StaticMesh::InitialiseGPUResources(VkCommandBuffer CommandBuf
     return true;
 }
 
-bool const Assets::StaticMesh::GetAssetData(uint32 const AssetHandle, Assets::StaticMesh::AssetData & OutputAssetData)
+bool const Assets::StaticMesh::GetAssetData(uint32 const kAssetHandle, Assets::StaticMesh::Types::StaticMesh & OutputStaticMesh)
 {
-    if (AssetHandle == 0u)
+    if (kAssetHandle == 0u)
     {
         Logging::Log(Logging::LogTypes::Error, PBR_TEXT("Failed to get static mesh for NULL handle."));
         return false;
     }
 
-    uint32 const kAssetIndex = { AssetHandle - 1u };
+    uint32 const kAssetIndex = { kAssetHandle - 1u };
 
-    OutputAssetData.VertexData = StaticMeshes.RawVertexBuffers [kAssetIndex].get();
-    OutputAssetData.NormalData = StaticMeshes.RawNormalBuffers [kAssetIndex].get();
-    OutputAssetData.UVData = StaticMeshes.RawUVBuffers [kAssetIndex].get();
-    OutputAssetData.IndexData = StaticMeshes.RawIndexBuffers [kAssetIndex].get();
-
-    OutputAssetData.VertexBufferHandle = StaticMeshes.VertexBufferHandles [kAssetIndex];
-    OutputAssetData.NormalBufferHandle = StaticMeshes.NormalBufferHandles [kAssetIndex];
-    OutputAssetData.TangentBufferHandle = StaticMeshes.TangentBufferHandles [kAssetIndex];
-    OutputAssetData.UVBufferHandle = StaticMeshes.UVBufferHandles [kAssetIndex];
-    OutputAssetData.IndexBufferHandle = StaticMeshes.IndexBufferHandles [kAssetIndex];
-
-    OutputAssetData.VertexCount = StaticMeshes.VertexCounts [kAssetIndex];
-    OutputAssetData.IndexCount = StaticMeshes.IndexCounts [kAssetIndex];
-
-    OutputAssetData.Status = StaticMeshes.StatusBits [kAssetIndex];
+    OutputStaticMesh = Private::StaticMeshes [kAssetIndex]; sizeof(Assets::StaticMesh::Types::StaticMesh);
 
     return true;
 }

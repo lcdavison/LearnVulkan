@@ -668,7 +668,7 @@ static void RenderStaticMeshes(VkCommandBuffer const kCommandBuffer, uint16 cons
     {
         Components::StaticMesh::Types::ComponentData const kComponentData = *CurrentMesh;
 
-        Assets::StaticMesh::AssetData MeshData = {};
+        Assets::StaticMesh::Types::StaticMesh MeshData = {};
         Assets::Material::MaterialData MaterialData = {};
 
         bool bHasData = Assets::StaticMesh::GetAssetData(kComponentData.MeshHandle, MeshData);
@@ -678,28 +678,31 @@ static void RenderStaticMeshes(VkCommandBuffer const kCommandBuffer, uint16 cons
         {
             ::UpdatePerDrawDescriptorSet(kDescriptorSetHandle, kAllocation, MaterialData);
 
-            std::array<Vulkan::Resource::Buffer, 5u> MeshBuffers = {};
+            std::array MeshBuffers = std::array<Vulkan::Resource::Buffer, 2u>();
 
-            Vulkan::Resource::GetBuffer(MeshData.VertexBufferHandle, MeshBuffers [0u]);
-            Vulkan::Resource::GetBuffer(MeshData.NormalBufferHandle, MeshBuffers [1u]);
-            Vulkan::Resource::GetBuffer(MeshData.TangentBufferHandle, MeshBuffers [2u]);
-            Vulkan::Resource::GetBuffer(MeshData.UVBufferHandle, MeshBuffers [3u]);
-            Vulkan::Resource::GetBuffer(MeshData.IndexBufferHandle, MeshBuffers [4u]);
+            Vulkan::Resource::GetBuffer(MeshData.MeshBufferHandle, MeshBuffers [0u]);
+            Vulkan::Resource::GetBuffer(MeshData.IndexBufferHandle, MeshBuffers [1u]);
 
-            vkCmdBindIndexBuffer(kCommandBuffer, MeshBuffers [4u].Resource, 0u, VK_INDEX_TYPE_UINT32);
+            vkCmdBindIndexBuffer(kCommandBuffer, MeshBuffers [1u].Resource, 0u, VK_INDEX_TYPE_UINT32);
 
             {
-                std::array<VkBuffer, 4u> const VertexBuffers =
+                std::array const kBuffers = std::array<VkBuffer, 4u>
                 {
                     MeshBuffers [0u].Resource,
-                    MeshBuffers [1u].Resource,
-                    MeshBuffers [2u].Resource,
-                    MeshBuffers [3u].Resource,
+                    MeshBuffers [0u].Resource,
+                    MeshBuffers [0u].Resource,
+                    MeshBuffers [0u].Resource,
                 };
 
-                std::array const BufferOffsets = std::array<VkDeviceSize, VertexBuffers.size()>();
+                std::array const kBufferOffsets = std::array<VkDeviceSize, kBuffers.size()>
+                {
+                    0u,
+                    MeshData.NormalDataOffsetInBytes,
+                    MeshData.TangentDataOffsetInBytes,
+                    MeshData.UVDataOffsetInBytes,
+                };
 
-                vkCmdBindVertexBuffers(kCommandBuffer, 0u, static_cast<uint32>(VertexBuffers.size()), VertexBuffers.data(), BufferOffsets.data());
+                vkCmdBindVertexBuffers(kCommandBuffer, 0u, static_cast<uint32>(kBuffers.size()), kBuffers.data(), kBufferOffsets.data());
             }
 
             vkCmdBindDescriptorSets(kCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, PipelineLayouts [0u], 1u, 1u, &kMeshDescriptorSet, 0u, nullptr);

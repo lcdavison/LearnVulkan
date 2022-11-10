@@ -1,9 +1,6 @@
 #pragma once
 
 #include "Common.hpp"
-
-#include <Math/Vector.hpp>
-
 #include "Graphics/VulkanModule.hpp"
 
 #include <filesystem>
@@ -13,36 +10,40 @@ namespace Vulkan::Device
     struct DeviceState;
 }
 
-namespace Assets::StaticMesh
+namespace Assets::StaticMesh::Types
 {
-    struct StaticMeshStatus
+    struct StaticMesh
     {
-        bool bHasNormals : 1;
-        bool bHasUVs : 1;
-    };
+        struct StatusFlags
+        {
+            bool bHasNormals = {};
+            bool bHasUVs = {};
+        };
 
-    struct AssetData
-    {
-        Math::Vector3 const * VertexData = {};
-        Math::Vector3 const * NormalData = {};
-        Math::Vector3 const * UVData = {};
-        uint32 const * IndexData = {};
-        
+        uint64 NormalDataOffsetInBytes = {};
+        uint64 TangentDataOffsetInBytes = {};
+        uint64 UVDataOffsetInBytes = {};
+
+        uint64 MeshDataSizeInBytes = {};
+
+        std::byte * MeshData = {};
+        uint32 * IndexData = {};
+
+        uint32 MeshBufferHandle = {};
+        uint32 IndexBufferHandle = {};
+
         uint32 VertexCount = {};
         uint32 IndexCount = {};
 
-        uint32 VertexBufferHandle = {};
-        uint32 NormalBufferHandle = {};
-        uint32 TangentBufferHandle = {};
-        uint32 UVBufferHandle = {};
-        uint32 IndexBufferHandle = {};
-
-        StaticMeshStatus Status = {};
+        StatusFlags Status = {};
     };
+}
 
-    extern bool const ImportStaticMesh(std::filesystem::path const & FilePath, std::string AssetName, uint32 & OutputAssetHandle);
+namespace Assets::StaticMesh
+{
+    extern bool const ImportStaticMesh(std::filesystem::path const & kFilePath, std::string AssetName, uint32 & OutputAssetHandle);
 
-    extern bool const InitialiseGPUResources(VkCommandBuffer CommandBuffer, Vulkan::Device::DeviceState const & DeviceState, VkFence const TransferFence);
+    extern bool const InitialiseGPUResources(VkCommandBuffer const kCommandBuffer, Vulkan::Device::DeviceState const & kDeviceState, VkFence const kTransferFence);
 
-    extern bool const GetAssetData(uint32 const AssetHandle, AssetData & OutputAssetData);
+    extern bool const GetAssetData(uint32 const kAssetHandle, Assets::StaticMesh::Types::StaticMesh & OutputAssetData);
 }
